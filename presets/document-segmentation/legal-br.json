@@ -1,0 +1,218 @@
+{
+  "name": "Brazilian Legal Documents",
+  "description": "Otimizado para documentos jurídicos brasileiros (processos, despachos, sentenças)",
+  "version": "1.0",
+  "author": "FilterPDF",
+  
+  "strategies": {
+    "text_patterns": {
+      "enabled": true,
+      "weight": 0.40,
+      "description": "Padrões específicos do judiciário brasileiro",
+      "config": {
+        "scan_lines_start": 40,
+        "scan_lines_end": 40,
+        "case_sensitive": false,
+        "start_patterns": [
+          {
+            "pattern": "PODER JUDICIÁRIO",
+            "weight": 3,
+            "regex": false,
+            "description": "Cabeçalho padrão do judiciário"
+          },
+          {
+            "pattern": "TRIBUNAL DE JUSTIÇA",
+            "weight": 3,
+            "regex": false,
+            "description": "Identificação do tribunal"
+          },
+          {
+            "pattern": "MINISTÉRIO PÚBLICO",
+            "weight": 3,
+            "regex": false,
+            "description": "Documentos do MP"
+          },
+          {
+            "pattern": "Diretoria (Especial|Geral|Administrativa)",
+            "weight": 2,
+            "regex": true,
+            "description": "Setor administrativo"
+          },
+          {
+            "pattern": "(Despacho|Sentença|Decisão|Acórdão|Certidão|Ofício|Portaria)\\s*n[º°]",
+            "weight": 2,
+            "regex": true,
+            "description": "Tipo de documento judicial"
+          },
+          {
+            "pattern": "Processo\\s*n[º°]\\s*\\d",
+            "weight": 2,
+            "regex": true,
+            "description": "Número do processo"
+          },
+          {
+            "pattern": "(VARA|JUÍZO)\\s+(CÍVEL|CRIMINAL|MISTA|FAZENDA|FAMÍLIA)",
+            "weight": 2,
+            "regex": true,
+            "description": "Identificação da vara"
+          }
+        ],
+        "end_patterns": [
+          {
+            "pattern": "Documento assinado eletronicamente",
+            "weight": 3,
+            "regex": false,
+            "description": "Assinatura eletrônica SEI"
+          },
+          {
+            "pattern": "assinado digitalmente",
+            "weight": 3,
+            "regex": false,
+            "description": "Assinatura digital"
+          },
+          {
+            "pattern": "Robson de Lima Cananéa",
+            "weight": 2,
+            "regex": false,
+            "description": "Assinante específico"
+          },
+          {
+            "pattern": "(Diretor|Juiz|Desembargador|Promotor)\\s+(Especial|Geral|de Direito)",
+            "weight": 2,
+            "regex": true,
+            "description": "Cargo do assinante"
+          },
+          {
+            "pattern": "(João Pessoa|Campina Grande|Patos|Sousa)\\s*[-–]\\s*PB",
+            "weight": 1,
+            "regex": true,
+            "description": "Local de assinatura"
+          },
+          {
+            "pattern": "autenticidade.*pode ser conferida",
+            "weight": 2,
+            "regex": true,
+            "description": "Texto de validação"
+          },
+          {
+            "pattern": "código verificador\\s+\\d+",
+            "weight": 2,
+            "regex": true,
+            "description": "Código de autenticação"
+          },
+          {
+            "pattern": "SEI\\s+n[º°]\\s*\\d+",
+            "weight": 1,
+            "regex": true,
+            "description": "Referência SEI"
+          }
+        ]
+      }
+    },
+    
+    "font_analysis": {
+      "enabled": true,
+      "weight": 0.15,
+      "description": "Documentos jurídicos mantêm fontes consistentes",
+      "config": {
+        "similarity_threshold": 0.8,
+        "check_font_count": true,
+        "check_font_names": true,
+        "check_font_sizes": false,
+        "min_font_change": 3
+      }
+    },
+    
+    "page_numbering": {
+      "enabled": true,
+      "weight": 0.20,
+      "description": "Cada documento reinicia numeração",
+      "config": {
+        "detect_restart": true,
+        "formats": ["numeric"],
+        "positions": ["footer", "corner"],
+        "restart_indicators": ["1", "01"]
+      }
+    },
+    
+    "blank_pages": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "Raramente há páginas em branco em processos",
+      "config": {}
+    },
+    
+    "layout_changes": {
+      "enabled": true,
+      "weight": 0.10,
+      "description": "Layout muda entre tipos de documento",
+      "config": {
+        "check_margins": true,
+        "check_columns": false,
+        "check_orientation": true,
+        "check_size": false,
+        "similarity_threshold": 0.7
+      }
+    },
+    
+    "header_footer": {
+      "enabled": true,
+      "weight": 0.15,
+      "description": "Cabeçalhos institucionais são importantes",
+      "config": {
+        "check_consistency": true,
+        "extract_top_percent": 15,
+        "extract_bottom_percent": 15,
+        "similarity_threshold": 0.7
+      }
+    },
+    
+    "metadata_hints": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "PDFs compilados raramente têm bookmarks úteis",
+      "config": {}
+    },
+    
+    "content_flow": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "Documentos jurídicos são independentes",
+      "config": {}
+    }
+  },
+  
+  "global_settings": {
+    "min_confidence_score": 0.6,
+    "min_document_pages": 1,
+    "merge_small_documents": false,
+    "merge_threshold": 2,
+    "output_format": "summary",
+    "extract_documents": false,
+    "verbose": false,
+    "language": "pt-BR"
+  },
+  
+  "document_types": {
+    "despacho": {
+      "typical_pages": "1-3",
+      "key_elements": ["Despacho nº", "encaminhem-se", "Diretor"]
+    },
+    "sentenca": {
+      "typical_pages": "5-20",
+      "key_elements": ["Sentença", "JULGO", "custas processuais"]
+    },
+    "processo": {
+      "typical_pages": "10-200",
+      "key_elements": ["Processo nº", "Requerente", "Requerido"]
+    },
+    "certidao": {
+      "typical_pages": "1-2",
+      "key_elements": ["CERTIDÃO", "CERTIFICO", "dou fé"]
+    },
+    "oficio": {
+      "typical_pages": "1-3",
+      "key_elements": ["Ofício nº", "Senhor", "Atenciosamente"]
+    }
+  }
+}

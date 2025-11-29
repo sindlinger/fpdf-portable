@@ -1,0 +1,158 @@
+RELATÓRIO DE EXTRAÇÃO - DIRETORIA ESPECIAL V10
+Usando apenas AdvancedLayout e LayoutPreserving (ignorando ColumnDetection)
+================================================================================
+
+ESTATÍSTICAS GERAIS:
+Total de arquivos processados: 1000
+Documentos da Diretoria Especial encontrados: 478
+Documentos multi-página: 211
+Documentos extraídos com sucesso: 410
+Falhas na extração: 68
+Documentos com extração multi-método: 478
+Taxa de sucesso: 85.8%
+
+--------------------------------------------------------------------------------
+
+MÉTODOS DE EXTRAÇÃO UTILIZADOS:
+AdvancedLayout                : 1462
+LayoutPreserving              : 1441
+
+--------------------------------------------------------------------------------
+
+EXTRAÇÃO POR CAMPO:
+autor               :  398 ( 83.3%)
+comarca             :  355 ( 74.3%)
+cpf_perito          :  417 ( 87.2%)
+destino             :  393 ( 82.2%)
+especialidade       :  460 ( 96.2%)
+juizo               :  407 ( 85.1%)
+numero_autos        :  277 ( 57.9%)
+parte_contraria     :  351 ( 73.4%)
+perito_nome         :  344 ( 72.0%)
+processo            :  376 ( 78.7%)
+valor_arbitrado     :  409 ( 85.6%)
+
+--------------------------------------------------------------------------------
+
+ANÁLISE DE CONFIANÇA (campos confirmados em múltiplos métodos):
+especialidade       : média 3.0, alta confiança em 457/460 docs
+parte_contraria     : média 2.9, alta confiança em 349/351 docs
+juizo               : média 2.0, alta confiança em 407/407 docs
+perito_nome         : média 2.0, alta confiança em 343/344 docs
+cpf_perito          : média 3.5, alta confiança em 416/417 docs
+valor_arbitrado     : média 3.4, alta confiança em 408/409 docs
+autor               : média 2.8, alta confiança em 398/398 docs
+destino             : média 2.0, alta confiança em 391/393 docs
+comarca             : média 2.0, alta confiança em 355/355 docs
+numero_autos        : média 3.4, alta confiança em 277/277 docs
+processo            : média 3.4, alta confiança em 376/376 docs
+
+--------------------------------------------------------------------------------
+
+EXEMPLOS COM ALTA CONFIANÇA (múltiplos métodos confirmaram):
+
+Exemplo 1 (confiança máxima: 20):
+  Arquivo: 001789772024815_cache.json
+  processo: 001789-77.2024.8.15 (confirmado em 4 métodos)
+  especialidade: e laudo (confirmado em 20 métodos)
+
+Exemplo 2 (confiança máxima: 4):
+  Arquivo: 2023142910_cache.json
+  juizo: Juízo da 3ª Vara Mista da Comarca de Cajazeiras (confirmado em 2 métodos)
+  perito_nome: Ronivaldo de Oliveira Barros (confirmado em 2 métodos)
+  cpf_perito: 753.109.024-49 (confirmado em 4 métodos)
+  especialidade: Ronivaldo de (confirmado em 2 métodos)
+  valor_arbitrado: 491.86 (confirmado em 2 métodos)
+  autor: MARIA APARECIDA ALBUQUERQUE FERREIRA (confirmado em 2 métodos)
+  parte_contraria: MARIA (confirmado em 2 métodos)
+  destino: Conselho da Magistratura (confirmado em 2 métodos)
+  comarca: Comarca de Cajazeiras (confirmado em 2 métodos)
+
+Exemplo 3 (confiança máxima: 4):
+  Arquivo: 2023140150_cache.json
+  juizo: 2ª Vara Mista da Comarca da Pombal (confirmado em 2 métodos)
+  perito_nome: José Ramos Nunes Ferreira (confirmado em 2 métodos)
+  especialidade: Técnico de (confirmado em 4 métodos)
+  valor_arbitrado: 1156.55 (confirmado em 2 métodos)
+  numero_autos: 0002498-26.2015.8.15.0301 (confirmado em 2 métodos)
+  autor: BERTO LOURENCO (confirmado em 2 métodos)
+  comarca: Comarca da Pombal (confirmado em 2 métodos)
+
+Exemplo 4 (confiança máxima: 4):
+  Arquivo: 2023112817_cache.json
+  juizo: Juízo da 3ª Vara Cível da Comarca da Capital (confirmado em 2 métodos)
+  perito_nome: João Paulo Costa Maravilha (confirmado em 2 métodos)
+  especialidade: Grafotécnico (confirmado em 4 métodos)
+  valor_arbitrado: 1500.00 (confirmado em 2 métodos)
+  numero_autos: 0808806-42.2022.8.15.2001 (confirmado em 2 métodos)
+  parte_contraria: BANCO OLÉ (confirmado em 2 métodos)
+  comarca: Comarca de João Pessoa (confirmado em 2 métodos)
+
+Exemplo 5 (confiança máxima: 4):
+  Arquivo: 2023101872_cache.json
+  juizo: Juízo da Vara Única da Comarca de Conceição (confirmado em 4 métodos)
+  perito_nome: Saulo Perícles Brocos Pires Ferreira (confirmado em 4 métodos)
+  especialidade: Engenheiro do (confirmado em 4 métodos)
+  valor_arbitrado: 74.00 (confirmado em 2 métodos)
+  comarca: Comarca de Conceição (confirmado em 4 métodos)
+
+Exemplo 6 (confiança máxima: 4):
+  Arquivo: 20230914791_cache.json
+  juizo: Juízo da 10ª Vara Cível da Capital (confirmado em 2 métodos)
+  perito_nome: João Bosco Ferraz de Oliveira (confirmado em 2 métodos)
+  cpf_perito: 127.585.314-53 (confirmado em 4 métodos)
+  especialidade: Avaliador de (confirmado em 4 métodos)
+  valor_arbitrado: 1750.00 (confirmado em 4 métodos)
+  numero_autos: 0000151-22.2019.8.15.2001 (confirmado em 2 métodos)
+  autor: GILVÂNIA NOGUEIRA DA SILVA (confirmado em 2 métodos)
+  parte_contraria: VISÃO INVESTIMENTOS IMOBILIÁRIOS LTDA (confirmado em 4 métodos)
+  destino: Conselho da Magistratura (confirmado em 2 métodos)
+  comarca: Comarca de Capital (confirmado em 2 métodos)
+
+Exemplo 7 (confiança máxima: 4):
+  Arquivo: 2023091479_cache.json
+  juizo: Juízo da 10ª Vara Cível da Capital (confirmado em 2 métodos)
+  perito_nome: João Bosco Ferraz de Oliveira (confirmado em 2 métodos)
+  cpf_perito: 127.585.314-53 (confirmado em 4 métodos)
+  especialidade: Avaliador de (confirmado em 4 métodos)
+  valor_arbitrado: 1750.00 (confirmado em 4 métodos)
+  numero_autos: 0000151-22.2019.8.15.2001 (confirmado em 2 métodos)
+  autor: GILVÂNIA NOGUEIRA DA SILVA (confirmado em 2 métodos)
+  parte_contraria: VISÃO INVESTIMENTOS IMOBILIÁRIOS LTDA (confirmado em 4 métodos)
+  destino: Conselho da Magistratura (confirmado em 2 métodos)
+  comarca: Comarca de Capital (confirmado em 2 métodos)
+
+Exemplo 8 (confiança máxima: 4):
+  Arquivo: 2022112893_cache.json
+  juizo: Juízo de Direito da 4ª Vara Mista da Comarca de Patos (confirmado em 2 métodos)
+  perito_nome: Leonardo Bruno Alves Monteiro (confirmado em 2 métodos)
+  cpf_perito: 034.146.104-00 (confirmado em 4 métodos)
+  especialidade: Médico (confirmado em 2 métodos)
+  valor_arbitrado: 1000.00 (confirmado em 2 métodos)
+  parte_contraria: COMERCIAL CAMPESTRE CLUB (confirmado em 4 métodos)
+  comarca: Comarca de Patos (confirmado em 2 métodos)
+
+Exemplo 9 (confiança máxima: 4):
+  Arquivo: 2021078111_cache.json
+  juizo: Juízo da 2ª Vara Mista da Comarca de Bayeux (confirmado em 2 métodos)
+  perito_nome: Marcos Vinícius Amorim Freitas (confirmado em 2 métodos)
+  cpf_perito: 051.944.134-67 (confirmado em 2 métodos)
+  especialidade: Marcos
+
+Vinícius (confirmado em 2 métodos)
+  valor_arbitrado: 622.00 (confirmado em 2 métodos)
+  autor: EDILEUZA DAS NEVES DE OLIVEIRA (confirmado em 4 métodos)
+  comarca: Comarca de Bayeux (confirmado em 2 métodos)
+
+Exemplo 10 (confiança máxima: 4):
+  Arquivo: 2020178967_cache.json
+  juizo: Juízo da 4ª Vara Cível da Comarca da Capital (confirmado em 2 métodos)
+  perito_nome: Felipe Queiroga Gadelha (confirmado em 2 métodos)
+  cpf_perito: 058.860.534-41 (confirmado em 2 métodos)
+  especialidade: Trata (confirmado em 2 métodos)
+  valor_arbitrado: 1000.00 (confirmado em 4 métodos)
+  autor: RANYERY DE SOUTO PEREIRA (confirmado em 2 métodos)
+  parte_contraria: MRV ENGENHARIA E (confirmado em 2 métodos)
+  destino: Conselho da Magistratura (confirmado em 2 métodos)
+  comarca: Comarca de João Pessoa (confirmado em 2 métodos)
+

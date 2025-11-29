@@ -1,0 +1,58 @@
+RELATÓRIO DE EXTRAÇÃO - DIRETORIA ESPECIAL V11
+Lógica melhorada para extração de comarca
+================================================================================
+
+ESTATÍSTICAS GERAIS:
+Total de arquivos processados: 1000
+Documentos da Diretoria Especial encontrados: 478
+Documentos multi-página: 211
+Documentos extraídos com sucesso: 410
+Falhas na extração: 68
+Taxa de sucesso: 85.8%
+
+--------------------------------------------------------------------------------
+
+MÉTODOS DE EXTRAÇÃO UTILIZADOS:
+AdvancedLayout      : 47717
+LayoutPreserving    :     0
+ColumnDetection     :     0
+Other               :     0
+
+--------------------------------------------------------------------------------
+
+EXTRAÇÃO POR CAMPO:
+autor               :  398 ( 83.3%)
+comarca             :  361 ( 75.5%)
+cpf_perito          :  417 ( 87.2%)
+destino             :  393 ( 82.2%)
+especialidade       :  460 ( 96.2%)
+juizo               :  407 ( 85.1%)
+numero_autos        :  277 ( 57.9%)
+parte_contraria     :  351 ( 73.4%)
+perito_nome         :  344 ( 72.0%)
+processo            :  376 ( 78.7%)
+valor_arbitrado     :  409 ( 85.6%)
+
+--------------------------------------------------------------------------------
+
+ANÁLISE DE COMARCA:
+  None: 117
+  Comarca de Sousa: 77
+  Comarca de João Pessoa: 40
+  Comarca de Pombal: 33
+  Comarca de Campina Grande: 21
+  Comarca de Remígio: 20
+  Comarca de Mamanguape: 15
+  Comarca de Cajazeiras: 14
+  Comarca de Alagoa Nova: 14
+  Comarca de Princesa Isabel: 13
+  Comarca de Piancó: 13
+  Comarca de João Pessoa.: 12
+  Comarca de Bayeux: 11
+  Comarca de Catolé do Rocha: 11
+  Comarca de Patos: 10
+  Comarca de Cabedelo: 8
+  Comarca de Santa Rita: 7
+  Comarca de Araruna: 5
+  Comarca de Guarabira: 5
+  Comarca de Teixeira: 5

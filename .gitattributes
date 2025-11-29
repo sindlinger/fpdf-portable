@@ -1,0 +1,2 @@
+publish/fpdf filter=lfs diff=lfs merge=lfs -text
+*.fpdf filter=lfs diff=lfs merge=lfs -text

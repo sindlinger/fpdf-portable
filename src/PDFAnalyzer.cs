@@ -1,0 +1,1459 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
+using System.Linq;
+using System.Text.RegularExpressions;
+using iTextSharp.text.pdf;
+using iTextSharp.text.pdf.parser;
+using FilterPDF.Strategies;
+
+namespace FilterPDF
+{
+    /// <summary>
+    /// Analisador completo de PDFs - extrai todas as informações disponíveis
+    /// Author: Eduardo Candeia Gonçalves (sindlinger@github.com)
+    /// </summary>
+    public class PDFAnalyzer
+    {
+        private PdfReader reader;
+        private string pdfPath;
+        private bool ownsReader;
+        
+        public PDFAnalyzer(string pdfPath)
+        {
+            this.pdfPath = pdfPath;
+            Console.WriteLine($"    [PDFAnalyzer] Opening PDF: {Path.GetFileName(pdfPath)}");
+            // Use PdfAccessManager for centralized access
+            this.reader = PdfAccessManager.GetReader(pdfPath);
+            this.ownsReader = false;
+            Console.WriteLine($"    [PDFAnalyzer] PDF opened successfully. Pages: {reader.NumberOfPages}");
+        }
+        
+        /// <summary>
+        /// Constructor that accepts an existing reader (for backward compatibility)
+        /// </summary>
+        public PDFAnalyzer(string pdfPath, PdfReader reader)
+        {
+            this.pdfPath = pdfPath;
+            this.reader = reader;
+            this.ownsReader = false;
+            Console.WriteLine($"    [PDFAnalyzer] Using existing reader. Pages: {reader.NumberOfPages}");
+        }
+        
+        /// <summary>
+        /// Análise completa do PDF
+        /// </summary>
+        public PDFAnalysisResult AnalyzeFull()
+        {
+            var result = new PDFAnalysisResult
+            {
+                FilePath = pdfPath,
+                FileSize = new FileInfo(pdfPath).Length,
+                AnalysisDate = DateTime.Now
+            };
+            
+            try
+            {
+                // Metadados básicos
+                result.Metadata = ExtractMetadata();
+                
+                // Metadados XMP
+                result.XMPMetadata = ExtractXMPMetadata();
+                
+                // Informações do documento
+                result.DocumentInfo = ExtractDocumentInfo();
+                
+                // Análise por página
+                result.Pages = AnalyzePages();
+                
+                // Segurança
+                result.Security = ExtractSecurityInfo();
+                
+                // Recursos
+                result.Resources = ExtractResources();
+                
+                // Estatísticas
+                result.Statistics = CalculateStatistics(result);
+                
+                // Novas funcionalidades avançadas
+                result.Accessibility = ExtractAccessibilityInfo();
+                result.Layers = ExtractOptionalContentGroups();
+                result.Signatures = ExtractDigitalSignatures();
+                result.ColorProfiles = ExtractColorProfiles();
+                result.Bookmarks = ExtractBookmarkStructure();
+                
+                // Usar processadores avançados para funcionalidades das DLLs
+                var advancedProcessor = new AdvancedPDFProcessor(reader);
+                result.XMPMetadata = advancedProcessor.ExtractCompleteXMPMetadata();
+                result.PDFACompliance = advancedProcessor.AnalyzePDFAConformance();
+                result.Multimedia = advancedProcessor.DetectRichMedia();
+                
+                // Usar RichMediaProcessor para análise detalhada de Rich Media
+                // var richMediaProcessor = new RichMediaProcessor(reader);
+                // result.RichMediaAnalysis = richMediaProcessor.AnalyzeRichMedia();
+                
+                // Usar SpatialProcessor para dados espaciais
+                // var spatialProcessor = new SpatialProcessor(reader);
+                // result.SpatialData = spatialProcessor.AnalyzeSpatialData();
+                
+                // Usar PDFAProcessor para análise detalhada de PDF/A
+                // var pdfaProcessor = new PDFAProcessor(reader);
+                // result.PDFAValidation = pdfaProcessor.ValidatePDFA();
+                // result.PDFACharacteristics = pdfaProcessor.AnalyzePDFACharacteristics();
+            }
+            finally
+            {
+                // Don't close the reader if we don't own it (it's managed by PdfAccessManager)
+                if (ownsReader && reader != null)
+                {
+                    reader.Close();
+                }
+            }
+            
+            return result;
+        }
+        
+        private Metadata ExtractMetadata()
+        {
+            var info = reader.Info;
+            var metadata = new Metadata();
+            
+            if (info.ContainsKey("Title")) metadata.Title = info["Title"];
+            if (info.ContainsKey("Author")) metadata.Author = info["Author"];
+            if (info.ContainsKey("Subject")) metadata.Subject = info["Subject"];
+            if (info.ContainsKey("Keywords")) metadata.Keywords = info["Keywords"];
+            if (info.ContainsKey("Creator")) metadata.Creator = info["Creator"];
+            if (info.ContainsKey("Producer")) metadata.Producer = info["Producer"];
+            if (info.ContainsKey("CreationDate")) metadata.CreationDate = ParsePDFDate(info["CreationDate"]);
+            if (info.ContainsKey("ModDate")) metadata.ModificationDate = ParsePDFDate(info["ModDate"]);
+            
+            metadata.PDFVersion = reader.PdfVersion.ToString();
+            metadata.IsTagged = false; // Not available in this version
+            
+            return metadata;
+        }
+        
+        private DocumentInfo ExtractDocumentInfo()
+        {
+            return new DocumentInfo
+            {
+                TotalPages = reader.NumberOfPages,
+                IsEncrypted = reader.IsEncrypted(),
+                IsLinearized = false, // Not available in this version
+                HasAcroForm = reader.AcroForm != null,
+                HasXFA = reader.AcroFields.Xfa != null,
+                FileStructure = reader.IsRebuilt() ? "Rebuilt" : "Original"
+            };
+        }
+        
+        private List<PageAnalysis> AnalyzePages()
+        {
+            var pages = new List<PageAnalysis>();
+            
+            for (int i = 1; i <= reader.NumberOfPages; i++)
+            {
+                var page = new PageAnalysis
+                {
+                    PageNumber = i,
+                    Size = GetPageSize(i),
+                    Rotation = reader.GetPageRotation(i),
+                    TextInfo = AnalyzePageText(i),
+                    Resources = AnalyzePageResources(i),
+                    Annotations = ExtractAnnotations(i)
+                };
+                
+                // Copiar FontInfo do TextInfo para o PageAnalysis
+                page.FontInfo = page.TextInfo.Fonts;
+                
+                // Detectar cabeçalhos/rodapés e referências
+                DetectHeadersFooters(page);
+                DetectDocumentReferences(page);
+                
+                pages.Add(page);
+            }
+            
+            return pages;
+        }
+        
+        private PageSize GetPageSize(int pageNum)
+        {
+            var rect = reader.GetPageSize(pageNum);
+            return new PageSize
+            {
+                Width = rect.Width,
+                Height = rect.Height,
+                WidthPoints = rect.Width,
+                HeightPoints = rect.Height,
+                WidthInches = rect.Width / 72f,
+                HeightInches = rect.Height / 72f,
+                WidthMM = rect.Width * 0.352778f,
+                HeightMM = rect.Height * 0.352778f
+            };
+        }
+        
+        private TextInfo AnalyzePageText(int pageNum)
+        {
+            // USAR texto direto sem reconstrução - NÃO ALTERAR O TEXTO ORIGINAL
+            string text = PdfTextExtractor.GetTextFromPage(reader, pageNum);
+            
+            var textInfo = new TextInfo
+            {
+                CharacterCount = text.Length,
+                WordCount = CountWords(text),
+                LineCount = text.Split('\n').Length,
+                Languages = DetectLanguages(text),
+                // COMENTADO: dependia da strategy customizada
+                // HasTables = strategy.HasTables(),
+                // HasColumns = strategy.HasColumns(),
+                HasTables = false, // TODO: detectar sem strategy customizada
+                HasColumns = false, // TODO: detectar sem strategy customizada
+                AverageLineLength = CalculateAverageLineLength(text),
+                PageText = text // Texto original SEM MODIFICAÇÕES
+            };
+            
+            // EXTRAÇÃO COMPLETA DE FONTES - TODAS as instâncias com tamanhos diferentes
+            textInfo.Fonts = ExtractAllPageFontsWithSizes(pageNum);
+            
+            return textInfo;
+        }
+        
+        /// <summary>
+        /// EXTRAI TODAS AS FONTES COM TODOS OS TAMANHOS USADOS - COMO O CÓDIGO ROBUSTO ANTIGO
+        /// </summary>
+        private List<FontInfo> ExtractAllPageFontsWithSizes(int pageNum)
+        {
+            var fonts = new List<FontInfo>();
+            var fontSizeMap = new Dictionary<string, HashSet<float>>();
+
+            try
+            {
+                // ANALISAR O CONTEÚDO DA PÁGINA COM PRTokeniser
+                var contents = reader.GetPageContent(pageNum);
+                var tokenizer = new PRTokeniser(new RandomAccessFileOrArray(contents));
+                
+                string? currentFont = null;
+                float currentSize = 0;
+                
+                while (tokenizer.NextToken())
+                {
+                    if (tokenizer.TokenType == PRTokeniser.TokType.OTHER)
+                    {
+                        string cmd = tokenizer.StringValue;
+                        
+                        // Capturar comando Tf (set font and size)
+                        if (cmd == "Tf" && currentFont != null)
+                        {
+                            if (!fontSizeMap.ContainsKey(currentFont))
+                                fontSizeMap[currentFont] = new HashSet<float>();
+                            fontSizeMap[currentFont].Add(currentSize);
+                        }
+                    }
+                    else if (tokenizer.TokenType == PRTokeniser.TokType.NAME)
+                    {
+                        // Capturar nome da fonte
+                        currentFont = tokenizer.StringValue;
+                    }
+                    else if (tokenizer.TokenType == PRTokeniser.TokType.NUMBER)
+                    {
+                        // Capturar tamanho da fonte
+                        currentSize = float.Parse(tokenizer.StringValue, System.Globalization.CultureInfo.InvariantCulture);
+                    }
+                }
+                
+                // Agora obter detalhes das fontes do dicionário de recursos
+                var pageDict = reader.GetPageN(pageNum);
+                var resources = pageDict.GetAsDict(PdfName.RESOURCES);
+                
+                if (resources != null)
+                {
+                    var fontDict = resources.GetAsDict(PdfName.FONT);
+                    if (fontDict != null)
+                    {
+                        foreach (var fontKey in fontDict.Keys)
+                        {
+                            var fontRef = fontDict.GetAsIndirectObject(fontKey);
+                            if (fontRef != null)
+                            {
+                                var fontObj = PdfReader.GetPdfObject(fontRef);
+                                if (fontObj is PdfDictionary fontD)
+                                {
+                                    // Informações básicas da fonte
+                                    var baseFont = fontD.GetAsName(PdfName.BASEFONT);
+                                    string fontName = baseFont?.ToString() ?? fontKey.ToString();
+                                    
+                                    // Corrigir nome da fonte (remover / do início)
+                                    fontName = FontNameFixer.Fix(fontName);
+                                    
+                                    bool isEmbedded = IsFontEmbedded(fontD);
+                                    string style = ExtractFontStyle(fontD) ?? string.Empty;
+                                    
+                                    // Obter todos os tamanhos desta fonte
+                                    var sizes = new HashSet<float>();
+                                    
+                                    // Procurar correspondência no mapa de tamanhos
+                                    string fontKeyStr = fontKey.ToString();
+                                    if (fontSizeMap.ContainsKey(fontKeyStr))
+                                    {
+                                        sizes.UnionWith(fontSizeMap[fontKeyStr]);
+                                    }
+                                    
+                                    // Também tentar com o nome base da fonte
+                                    foreach (var kvp in fontSizeMap)
+                                    {
+                                        if (fontName.Contains(kvp.Key) || kvp.Key.Contains(fontName))
+                                        {
+                                            sizes.UnionWith(kvp.Value);
+                                        }
+                                    }
+                                    
+                                    // Se ainda não encontrou tamanhos, usar CompleteFontAnalysisStrategy
+                                    if (sizes.Count == 0)
+                                    {
+                                        var fontStrategy = new CompleteFontAnalysisStrategy();
+                                        PdfTextExtractor.GetTextFromPage(reader, pageNum, fontStrategy);
+                                        var strategySizes = fontStrategy.GetFontSizes(fontName);
+                                        if (strategySizes.Count > 0)
+                                            sizes.UnionWith(strategySizes);
+                                        else
+                                            sizes.Add(12.0f); // Default
+                                    }
+                                    
+                                    // Determinar tipo da fonte
+                                    string fontType = "Type1"; // default
+                                    var subtype = fontD.GetAsName(PdfName.SUBTYPE);
+                                    if (subtype != null)
+                                    {
+                                        string subtypeStr = subtype.ToString();
+                                        if (subtypeStr.Contains("TrueType")) fontType = "TrueType";
+                                        else if (subtypeStr.Contains("Type0")) fontType = "Type0";
+                                        else if (subtypeStr.Contains("CIDFont")) fontType = "CIDFont";
+                                        else if (subtypeStr.Contains("Type3")) fontType = "Type3";
+                                    }
+                                    
+                                    // Detectar estilos da fonte
+                                    bool isBold = fontName.Contains("Bold") || fontName.Contains("bold") || 
+                                                 fontName.Contains("Heavy") || fontName.Contains("Black");
+                                    bool isItalic = fontName.Contains("Italic") || fontName.Contains("italic") || 
+                                                   fontName.Contains("Oblique") || fontName.Contains("Slant");
+                                    bool isMonospace = fontName.Contains("Courier") || fontName.Contains("Mono") || 
+                                                      fontName.Contains("Consolas") || fontName.Contains("Fixed");
+                                    bool isSerif = fontName.Contains("Times") || fontName.Contains("Serif") || 
+                                                  fontName.Contains("Georgia") || fontName.Contains("Palatino");
+                                    bool isSansSerif = fontName.Contains("Arial") || fontName.Contains("Helvetica") || 
+                                                      fontName.Contains("Sans") || fontName.Contains("Verdana");
+                                    
+                                    // Criar uma única entrada de fonte com todos os tamanhos
+                                    fonts.Add(new FontInfo
+                                    {
+                                        Name = fontName,
+                                        BaseFont = fontName,
+                                        FontType = fontType,
+                                        Size = sizes.Count > 0 ? sizes.First() : 12.0f,
+                                        Style = style,
+                                        IsEmbedded = isEmbedded,
+                                        FontSizes = sizes.ToList(),
+                                        IsBold = isBold,
+                                        IsItalic = isItalic,
+                                        IsMonospace = isMonospace,
+                                        IsSerif = isSerif,
+                                        IsSansSerif = isSansSerif
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            return fonts;
+        }
+        
+        private bool IsFontEmbedded(PdfDictionary fontDict)
+        {
+            try
+            {
+                var fontDescriptor = fontDict.GetAsDict(PdfName.FONTDESCRIPTOR);
+                if (fontDescriptor != null)
+                {
+                    return fontDescriptor.Contains(PdfName.FONTFILE) || 
+                           fontDescriptor.Contains(PdfName.FONTFILE2) || 
+                           fontDescriptor.Contains(PdfName.FONTFILE3);
+                }
+            }
+            catch { }
+            return false;
+        }
+        
+        private string? ExtractFontStyle(PdfDictionary fontDict)
+        {
+            try
+            {
+                var fontName = fontDict.GetAsName(PdfName.BASEFONT)?.ToString() ?? "";
+                
+                if (fontName.Contains("Bold") && fontName.Contains("Italic"))
+                    return "BoldItalic";
+                else if (fontName.Contains("Bold"))
+                    return "Bold";
+                else if (fontName.Contains("Italic"))
+                    return "Italic";
+                else
+                    return "Regular";
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        
+        private List<float> ExtractFontSizesFromContent(int pageNum, string fontName)
+        {
+            var sizes = new List<float>();
+            
+            try
+            {
+                // Implementar análise do stream de conteúdo para extrair tamanhos
+                var pageDict = reader.GetPageN(pageNum);
+                var contentBytes = reader.GetPageContent(pageNum);
+                
+                // Verificar recursos da página para fontes inline
+                var resources = pageDict.GetAsDict(PdfName.RESOURCES);
+                if (resources != null)
+                {
+                    var fonts = resources.GetAsDict(PdfName.FONT);
+                    if (fonts != null)
+                    {
+                        // Analisar fontes definidas nos recursos da página
+                        foreach (var fontKey in fonts.Keys)
+                        {
+                            var fontDict = fonts.GetAsDict(fontKey);
+                            if (fontDict != null)
+                            {
+                                // Extrair tamanho padrão se disponível
+                                var descriptor = fontDict.GetAsDict(PdfName.FONTDESCRIPTOR);
+                                if (descriptor != null)
+                                {
+                                    var fontBBox = descriptor.GetAsArray(PdfName.FONTBBOX);
+                                    if (fontBBox != null && fontBBox.Size >= 4)
+                                    {
+                                        // Estimar tamanho baseado na BBox
+                                        var height = fontBBox.GetAsNumber(3).FloatValue - fontBBox.GetAsNumber(1).FloatValue;
+                                        if (height > 0 && !sizes.Contains(height / 1000f * 12f))
+                                        {
+                                            sizes.Add(height / 1000f * 12f); // Normalizar para pontos
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (contentBytes != null)
+                {
+                    string content = System.Text.Encoding.ASCII.GetString(contentBytes);
+                    
+                    // Procurar por comandos Tf (set font and size)
+                    var tfMatches = System.Text.RegularExpressions.Regex.Matches(content, @"(\d+\.?\d*)\s+Tf");
+                    foreach (System.Text.RegularExpressions.Match match in tfMatches)
+                    {
+                        if (float.TryParse(match.Groups[1].Value, out float size))
+                        {
+                            if (!sizes.Contains(size))
+                            {
+                                sizes.Add(size);
+                            }
+                        }
+                    }
+                }
+                
+                if (sizes.Count == 0)
+                {
+                    sizes.Add(12.0f); // Default size
+                }
+            }
+            catch
+            {
+                sizes.Add(12.0f);
+            }
+            
+            return sizes;
+        }
+        
+        private PageResources AnalyzePageResources(int pageNum)
+        {
+            var dict = reader.GetPageN(pageNum);
+            var resources = dict.GetAsDict(PdfName.RESOURCES);
+            var result = new PageResources();
+            
+            if (resources != null)
+            {
+                // Imagens
+                var xobject = resources.GetAsDict(PdfName.XOBJECT);
+                if (xobject != null)
+                {
+                    foreach (var key in xobject.Keys)
+                    {
+                        var obj = xobject.GetAsIndirectObject(key);
+                        if (obj != null)
+                        {
+                            var stream = reader.GetPdfObject(obj.Number) as PRStream;
+                            if (stream != null)
+                            {
+                                var subtype = stream.GetAsName(PdfName.SUBTYPE);
+                                if (PdfName.IMAGE.Equals(subtype))
+                                {
+                                    // USAR DetailedImageExtractor para extrair informações completas
+                                    var detailedImages = DetailedImageExtractor.ExtractCompleteImageDetails(reader, pageNum);
+                                    result.Images.AddRange(detailedImages);
+                                    return result; // Evitar duplicatas
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Fontes
+                var fonts = resources.GetAsDict(PdfName.FONT);
+                if (fonts != null)
+                {
+                    foreach (var key in fonts.Keys)
+                    {
+                        result.FontCount++;
+                    }
+                }
+            }
+            
+            // Campos de formulário na página
+            result.FormFields = ExtractPageFormFields(pageNum);
+            
+            return result;
+        }
+        
+        private List<Annotation> ExtractAnnotations(int pageNum)
+        {
+            var annotations = new List<Annotation>();
+            var pageDict = reader.GetPageN(pageNum);
+            var annots = pageDict.GetAsArray(PdfName.ANNOTS);
+            
+            if (annots != null)
+            {
+                for (int i = 0; i < annots.Size; i++)
+                {
+                    var annotDict = annots.GetAsDict(i);
+                    if (annotDict != null)
+                    {
+                        annotations.Add(new Annotation
+                        {
+                            Type = annotDict.GetAsName(PdfName.SUBTYPE)?.ToString() ?? string.Empty,
+                            Contents = annotDict.GetAsString(PdfName.CONTENTS)?.ToString() ?? string.Empty,
+                            Author = annotDict.GetAsString(PdfName.T)?.ToString() ?? string.Empty,
+                            ModificationDate = ParsePDFDate(annotDict.GetAsString(PdfName.M)?.ToString() ?? string.Empty)
+                        });
+                    }
+                }
+            }
+            
+            return annotations;
+        }
+        
+        private void DetectHeadersFooters(PageAnalysis page)
+        {
+            // Obter altura da página
+            var pageSize = reader.GetPageSize(page.PageNumber);
+            float pageHeight = pageSize.Height;
+            
+            // USAR AdvancedHeaderFooterStrategy para HEADERS com altura correta
+            var headerStrategy = new AdvancedHeaderFooterStrategy(true, pageHeight);
+            string headerText = PdfTextExtractor.GetTextFromPage(reader, page.PageNumber, headerStrategy);
+            page.Headers = ParseHeaderFooterText(headerText);
+
+            // USAR AdvancedHeaderFooterStrategy para FOOTERS com altura correta
+            var footerStrategy = new AdvancedHeaderFooterStrategy(false, pageHeight);
+            string footerText = PdfTextExtractor.GetTextFromPage(reader, page.PageNumber, footerStrategy);
+            page.Footers = ParseHeaderFooterText(footerText);
+        }
+        
+        private List<string> ParseHeaderFooterText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return new List<string>();
+                
+            return text.Split('\n')
+                      .Where(line => !string.IsNullOrWhiteSpace(line))
+                      .Select(line => line.Trim())
+                      .ToList();
+        }
+        
+        private void DetectDocumentReferences(PageAnalysis page)
+        {
+            var references = new List<string>();
+            string text = PdfTextExtractor.GetTextFromPage(reader, page.PageNumber);
+
+            // Padrões do código antigo - EXATAMENTE como solicitado
+            var patterns = new[] {
+                @"SEI\s+\d{6}-\d{2}\.\d{4}\.\d\.\d{2}(?:\s*/\s*pg\.\s*\d+)?",  // SEI 011622-24.2025.8.15 / pg. 1
+                @"Processo\s+n[º°]\s*[\d.-]+",                                    // Processo nº 011622-24.2025.8.15
+                @"Ofício\s+\d+\s+(?:\(\d+\))?",                                   // Ofício 473 Ofício (0201043)
+                @"Anexo\s+\(\d+\)"                                                  // Anexo (0201081)
+            };
+
+            foreach (var pattern in patterns)
+            {
+                var matches = Regex.Matches(text, pattern);
+                foreach (Match match in matches)
+                    references.Add(match.Value);
+            }
+
+            page.DocumentReferences = references.Distinct().ToList();
+        }
+        
+        private SecurityInfo ExtractSecurityInfo()
+        {
+            var security = new SecurityInfo
+            {
+                IsEncrypted = reader.IsEncrypted(),
+                PermissionFlags = (int)reader.Permissions,
+                EncryptionType = reader.GetCryptoMode()
+            };
+            
+            if (security.IsEncrypted)
+            {
+                security.CanPrint = reader.IsOpenedWithFullPermissions;
+                security.CanModify = (reader.Permissions & PdfWriter.ALLOW_MODIFY_CONTENTS) != 0;
+                security.CanCopy = (reader.Permissions & PdfWriter.ALLOW_COPY) != 0;
+                security.CanAnnotate = (reader.Permissions & PdfWriter.ALLOW_MODIFY_ANNOTATIONS) != 0;
+            }
+            
+            return security;
+        }
+        
+        private ResourcesSummary ExtractResources()
+        {
+            var resources = new ResourcesSummary();
+            
+            // Contar tipos de objetos
+            for (int i = 0; i < reader.XrefSize; i++)
+            {
+                var obj = reader.GetPdfObject(i);
+                if (obj != null && !obj.IsNull())
+                {
+                    if (obj.IsStream())
+                    {
+                        var stream = (PRStream)obj;
+                        var subtype = stream.GetAsName(PdfName.SUBTYPE);
+                        
+                        if (PdfName.IMAGE.Equals(subtype))
+                            resources.TotalImages++;
+                        else if (PdfName.FORM.Equals(subtype))
+                            resources.Forms++;
+                    }
+                }
+            }
+            
+            // JavaScript detection not available in this version
+            resources.HasJavaScript = false;
+            resources.JavaScriptCount = 0;
+            
+            // Anexos
+            var catalog = reader.Catalog;
+            var names = catalog.GetAsDict(PdfName.NAMES);
+            if (names != null)
+            {
+                var embeddedFiles = names.GetAsDict(PdfName.EMBEDDEDFILES);
+                resources.HasAttachments = embeddedFiles != null;
+            }
+            
+            return resources;
+        }
+        
+        private Statistics CalculateStatistics(PDFAnalysisResult result)
+        {
+            var stats = new Statistics();
+            
+            // Estatísticas de texto
+            stats.TotalCharacters = result.Pages.Sum(p => p.TextInfo.CharacterCount);
+            stats.TotalWords = result.Pages.Sum(p => p.TextInfo.WordCount);
+            stats.TotalLines = result.Pages.Sum(p => p.TextInfo.LineCount);
+            stats.AverageWordsPerPage = result.Pages.Count > 0 ? stats.TotalWords / result.Pages.Count : 0;
+            
+            // Estatísticas de recursos
+            stats.TotalImages = result.Pages.Sum(p => p.Resources.Images.Count);
+            stats.TotalAnnotations = result.Pages.Sum(p => p.Annotations.Count);
+            
+            // Fontes únicas
+            var allFonts = new HashSet<string>();
+            foreach (var page in result.Pages)
+            {
+                foreach (var font in page.TextInfo.Fonts)
+                {
+                    allFonts.Add(font.Name);
+                }
+            }
+            stats.UniqueFonts = allFonts.Count;
+            
+            // Páginas com características especiais
+            stats.PagesWithImages = result.Pages.Count(p => p.Resources.Images.Count > 0);
+            stats.PagesWithTables = result.Pages.Count(p => p.TextInfo.HasTables);
+            stats.PagesWithColumns = result.Pages.Count(p => p.TextInfo.HasColumns);
+            
+            return stats;
+        }
+        
+        private ImageInfo ExtractImageInfo(PRStream stream, string name)
+        {
+            var info = new ImageInfo { Name = name };
+            
+            var width = stream.GetAsNumber(PdfName.WIDTH);
+            var height = stream.GetAsNumber(PdfName.HEIGHT);
+            var bitsPerComponent = stream.GetAsNumber(PdfName.BITSPERCOMPONENT);
+            var filter = stream.GetAsName(PdfName.FILTER);
+            
+            if (width != null) info.Width = width.IntValue;
+            if (height != null) info.Height = height.IntValue;
+            if (bitsPerComponent != null) info.BitsPerComponent = bitsPerComponent.IntValue;
+            if (filter != null) info.CompressionType = filter.ToString();
+            
+            info.ColorSpace = stream.GetAsName(PdfName.COLORSPACE)?.ToString() ?? "Unknown";
+            
+            return info;
+        }
+        
+        private DateTime? ParsePDFDate(string pdfDate)
+        {
+            if (string.IsNullOrEmpty(pdfDate)) return null;
+            
+            try
+            {
+                // PDF date format: D:YYYYMMDDHHmmSSOHH'mm'
+                pdfDate = pdfDate.Replace("D:", "").Replace("'", "");
+                if (pdfDate.Length >= 14)
+                {
+                    int year = int.Parse(pdfDate.Substring(0, 4));
+                    int month = int.Parse(pdfDate.Substring(4, 2));
+                    int day = int.Parse(pdfDate.Substring(6, 2));
+                    int hour = int.Parse(pdfDate.Substring(8, 2));
+                    int minute = int.Parse(pdfDate.Substring(10, 2));
+                    int second = int.Parse(pdfDate.Substring(12, 2));
+                    
+                    return new DateTime(year, month, day, hour, minute, second);
+                }
+            }
+            catch { }
+            
+            return null;
+        }
+        
+        private int CountWords(string text)
+        {
+            return Regex.Matches(text, @"\b\w+\b").Count;
+        }
+        
+        private List<string> DetectLanguages(string text)
+        {
+            var languages = new List<string>();
+            
+            // Detectar por padrões comuns
+            if (Regex.IsMatch(text, @"\b(the|and|of|to|in|is|are)\b", RegexOptions.IgnoreCase))
+                languages.Add("English");
+            
+            if (Regex.IsMatch(text, @"\b(de|da|do|que|para|com|em|por)\b", RegexOptions.IgnoreCase))
+                languages.Add("Português");
+            
+            if (Regex.IsMatch(text, @"\b(el|la|de|que|en|es|un|una)\b", RegexOptions.IgnoreCase))
+                languages.Add("Español");
+            
+            return languages.Distinct().ToList();
+        }
+        
+        private double CalculateAverageLineLength(string text)
+        {
+            var lines = text.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
+            return lines.Length > 0 ? lines.Average(l => l.Length) : 0;
+        }
+        
+        // ========== NOVOS MÉTODOS AVANÇADOS ==========
+        
+        private XMPMetadata ExtractXMPMetadata()
+        {
+            // Usar o AdvancedPDFProcessor para extração COMPLETA de XMP
+            // var processor = new AdvancedPDFProcessor(reader);
+            // return processor.ExtractCompleteXMPMetadata();
+            return new XMPMetadata(); // Temporary fallback
+        }
+        
+        private AccessibilityInfo ExtractAccessibilityInfo()
+        {
+            var accessibility = new AccessibilityInfo();
+
+            try
+            {
+                var catalog = reader.Catalog;
+
+                // Verificar TODAS as tags de estrutura
+                var structTree = catalog.GetAsDict(PdfName.STRUCTTREEROOT);
+                if (structTree != null)
+                {
+                    accessibility.HasStructureTags = true;
+                    accessibility.IsTaggedPDF = true;
+                    
+                    // EXTRAIR roles, elementos, hierarquia completa
+                    var roleMap = structTree.GetAsDict(PdfName.ROLEMAP);
+                    if (roleMap != null)
+                    {
+                        foreach (var key in roleMap.Keys)
+                        {
+                            var mappedRole = roleMap.Get(key);
+                            if (mappedRole != null)
+                            {
+                                // Adicionar mapeamento de roles personalizados
+                                accessibility.CustomRoles[key.ToString()] = mappedRole.ToString();
+                            }
+                        }
+                    }
+                    
+                    // Extrair árvore de estrutura completa
+                    var kids = structTree.GetAsArray(PdfName.K);
+                    if (kids != null)
+                    {
+                        accessibility.StructureTree = ParseStructureTree(kids, 0);
+                        CountStructureElements(accessibility.StructureTree, accessibility);
+                    }
+                    
+                    // Verificar ParentTree para mapeamento de conteúdo
+                    var parentTree = structTree.Get(PdfName.PARENTTREE);
+                    if (parentTree != null)
+                    {
+                        accessibility.HasParentTree = true;
+                    }
+                    
+                    // Verificar IDTree
+                    var idTree = structTree.Get(new PdfName("IDTree"));
+                    if (idTree != null)
+                    {
+                        accessibility.HasIDTree = true;
+                    }
+                }
+                else
+                {
+                    accessibility.HasStructureTags = false;
+                    accessibility.IsTaggedPDF = false;
+                }
+                
+                // Detectar linguagem principal e alternativas
+                var lang = catalog.GetAsString(PdfName.LANG);
+                if (lang != null)
+                {
+                    accessibility.Language = lang.ToString();
+                }
+                
+                // Verificar ViewerPreferences para acessibilidade
+                var viewerPrefs = catalog.GetAsDict(PdfName.VIEWERPREFERENCES);
+                if (viewerPrefs != null)
+                {
+                    var displayDocTitle = viewerPrefs.GetAsBoolean(new PdfName("DisplayDocTitle"));
+                    if (displayDocTitle != null && displayDocTitle.BooleanValue)
+                    {
+                        accessibility.DisplayDocTitle = true;
+                    }
+                }
+                
+                // Verificar se tem texto alternativo em imagens
+                for (int i = 1; i <= reader.NumberOfPages; i++)
+                {
+                    var page = reader.GetPageN(i);
+                    CheckPageAccessibility(page, accessibility);
+                }
+            }
+            catch { }
+
+            return accessibility;
+        }
+        
+        private void CheckPageAccessibility(PdfDictionary page, AccessibilityInfo accessibility)
+        {
+            try
+            {
+                var resources = page.GetAsDict(PdfName.RESOURCES);
+                if (resources != null)
+                {
+                    var xobject = resources.GetAsDict(PdfName.XOBJECT);
+                    if (xobject != null)
+                    {
+                        foreach (var key in xobject.Keys)
+                        {
+                            var obj = xobject.GetAsIndirectObject(key);
+                            if (obj != null)
+                            {
+                                var stream = reader.GetPdfObject(obj.Number) as PRStream;
+                                if (stream != null && PdfName.IMAGE.Equals(stream.GetAsName(PdfName.SUBTYPE)))
+                                {
+                                    // Verificar se tem texto alternativo
+                                    var alt = stream.Get(PdfName.ALT);
+                                    if (alt != null)
+                                    {
+                                        accessibility.HasAlternativeText = true;
+                                        accessibility.ImagesWithAltText++;
+                                    }
+                                    accessibility.TotalImages++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+        
+        private List<OptionalContentGroup> ExtractOptionalContentGroups()
+        {
+            var layers = new List<OptionalContentGroup>();
+            
+            try
+            {
+                var catalog = reader.Catalog;
+                var ocProperties = catalog.GetAsDict(PdfName.OCPROPERTIES);
+                
+                if (ocProperties != null)
+                {
+                    var ocgs = ocProperties.GetAsArray(PdfName.OCGS);
+                    if (ocgs != null)
+                    {
+                        for (int i = 0; i < ocgs.Size; i++)
+                        {
+                            var ocgDict = ocgs.GetAsDict(i);
+                            if (ocgDict != null)
+                            {
+                                var layer = new OptionalContentGroup
+                                {
+                                    Name = ocgDict.GetAsString(PdfName.NAME)?.ToString() ?? "Unnamed Layer",
+                                    Intent = ocgDict.GetAsName(PdfName.INTENT)?.ToString() ?? "View",
+                                    IsVisible = true, // Padrão
+                                    CanToggle = true
+                                };
+                                
+                                var usage = ocgDict.GetAsDict(PdfName.USAGE);
+                                if (usage != null)
+                                {
+                                    foreach (var key in usage.Keys)
+                                    {
+                                        layer.Usage = key.ToString();
+                                    }
+                                }
+                                
+                                layers.Add(layer);
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            
+            return layers;
+        }
+        
+        private List<DigitalSignature> ExtractDigitalSignatures()
+        {
+            var signatures = new List<DigitalSignature>();
+            
+            try
+            {
+                var acroForm = reader.AcroForm;
+                if (acroForm != null)
+                {
+                    var fields = acroForm.GetAsArray(PdfName.FIELDS);
+                    if (fields != null)
+                    {
+                        for (int i = 0; i < fields.Size; i++)
+                        {
+                            var field = fields.GetAsDict(i);
+                            if (field != null)
+                            {
+                                var ft = field.GetAsName(PdfName.FT);
+                                if (PdfName.SIG.Equals(ft))
+                                {
+                                    var signature = new DigitalSignature
+                                    {
+                                        Name = field.GetAsString(PdfName.T)?.ToString() ?? "Signature",
+                                        SignatureType = "Digital Signature"
+                                    };
+                                    
+                                    var v = field.GetAsDict(PdfName.V);
+                                    if (v != null)
+                                    {
+                                        signature.ContactInfo = v.GetAsString(PdfName.CONTACTINFO)?.ToString() ?? string.Empty;
+                                        signature.Location = v.GetAsString(PdfName.LOCATION)?.ToString() ?? string.Empty;
+                                        signature.Reason = v.GetAsString(PdfName.REASON)?.ToString() ?? string.Empty;
+                                        
+                                        var m = v.GetAsString(PdfName.M);
+                                        if (m != null)
+                                        {
+                                            signature.SignDate = ParsePDFDate(m.ToString());
+                                        }
+                                    }
+                                    
+                                    signatures.Add(signature);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            
+            return signatures;
+        }
+        
+        private List<ColorProfile> ExtractColorProfiles()
+        {
+            var profiles = new List<ColorProfile>();
+
+            try
+            {
+                // PERCORRER TODAS AS PÁGINAS
+                for (int i = 1; i <= reader.NumberOfPages; i++)
+                {
+                    var page = reader.GetPageN(i);
+                    var resources = page.GetAsDict(PdfName.RESOURCES);
+
+                    if (resources != null)
+                    {
+                        // PROCURAR EM COLORSPACE
+                        var colorSpaces = resources.GetAsDict(PdfName.COLORSPACE);
+                        if (colorSpaces != null)
+                        {
+                            foreach (var key in colorSpaces.Keys)
+                            {
+                                var cs = colorSpaces.Get(key);
+                                
+                                // EXTRAIR informações ICC Profile
+                                if (cs != null && cs.ToString().Contains("ICCBased"))
+                                {
+                                    var profile = new ColorProfile
+                                    {
+                                        Name = key.ToString(),
+                                        ColorSpace = "ICC"
+                                    };
+                                    
+                                    // Tentar extrair mais detalhes do stream ICC
+                                    if (cs is PdfArray csArray && csArray.Size > 1)
+                                    {
+                                        var iccStream = csArray.GetAsStream(1);
+                                        if (iccStream != null)
+                                        {
+                                            profile.ProfileSize = iccStream.Length;
+                                            
+                                            // Extrair número de componentes
+                                            var n = iccStream.GetAsNumber(PdfName.N);
+                                            if (n != null)
+                                            {
+                                                profile.NumberOfComponents = n.IntValue;
+                                                profile.Description = $"{n.IntValue} component ICC profile";
+                                            }
+                                            
+                                            // Tentar extrair metadata do ICC
+                                            var alternate = iccStream.GetAsName(PdfName.ALTERNATE);
+                                            if (alternate != null)
+                                            {
+                                                profile.AlternateColorSpace = alternate.ToString();
+                                            }
+                                        }
+                                    }
+                                    
+                                    profiles.Add(profile);
+                                }
+                                // Verificar também outros tipos de colorspace
+                                else if (cs is PdfName)
+                                {
+                                    var csName = cs.ToString();
+                                    if (csName.Contains("RGB") || csName.Contains("CMYK") || csName.Contains("Gray"))
+                                    {
+                                        profiles.Add(new ColorProfile
+                                        {
+                                            Name = key.ToString(),
+                                            ColorSpace = csName,
+                                            Description = $"Device {csName}"
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Verificar também em XObject para imagens com perfis embutidos
+                        var xobjects = resources.GetAsDict(PdfName.XOBJECT);
+                        if (xobjects != null)
+                        {
+                            foreach (var xkey in xobjects.Keys)
+                            {
+                                var xobj = xobjects.GetAsIndirectObject(xkey);
+                                if (xobj != null)
+                                {
+                                    var stream = reader.GetPdfObject(xobj.Number) as PRStream;
+                                    if (stream != null && PdfName.IMAGE.Equals(stream.GetAsName(PdfName.SUBTYPE)))
+                                    {
+                                        var imgColorSpace = stream.Get(PdfName.COLORSPACE);
+                                        if (imgColorSpace != null && imgColorSpace.ToString().Contains("ICCBased"))
+                                        {
+                                            profiles.Add(new ColorProfile
+                                            {
+                                                Name = $"Image_{xkey}",
+                                                ColorSpace = "ICC (Embedded in image)",
+                                                Description = "ICC profile embedded in image"
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            return profiles.Distinct().ToList();
+        }
+        
+        private BookmarkStructure ExtractBookmarkStructure()
+        {
+            var bookmarks = new BookmarkStructure();
+            
+            try
+            {
+                var catalog = reader.Catalog;
+                var outlines = catalog.GetAsDict(PdfName.OUTLINES);
+                
+                if (outlines != null)
+                {
+                    var first = outlines.GetAsDict(PdfName.FIRST);
+                    if (first != null)
+                    {
+                        bookmarks.RootItems = ParseBookmarkItems(first, 0);
+                        bookmarks.TotalCount = CountBookmarks(bookmarks.RootItems);
+                        bookmarks.MaxDepth = CalculateMaxDepth(bookmarks.RootItems);
+                    }
+                }
+            }
+            catch { }
+            
+            return bookmarks;
+        }
+        
+        // Métodos auxiliares
+        private string? ExtractXMPValue(string xmpString, string tagName)
+        {
+            try
+            {
+                var pattern = $@"<{tagName}[^>]*>([^<]*)</{tagName}>";
+                var match = Regex.Match(xmpString, pattern);
+                return match.Success ? match.Groups[1].Value : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        
+        private List<string> ExtractXMPArray(string xmpString, string tagName)
+        {
+            var results = new List<string>();
+            try
+            {
+                var pattern = $@"<{tagName}[^>]*>.*?<rdf:li[^>]*>([^<]*)</rdf:li>.*?</{tagName}>";
+                var matches = Regex.Matches(xmpString, pattern, RegexOptions.Singleline);
+                foreach (Match match in matches)
+                {
+                    results.Add(match.Groups[1].Value);
+                }
+            }
+            catch { }
+            return results;
+        }
+        
+        private List<StructureElement> ParseStructureTree(PdfArray kids, int level)
+        {
+            var elements = new List<StructureElement>();
+            
+            try
+            {
+                for (int i = 0; i < kids.Size; i++)
+                {
+                    var kid = kids.GetAsDict(i);
+                    if (kid != null)
+                    {
+                        var element = new StructureElement
+                        {
+                            Type = kid.GetAsName(PdfName.S)?.ToString() ?? string.Empty,
+                            Title = kid.GetAsString(PdfName.T)?.ToString() ?? string.Empty,
+                            AlternativeText = kid.GetAsString(PdfName.ALT)?.ToString() ?? string.Empty,
+                            ActualText = kid.GetAsString(PdfName.ACTUALTEXT)?.ToString() ?? string.Empty,
+                            Level = level
+                        };
+                        
+                        var childKids = kid.GetAsArray(PdfName.K);
+                        if (childKids != null)
+                        {
+                            element.Children = ParseStructureTree(childKids, level + 1);
+                        }
+                        
+                        elements.Add(element);
+                    }
+                }
+            }
+            catch { }
+            
+            return elements;
+        }
+        
+        private void CountStructureElements(List<StructureElement> elements, AccessibilityInfo accessibility)
+        {
+            foreach (var element in elements)
+            {
+                switch (element.Type?.ToUpper())
+                {
+                    case "H":
+                    case "H1":
+                    case "H2":
+                    case "H3":
+                    case "H4":
+                    case "H5":
+                    case "H6":
+                        accessibility.HeadingLevels++;
+                        break;
+                    case "L":
+                    case "LI":
+                        accessibility.ListElements++;
+                        break;
+                    case "TABLE":
+                    case "TR":
+                    case "TD":
+                    case "TH":
+                        accessibility.TableElements++;
+                        break;
+                    case "FIGURE":
+                    case "IMG":
+                        accessibility.FigureElements++;
+                        break;
+                }
+                
+                if (!string.IsNullOrEmpty(element.AlternativeText))
+                {
+                    accessibility.HasAlternativeText = true;
+                }
+                
+                CountStructureElements(element.Children, accessibility);
+            }
+        }
+        
+        private List<BookmarkItem> ParseBookmarkItems(PdfDictionary first, int level)
+        {
+            var items = new List<BookmarkItem>();
+            var current = first;
+            
+            try
+            {
+                while (current != null)
+                {
+                    var item = new BookmarkItem
+                    {
+                        Title = current.GetAsString(PdfName.TITLE)?.ToString() ?? string.Empty,
+                        Level = level,
+                        IsOpen = current.GetAsNumber(PdfName.COUNT)?.IntValue > 0
+                    };
+                    
+                    // Extrair destino
+                    var dest = current.GetAsArray(PdfName.DEST);
+                    if (dest != null && dest.Size > 0)
+                    {
+                        item.Destination = new BookmarkDestination();
+                        var pageRef = dest.GetAsIndirectObject(0);
+                        if (pageRef != null)
+                        {
+                            item.Destination.PageNumber = GetPageNumberFromRef(pageRef);
+                        }
+                        
+                        if (dest.Size > 1)
+                        {
+                            item.Destination.Type = dest.GetAsName(1)?.ToString() ?? string.Empty;
+                        }
+                    }
+                    
+                    // Extrair ação
+                    var action = current.GetAsDict(PdfName.A);
+                    if (action != null)
+                    {
+                        item.Action = new BookmarkAction
+                        {
+                            Type = action.GetAsName(PdfName.S)?.ToString() ?? string.Empty,
+                            URI = action.GetAsString(PdfName.URI)?.ToString() ?? string.Empty
+                        };
+                    }
+                    
+                    // Processar filhos
+                    var kidFirst = current.GetAsDict(PdfName.FIRST);
+                    if (kidFirst != null)
+                    {
+                        item.Children = ParseBookmarkItems(kidFirst, level + 1);
+                    }
+                    
+                    items.Add(item);
+                    current = current.GetAsDict(PdfName.NEXT);
+                }
+            }
+            catch { }
+            
+            return items;
+        }
+        
+        private int CountBookmarks(List<BookmarkItem> items)
+        {
+            int count = items.Count;
+            foreach (var item in items)
+            {
+                count += CountBookmarks(item.Children);
+            }
+            return count;
+        }
+        
+        private int CalculateMaxDepth(List<BookmarkItem> items)
+        {
+            if (items.Count == 0) return 0;
+            
+            int maxDepth = 1;
+            foreach (var item in items)
+            {
+                int childDepth = CalculateMaxDepth(item.Children);
+                maxDepth = Math.Max(maxDepth, 1 + childDepth);
+            }
+            return maxDepth;
+        }
+        
+        private List<FormField> ExtractPageFormFields(int pageNum)
+        {
+            var formFields = new List<FormField>();
+            
+            try
+            {
+                var acroForm = reader.AcroForm;
+                if (acroForm != null)
+                {
+                    var fields = acroForm.GetAsArray(PdfName.FIELDS);
+                    if (fields != null)
+                    {
+                        for (int i = 0; i < fields.Size; i++)
+                        {
+                            var field = fields.GetAsDict(i);
+                            if (field != null && IsFieldOnPage(field, pageNum))
+                            {
+                                var formField = new FormField
+                                {
+                                    Name = field.GetAsString(PdfName.T)?.ToString() ?? string.Empty,
+                                    Type = GetFieldType(field.GetAsName(PdfName.FT)),
+                                    Value = field.GetAsString(PdfName.V)?.ToString() ?? string.Empty,
+                                    DefaultValue = field.GetAsString(PdfName.DV)?.ToString() ?? string.Empty,
+                                    IsRequired = (field.GetAsNumber(PdfName.FF)?.IntValue & 2) != 0,
+                                    IsReadOnly = (field.GetAsNumber(PdfName.FF)?.IntValue & 1) != 0
+                                };
+                                
+                                // Extrair opções para campos de escolha
+                                var opt = field.GetAsArray(PdfName.OPT);
+                                if (opt != null)
+                                {
+                                    for (int j = 0; j < opt.Size; j++)
+                                    {
+                                        var option = opt.GetAsString(j);
+                                        if (option != null)
+                                        {
+                                            formField.Options.Add(option.ToString());
+                                        }
+                                    }
+                                }
+                                
+                                // Extrair geometria do campo
+                                var rect = field.GetAsArray(PdfName.RECT);
+                                if (rect != null && rect.Size >= 4)
+                                {
+                                    formField.X = rect.GetAsNumber(0).FloatValue;
+                                    formField.Y = rect.GetAsNumber(1).FloatValue;
+                                    formField.Width = rect.GetAsNumber(2).FloatValue - formField.X;
+                                    formField.Height = rect.GetAsNumber(3).FloatValue - formField.Y;
+                                }
+                                
+                                formFields.Add(formField);
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            
+            return formFields;
+        }
+        
+        private bool IsFieldOnPage(PdfDictionary field, int pageNum)
+        {
+            try
+            {
+                var page = field.GetAsIndirectObject(PdfName.P);
+                if (page != null)
+                {
+                    return GetPageNumberFromRef(page) == pageNum;
+                }
+                
+                // Se não tem referência direta à página, verificar anotações
+                var kids = field.GetAsArray(PdfName.KIDS);
+                if (kids != null)
+                {
+                    for (int i = 0; i < kids.Size; i++)
+                    {
+                        var kid = kids.GetAsDict(i);
+                        if (kid != null && IsFieldOnPage(kid, pageNum))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch { }
+            
+            return false;
+        }
+        
+        private string GetFieldType(PdfName fieldType)
+        {
+            if (fieldType == null) return "Unknown";
+            
+            if (PdfName.TX.Equals(fieldType)) return "Text";
+            if (PdfName.CH.Equals(fieldType)) return "Choice";
+            if (PdfName.BTN.Equals(fieldType)) return "Button";
+            if (PdfName.SIG.Equals(fieldType)) return "Signature";
+            
+            return fieldType.ToString();
+        }
+        
+        private int GetPageNumberFromRef(PdfIndirectReference pageRef)
+        {
+            try
+            {
+                // Percorrer todas as páginas para encontrar a referência
+                for (int i = 1; i <= reader.NumberOfPages; i++)
+                {
+                    var pageDict = reader.GetPageN(i);
+                    if (pageDict != null && pageDict.IndRef != null && pageDict.IndRef.Equals(pageRef))
+                    {
+                        return i;
+                    }
+                }
+            }
+            catch { }
+            return 1; // Fallback para página 1
+        }
+    }
+    
+    // REMOVIDO: TextAnalysisStrategy que reconstruía texto
+    // Agora usamos extração direta com PdfTextExtractor.GetTextFromPage
+    // para preservar o texto original sem modificações
+    
+    // REMOVIDO: MainContentExtractionStrategy porque reconstruía texto
+    // REGRA: NUNCA alterar o texto original do PDF
+}

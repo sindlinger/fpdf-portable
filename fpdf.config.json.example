@@ -1,0 +1,21 @@
+{
+  "Security": {
+    "AllowedDirectories": [
+      "/mnt/c/Users/pichau/Desktop/geral_pdf/pdf_cache",
+      "./data",
+      "./tests/pdfs"
+    ],
+    "DisablePathValidation": false,
+    "MaxFileSize": 524288000
+  },
+  "Performance": {
+    "DefaultWorkers": 16,
+    "BatchSize": 100,
+    "MaxConcurrency": 16
+  },
+  "Cache": {
+    "DefaultDirectory": ".cache",
+    "AutoCleanup": false,
+    "MaxCacheSizeMB": 1024
+  }
+}

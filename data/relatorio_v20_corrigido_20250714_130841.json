@@ -1,0 +1,96 @@
+{
+  "timestamp": "2025-07-14T13:08:41.416496",
+  "version": "V20_CORRIGIDO",
+  "parameters": {
+    "input_dir": ".cache",
+    "output_dir": ".",
+    "workers": 1,
+    "number": 38
+  },
+  "total_docs": 38,
+  "diretoria_especial_docs": 102,
+  "multi_page_docs": 102,
+  "pages_analyzed": 402,
+  "strategy_success": {
+    "PageText": 33,
+    "AdvancedLayout": 33,
+    "LayoutPreserving": 33
+  },
+  "field_ratings": {
+    "processo": {
+      "found": 34,
+      "total": 38
+    },
+    "numero_autos": {
+      "found": 33,
+      "total": 38
+    },
+    "juizo": {
+      "found": 33,
+      "total": 38
+    },
+    "comarca": {
+      "found": 33,
+      "total": 38
+    },
+    "autor": {
+      "found": 34,
+      "total": 38
+    },
+    "parte_contraria": {
+      "found": 34,
+      "total": 38
+    },
+    "perito_nome": {
+      "found": 33,
+      "total": 38
+    },
+    "cpf_perito": {
+      "found": 33,
+      "total": 38
+    },
+    "especialidade": {
+      "found": 33,
+      "total": 38
+    },
+    "valor_arbitrado": {
+      "found": 33,
+      "total": 38
+    },
+    "destino": {
+      "found": 34,
+      "total": 38
+    }
+  },
+  "perito_por_cpf": 0,
+  "valor_inferido": 3,
+  "validation_failures": {
+    "comarca": 87,
+    "parte_contraria": 6,
+    "perito_nome": 312,
+    "valor_arbitrado": 21
+  },
+  "extraction_methods": {
+    "processo_pattern_0": 102,
+    "numero_autos_pattern_0": 78,
+    "juizo_pattern_0": 90,
+    "comarca_pattern_0": 99,
+    "autor_pattern_0": 99,
+    "parte_contraria_pattern_0": 99,
+    "perito_nome_pattern_4": 84,
+    "cpf_perito_pattern_0": 99,
+    "especialidade_pattern_1": 99,
+    "valor_arbitrado_pattern_0": 96,
+    "destino_pattern_0": 99,
+    "numero_autos_pattern_2": 15,
+    "autor_pattern_2": 3,
+    "parte_contraria_pattern_2": 3,
+    "numero_autos_pattern_16": 6,
+    "perito_nome_pattern_0": 15,
+    "destino_pattern_3": 3,
+    "juizo_pattern_2": 9
+  },
+  "timeouts": 0,
+  "errors": [],
+  "processing_time_seconds": 14.007864
+}

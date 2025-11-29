@@ -1,0 +1,46 @@
+# REGRAS CRÍTICAS PARA CLAUDE - NUNCA VIOLAR
+
+## 1. COMPILAÇÃO - SEMPRE .EXE
+- **ÚNICO COMANDO PERMITIDO**: `dotnet publish fpdf.csproj -c Release`
+- **NUNCA MUDAR** para:
+  - dotnet run
+  - dotnet build sem publish
+  - Framework-dependent
+  - Sem RuntimeIdentifier
+  - Multi-plataforma genérico
+- **EXECUTAR SEMPRE**: `./bin/fpdf`
+
+## 2. CONFIGURAÇÃO DO PROJETO - NUNCA ALTERAR
+```xml
+<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+<SelfContained>true</SelfContained>
+<PublishSingleFile>true</PublishSingleFile>
+<PublishDir>bin\</PublishDir>
+```
+
+## 3. WARNINGS - CORRIGIR DE VERDADE
+- **NUNCA** suprimir warnings com pragmas
+- **NUNCA** ignorar warnings
+- **SEMPRE** corrigir a causa raiz do warning
+- **Nullable references**: usar `?` e null checks apropriados
+- **iTextSharp/BouncyCastle NU1701**: são esperados e aceitáveis
+
+## 4. REGRAS DE CÓDIGO
+- **NUNCA USAR EMOJIS** no código
+- **SEMPRE** preservar a lógica existente ao corrigir warnings
+- **NUNCA** simplificar demais ou remover validações
+
+## 5. QUANDO ESQUECER ESTAS REGRAS
+Se Claude sugerir qualquer mudança na compilação:
+1. PARAR imediatamente
+2. LER este arquivo
+3. Reverter para `dotnet publish fpdf.csproj -c Release`
+4. Lembrar que o usuário já corrigiu isso VÁRIAS VEZES
+
+## EDUARDO DIZ:
+"Compile corretamente sem warnings, e sem remover os warnings à força.
+Isso você já fez várias vezes, mas depois você se esquece e novamente 
+modifica meu código todo para usar esse outro tipo de compilação, sem 
+eu pedir. E depois precisa novamente reverter todos para voltar para .exe"
+
+**LEMBRE-SE SEMPRE DISSO**

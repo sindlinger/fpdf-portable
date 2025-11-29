@@ -1,0 +1,140 @@
+{
+  "name": "Invoice and Receipt Detection",
+  "description": "Otimizado para separar faturas, notas fiscais e recibos",
+  "version": "1.0",
+  
+  "strategies": {
+    "text_patterns": {
+      "enabled": true,
+      "weight": 0.35,
+      "description": "Padrões comuns em documentos fiscais",
+      "config": {
+        "scan_lines_start": 30,
+        "scan_lines_end": 20,
+        "case_sensitive": false,
+        "start_patterns": [
+          {
+            "pattern": "(INVOICE|FATURA|NOTA FISCAL)",
+            "weight": 3,
+            "regex": true
+          },
+          {
+            "pattern": "(Invoice|Receipt|Bill)\\s*(Number|#|Nº|No\\.)",
+            "weight": 3,
+            "regex": true
+          },
+          {
+            "pattern": "CNPJ:\\s*\\d{2}\\.\\d{3}\\.\\d{3}",
+            "weight": 2,
+            "regex": true
+          },
+          {
+            "pattern": "DANFE",
+            "weight": 3,
+            "regex": false,
+            "description": "Nota Fiscal Eletrônica"
+          },
+          {
+            "pattern": "(Date|Data):\\s*\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}",
+            "weight": 2,
+            "regex": true
+          }
+        ],
+        "end_patterns": [
+          {
+            "pattern": "(TOTAL|TOTAL GERAL|GRAND TOTAL)",
+            "weight": 3,
+            "regex": true
+          },
+          {
+            "pattern": "(Assinatura|Signature|Authorized by)",
+            "weight": 2,
+            "regex": true
+          },
+          {
+            "pattern": "Protocolo de Autorização",
+            "weight": 3,
+            "regex": false
+          },
+          {
+            "pattern": "(Obrigado|Thank you|Agradecemos)",
+            "weight": 1,
+            "regex": true
+          }
+        ]
+      }
+    },
+    
+    "font_analysis": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "Faturas podem ter fontes variadas",
+      "config": {}
+    },
+    
+    "page_numbering": {
+      "enabled": true,
+      "weight": 0.30,
+      "description": "Cada fatura reinicia numeração",
+      "config": {
+        "detect_restart": true,
+        "formats": ["numeric"],
+        "positions": ["footer", "header"],
+        "restart_indicators": ["1", "Page 1"]
+      }
+    },
+    
+    "blank_pages": {
+      "enabled": true,
+      "weight": 0.20,
+      "description": "Comum ter páginas em branco entre faturas",
+      "config": {
+        "min_words": 5,
+        "max_words": 20,
+        "consider_images": false,
+        "blank_threshold": 0.90
+      }
+    },
+    
+    "layout_changes": {
+      "enabled": true,
+      "weight": 0.15,
+      "description": "Diferentes empresas têm layouts distintos",
+      "config": {
+        "check_margins": false,
+        "check_columns": true,
+        "check_orientation": false,
+        "check_size": false,
+        "similarity_threshold": 0.5
+      }
+    },
+    
+    "header_footer": {
+      "enabled": false,
+      "weight": 0.0,
+      "config": {}
+    },
+    
+    "metadata_hints": {
+      "enabled": false,
+      "weight": 0.0,
+      "config": {}
+    },
+    
+    "content_flow": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "Faturas são documentos independentes",
+      "config": {}
+    }
+  },
+  
+  "global_settings": {
+    "min_confidence_score": 0.5,
+    "min_document_pages": 1,
+    "merge_small_documents": false,
+    "output_format": "summary",
+    "extract_documents": true,
+    "extract_naming": "invoice_{number}"
+  }
+}

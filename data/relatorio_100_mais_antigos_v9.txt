@@ -1,0 +1,39 @@
+RELATÓRIO DE EXTRAÇÃO - DIRETORIA ESPECIAL V9
+Mostrando TODOS os valores encontrados por cada método
+================================================================================
+
+ESTATÍSTICAS GERAIS:
+Total de arquivos processados: 100
+Documentos da Diretoria Especial encontrados: 250
+Documentos multi-página: 248
+Documentos extraídos com sucesso: 248
+Falhas na extração: 2
+Documentos com extração multi-método: 250
+Taxa de sucesso: 99.2%
+
+--------------------------------------------------------------------------------
+
+MÉTODOS DE EXTRAÇÃO UTILIZADOS:
+AdvancedLayout                :  928
+ColumnDetection               :  882
+LayoutPreserving              :  882
+
+--------------------------------------------------------------------------------
+
+EXTRAÇÃO POR CAMPO:
+autor               :  214 ( 85.6%)
+comarca             :  120 ( 48.0%)
+cpf_perito          :  220 ( 88.0%)
+destino             :  213 ( 85.2%)
+especialidade       :  233 ( 93.2%)
+juizo               :  133 ( 53.2%)
+numero_autos        :  118 ( 47.2%)
+parte_contraria     :  210 ( 84.0%)
+perito_nome         :  112 ( 44.8%)
+processo            :  234 ( 93.6%)
+valor_arbitrado     :  237 ( 94.8%)
+
+--------------------------------------------------------------------------------
+
+ANÁLISE DETALHADA DE VALORES ENCONTRADOS:
+

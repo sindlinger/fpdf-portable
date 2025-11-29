@@ -1,0 +1,164 @@
+## PATCH PARA CORRIGIR TRAVAMENTOS NO LOAD COMMAND
+
+### PROBLEMA 1: DEADLOCK EM SEMAPHORESLIM
+LOCALIZAÇÃO: Linha 308 - semaphore.Wait(cancellationTokenSource.Token)
+
+PROBLEMA:
+- O semáforo pode causar deadlock se o CancellationToken for cancelado durante Wait()
+- ProcessSingleFileWithResult() pode travar e não liberar o semáforo
+
+SOLUÇÃO:
+```csharp
+// ANTES (PROBLEMÁTICO):
+semaphore.Wait(cancellationTokenSource.Token);
+
+// DEPOIS (CORRIGIDO):
+if (!semaphore.Wait(TimeSpan.FromMinutes(2), cancellationTokenSource.Token))
+{
+    throw new TimeoutException($"Semaphore timeout for file: {file}");
+}
+```
+
+### PROBLEMA 2: RESOURCE LEAK NO PdfReader
+LOCALIZAÇÃO: Linha 1310 - ExtractUsingAdvancedMethod
+
+PROBLEMA:
+- PdfReader não está sendo disposto com using statement
+- Pode acumular handles de arquivo e causar travamento
+
+SOLUÇÃO:
+```csharp
+// ANTES (VAZAMENTO):
+var reader = PdfAccessManager.CreateTemporaryReader(inputFile);
+try { ... } finally { reader.Close(); }
+
+// DEPOIS (CORRIGIDO):
+using (var reader = PdfAccessManager.CreateTemporaryReader(inputFile))
+{
+    // processamento
+}
+```
+
+### PROBLEMA 3: JSON SERIALIZATION BLOCKING
+LOCALIZAÇÃO: Linha 985 - JsonConvert.SerializeObject
+
+PROBLEMA:
+- Serialização síncrona de objetos grandes pode travar
+- File.WriteAllText é blocking I/O
+
+SOLUÇÃO:
+```csharp
+// ANTES (BLOCKING):
+var json = JsonConvert.SerializeObject(cacheData, settings);
+File.WriteAllText(outputPath, json);
+
+// DEPOIS (NON-BLOCKING):
+try
+{
+    using var stream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, FileOptions.SequentialScan);
+    using var writer = new StreamWriter(stream, System.Text.Encoding.UTF8, 65536);
+    using var jsonWriter = new JsonTextWriter(writer);
+    var serializer = JsonSerializer.Create(settings);
+    serializer.Serialize(jsonWriter, cacheData);
+    jsonWriter.Flush();
+    writer.Flush();
+    stream.Flush();
+}
+catch (Exception ex)
+{
+    throw new IOException($"Failed to write cache file {outputPath}: {ex.Message}", ex);
+}
+```
+
+### PROBLEMA 4: TIMEOUT INSUFICIENTE
+LOCALIZAÇÃO: Linha 755 - const int TIMEOUT_SECONDS = 120
+
+PROBLEMA:
+- 2 minutos podem não ser suficientes para PDFs grandes no modo ULTRA
+- Timeout muito restritivo pode interromper processamento válido
+
+SOLUÇÃO:
+```csharp
+// ANTES:
+const int TIMEOUT_SECONDS = 120; // 2 minutes
+
+// DEPOIS:
+int timeoutSeconds = options.ExtractUltra ? 600 : // 10 min para ultra
+                    options.ExtractCustom ? 300 : // 5 min para custom  
+                    120; // 2 min para text/raw
+```
+
+### PROBLEMA 5: CONCURRENT COLLECTION ACCESS
+LOCALIZAÇÃO: Linha 289 - ConcurrentBag usage
+
+PROBLEMA:
+- ConcurrentBag pode ter contenção em high-throughput scenarios
+- Parallel.ForEach com SemaphoreSlim pode criar bottleneck
+
+SOLUÇÃO:
+```csharp
+// ADICIONAR THREAD-SAFE PROGRESS TRACKING:
+private readonly object progressLock = new object();
+private int completedFiles = 0;
+
+// NO LOOP:
+lock (progressLock)
+{
+    completedFiles++;
+    progressTracker.UpdateProgress(success, skipped, cacheFile);
+    
+    // Log progress periodically
+    if (completedFiles % 10 == 0)
+    {
+        Console.WriteLine($"Progress: {completedFiles}/{totalFiles} files processed");
+    }
+}
+```
+
+### PROBLEMA 6: INADEQUATE ERROR HANDLING
+LOCALIZAÇÃO: Multiple locations - catch blocks too generic
+
+PROBLEMA:
+- Catch genérico pode esconder problemas específicos
+- Não identifica causa raiz do travamento
+
+SOLUÇÃO:
+```csharp
+// ADICIONAR LOGGING ESPECÍFICO:
+catch (UnauthorizedAccessException ex)
+{
+    return (false, false, $"Access denied: {ex.Message}", "");
+}
+catch (IOException ex)
+{
+    return (false, false, $"IO error: {ex.Message}", "");
+}
+catch (OutOfMemoryException ex)
+{
+    GC.Collect();
+    GC.WaitForPendingFinalizers();
+    GC.Collect();
+    return (false, false, $"Out of memory: {ex.Message}", "");
+}
+catch (TimeoutException ex)
+{
+    return (false, false, $"Timeout: {ex.Message}", "");
+}
+catch (OperationCanceledException)
+{
+    return (false, false, "Operation cancelled", "");
+}
+```
+
+### TESTE PARA IDENTIFICAR PROBLEMA:
+1. Adicionar logs detalhados em cada etapa
+2. Usar timeout mais granular
+3. Monitor resource usage (handles, memory)
+4. Test com PDF individual primeiro
+5. Verificar se .cache directory tem permissões corretas
+
+### VERIFICAÇÕES ESPECÍFICAS:
+1. Verificar se ImageDataExtractor.ExtractImagesWithData() não está em loop infinito
+2. Confirmar que PdfAccessManager.CreateTemporaryReader() está funcionando
+3. Testar serialização JSON isoladamente
+4. Verificar se SemaphoreSlim está sendo liberado corretamente

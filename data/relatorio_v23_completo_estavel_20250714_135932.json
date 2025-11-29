@@ -1,0 +1,112 @@
+{
+  "timestamp": "2025-07-14T13:59:32.523220",
+  "version": "V23_COMPLETO_ESTAVEL",
+  "parameters": {
+    "input_dir": ".cache",
+    "output_dir": ".",
+    "workers": 1,
+    "number": 100
+  },
+  "total_docs": 100,
+  "diretoria_especial_docs": 220,
+  "multi_page_docs": 220,
+  "pages_analyzed": 847,
+  "strategy_success": {
+    "PageText": 68,
+    "AdvancedLayout": 68,
+    "LayoutPreserving": 68
+  },
+  "field_ratings": {
+    "processo": {
+      "found": 73,
+      "total": 100
+    },
+    "numero_autos": {
+      "found": 73,
+      "total": 100
+    },
+    "juizo": {
+      "found": 73,
+      "total": 100
+    },
+    "comarca": {
+      "found": 67,
+      "total": 100
+    },
+    "autor": {
+      "found": 74,
+      "total": 100
+    },
+    "parte_contraria": {
+      "found": 74,
+      "total": 100
+    },
+    "perito_nome": {
+      "found": 70,
+      "total": 100
+    },
+    "cpf_perito": {
+      "found": 72,
+      "total": 100
+    },
+    "especialidade": {
+      "found": 68,
+      "total": 100
+    },
+    "valor_arbitrado": {
+      "found": 70,
+      "total": 100
+    },
+    "destino": {
+      "found": 67,
+      "total": 100
+    }
+  },
+  "perito_por_cpf": 3,
+  "valor_inferido": 3,
+  "validation_failures": {
+    "perito_nome": 555,
+    "comarca": 136,
+    "valor_arbitrado": 27,
+    "parte_contraria": 3
+  },
+  "extraction_methods": {
+    "processo_pattern_0": 217,
+    "numero_autos_pattern_2": 51,
+    "juizo_pattern_0": 205,
+    "comarca_pattern_0": 193,
+    "autor_pattern_0": 192,
+    "parte_contraria_pattern_0": 192,
+    "perito_nome_pattern_4": 150,
+    "cpf_perito_pattern_0": 195,
+    "especialidade_pattern_1": 174,
+    "valor_arbitrado_pattern_0": 189,
+    "destino_pattern_0": 156,
+    "autor_pattern_2": 10,
+    "parte_contraria_pattern_2": 24,
+    "numero_autos_pattern_16": 6,
+    "perito_nome_pattern_0": 45,
+    "numero_autos_pattern_0": 135,
+    "destino_pattern_3": 39,
+    "juizo_pattern_2": 12,
+    "especialidade_pattern_3": 30,
+    "numero_autos_pattern_10": 15,
+    "autor_pattern_1": 16,
+    "cpf_perito_pattern_3": 6,
+    "perito_nome_pattern_8": 6,
+    "numero_autos_pattern_9": 10,
+    "parte_contraria_pattern_1": 4,
+    "perito_nome_pattern_6": 6,
+    "cpf_perito_pattern_9": 15,
+    "especialidade_pattern_9": 6,
+    "valor_arbitrado_pattern_11": 12,
+    "valor_arbitrado_pattern_5": 3,
+    "comarca_pattern_1": 6,
+    "destino_pattern_1": 6,
+    "especialidade_pattern_0": 3,
+    "valor_arbitrado_pattern_17": 3
+  },
+  "timeouts": 1,
+  "errors": [],
+  "processing_time_seconds": 55.38679
+}

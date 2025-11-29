@@ -1,0 +1,907 @@
+{
+  "timestamp": "2025-07-14T14:11:47.295789",
+  "total_arquivos": 2170,
+  "processos_unicos": 1355,
+  "processos_duplicados": 390,
+  "total_arquivos_extras": 425,
+  "tipos_duplicacao": {
+    "multiplas_partes": 76,
+    "processo_completo_duplicado": 314
+  },
+  "distribuicao_anos": {
+    "0202": 18,
+    "Sem ano": 1430,
+    "4202": 23,
+    "8202": 26,
+    "6202": 21,
+    "2202": 16,
+    "1202": 19,
+    "5202": 8,
+    "7202": 21,
+    "9202": 19,
+    "3202": 22,
+    "9541": 1,
+    "9061": 1,
+    "1571": 1,
+    "9201": 1,
+    "2141": 1,
+    "2751": 1,
+    "4791": 1,
+    "9331": 2,
+    "5761": 1,
+    "3621": 1,
+    "1271": 2,
+    "1272": 1,
+    "6261": 2,
+    "5351": 1,
+    "5352": 1,
+    "0751": 1,
+    "7661": 1,
+    "1991": 1,
+    "8731": 2,
+    "9961": 1,
+    "1811": 1,
+    "7061": 1,
+    "4581": 1,
+    "6421": 1,
+    "2311": 1,
+    "2821": 1,
+    "7691": 1,
+    "8491": 1,
+    "8732": 1,
+    "8733": 1,
+    "9451": 1,
+    "2781": 1,
+    "2861": 1,
+    "4731": 1,
+    "9281": 1,
+    "9931": 1,
+    "0031": 1,
+    "0541": 1,
+    "0951": 1,
+    "2681": 1,
+    "2682": 1,
+    "4011": 1,
+    "9861": 1,
+    "1071": 1,
+    "5271": 1,
+    "6681": 1,
+    "6841": 1,
+    "0191": 1,
+    "5451": 1,
+    "5111": 1,
+    "9441": 1,
+    "7651": 1,
+    "8451": 1,
+    "8452": 1,
+    "0141": 2,
+    "1131": 1,
+    "6331": 1,
+    "8101": 1,
+    "2911": 1,
+    "8301": 1,
+    "3351": 1,
+    "3352": 1,
+    "5721": 1,
+    "5071": 1,
+    "0441": 1,
+    "6551": 1,
+    "6631": 1,
+    "4141": 1,
+    "4142": 1,
+    "4143": 1,
+    "6091": 1,
+    "8931": 1,
+    "9291": 1,
+    "4411": 1,
+    "5051": 1,
+    "3581": 1,
+    "7941": 1,
+    "0261": 1,
+    "7611": 1,
+    "7621": 1,
+    "9981": 1,
+    "8961": 1,
+    "9991": 1,
+    "0142": 1,
+    "6291": 1,
+    "3671": 1,
+    "3831": 1,
+    "5781": 1,
+    "1551": 1,
+    "4671": 1,
+    "9401": 1,
+    "9661": 1,
+    "9662": 1,
+    "9741": 1,
+    "2091": 1,
+    "2171": 1,
+    "2172": 1,
+    "2251": 1,
+    "2331": 1,
+    "6611": 1,
+    "6612": 1,
+    "8031": 1,
+    "8032": 1,
+    "8033": 1,
+    "8201": 1,
+    "8381": 1,
+    "8382": 1,
+    "2931": 1,
+    "3811": 1,
+    "0601": 1,
+    "7391": 1,
+    "7471": 1,
+    "7631": 1,
+    "7632": 1,
+    "0901": 1,
+    "2921": 1,
+    "4291": 1
+  },
+  "top_50_duplicados": {
+    "00042358202481": {
+      "processo": "0004235",
+      "ano": "8202",
+      "orgao": "481",
+      "num_arquivos": 5,
+      "arquivos": [
+        "0004235820248151_cache.json",
+        "0004235820248152_cache.json",
+        "0004235820248153_cache.json",
+        "0004235820248154_cache.json",
+        "000423582024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51",
+        "52",
+        "53",
+        "54"
+      ]
+    },
+    "2024020873": {
+      "processo": "2024020",
+      "ano": "",
+      "orgao": "873",
+      "num_arquivos": 5,
+      "arquivos": [
+        "2024020873_cache.json",
+        "processo_completo_2024020873-1_cache.json",
+        "processo_completo_2024020873-2_cache.json",
+        "processo_completo_2024020873-3_cache.json",
+        "processo_completo_2024020873_cache.json"
+      ],
+      "tem_sequencial": false,
+      "sequenciais": []
+    },
+    "00037541202481": {
+      "processo": "0003754",
+      "ano": "1202",
+      "orgao": "481",
+      "num_arquivos": 4,
+      "arquivos": [
+        "0003754120248151_cache.json",
+        "0003754120248152_cache.json",
+        "0003754120248153_cache.json",
+        "000375412024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51",
+        "52",
+        "53"
+      ]
+    },
+    "00037770202481": {
+      "processo": "0003777",
+      "ano": "0202",
+      "orgao": "481",
+      "num_arquivos": 4,
+      "arquivos": [
+        "0003777020248151_cache.json",
+        "0003777020248152_cache.json",
+        "0003777020248153_cache.json",
+        "000377702024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51",
+        "52",
+        "53"
+      ]
+    },
+    "00103442202481": {
+      "processo": "0010344",
+      "ano": "2202",
+      "orgao": "481",
+      "num_arquivos": 4,
+      "arquivos": [
+        "0010344220248151_cache.json",
+        "0010344220248152_cache.json",
+        "0010344220248153_cache.json",
+        "001034422024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51",
+        "52",
+        "53"
+      ]
+    },
+    "00193789202481": {
+      "processo": "0019378",
+      "ano": "9202",
+      "orgao": "481",
+      "num_arquivos": 4,
+      "arquivos": [
+        "0019378920248151_cache.json",
+        "0019378920248152_cache.json",
+        "0019378920248153_cache.json",
+        "001937892024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51",
+        "52",
+        "53"
+      ]
+    },
+    "00290560202481": {
+      "processo": "0029056",
+      "ano": "0202",
+      "orgao": "481",
+      "num_arquivos": 4,
+      "arquivos": [
+        "0029056020248151_cache.json",
+        "0029056020248152_cache.json",
+        "0029056020248153_cache.json",
+        "002905602024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51",
+        "52",
+        "53"
+      ]
+    },
+    "00020664202481": {
+      "processo": "0002066",
+      "ano": "4202",
+      "orgao": "481",
+      "num_arquivos": 3,
+      "arquivos": [
+        "0002066420248151_cache.json",
+        "0002066420248152_cache.json",
+        "000206642024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51",
+        "52"
+      ]
+    },
+    "00079520202481": {
+      "processo": "0007952",
+      "ano": "0202",
+      "orgao": "481",
+      "num_arquivos": 3,
+      "arquivos": [
+        "0007952020248151_cache.json",
+        "0007952020248152_cache.json",
+        "000795202024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51",
+        "52"
+      ]
+    },
+    "00176978202481": {
+      "processo": "0017697",
+      "ano": "8202",
+      "orgao": "481",
+      "num_arquivos": 3,
+      "arquivos": [
+        "0017697820248151_cache.json",
+        "0017697820248152_cache.json",
+        "001769782024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51",
+        "52"
+      ]
+    },
+    "00304619202481": {
+      "processo": "0030461",
+      "ano": "9202",
+      "orgao": "481",
+      "num_arquivos": 3,
+      "arquivos": [
+        "0030461920248151_cache.json",
+        "0030461920248152_cache.json",
+        "003046192024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51",
+        "52"
+      ]
+    },
+    "00329721202481": {
+      "processo": "0032972",
+      "ano": "1202",
+      "orgao": "481",
+      "num_arquivos": 3,
+      "arquivos": [
+        "0032972120248151_cache.json",
+        "0032972120248152_cache.json",
+        "003297212024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51",
+        "52"
+      ]
+    },
+    "00508319202481": {
+      "processo": "0050831",
+      "ano": "9202",
+      "orgao": "481",
+      "num_arquivos": 3,
+      "arquivos": [
+        "0050831920248151_cache.json",
+        "0050831920248152_cache.json",
+        "005083192024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51",
+        "52"
+      ]
+    },
+    "00518838202481": {
+      "processo": "0051883",
+      "ano": "8202",
+      "orgao": "481",
+      "num_arquivos": 3,
+      "arquivos": [
+        "0051883820248151_cache.json",
+        "0051883820248152_cache.json",
+        "005188382024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51",
+        "52"
+      ]
+    },
+    "2024020945": {
+      "processo": "2024020",
+      "ano": "",
+      "orgao": "945",
+      "num_arquivos": 3,
+      "arquivos": [
+        "2024020945_cache.json",
+        "processo_completo_2024020945-1_cache.json",
+        "processo_completo_2024020945_cache.json"
+      ],
+      "tem_sequencial": false,
+      "sequenciais": []
+    },
+    "2024022473": {
+      "processo": "2024022",
+      "ano": "",
+      "orgao": "473",
+      "num_arquivos": 3,
+      "arquivos": [
+        "2024022473_cache.json",
+        "processo_completo_2024022473-1_cache.json",
+        "processo_completo_2024022473_cache.json"
+      ],
+      "tem_sequencial": false,
+      "sequenciais": []
+    },
+    "2024025003": {
+      "processo": "2024025",
+      "ano": "",
+      "orgao": "003",
+      "num_arquivos": 3,
+      "arquivos": [
+        "2024025003_cache.json",
+        "processo_completo_2024025003(1)_cache.json",
+        "processo_completo_2024025003_cache.json"
+      ],
+      "tem_sequencial": false,
+      "sequenciais": []
+    },
+    "2024025054": {
+      "processo": "2024025",
+      "ano": "",
+      "orgao": "054",
+      "num_arquivos": 3,
+      "arquivos": [
+        "2024025054_cache.json",
+        "processo_completo_2024025054(1)_cache.json",
+        "processo_completo_2024025054_cache.json"
+      ],
+      "tem_sequencial": false,
+      "sequenciais": []
+    },
+    "2024025095": {
+      "processo": "2024025",
+      "ano": "",
+      "orgao": "095",
+      "num_arquivos": 3,
+      "arquivos": [
+        "2024025095_cache.json",
+        "processo_completo_2024025095(1)_cache.json",
+        "processo_completo_2024025095_cache.json"
+      ],
+      "tem_sequencial": false,
+      "sequenciais": []
+    },
+    "2024026127": {
+      "processo": "2024026",
+      "ano": "",
+      "orgao": "127",
+      "num_arquivos": 3,
+      "arquivos": [
+        "2024026127_cache.json",
+        "processo_completo_2024026127(1)_cache.json",
+        "processo_completo_2024026127_cache.json"
+      ],
+      "tem_sequencial": false,
+      "sequenciais": []
+    },
+    "2024026401": {
+      "processo": "2024026",
+      "ano": "",
+      "orgao": "401",
+      "num_arquivos": 3,
+      "arquivos": [
+        "2024026401_cache.json",
+        "processo_completo_2024026401-1_cache.json",
+        "processo_completo_2024026401_cache.json"
+      ],
+      "tem_sequencial": false,
+      "sequenciais": []
+    },
+    "2024027986": {
+      "processo": "2024027",
+      "ano": "",
+      "orgao": "986",
+      "num_arquivos": 3,
+      "arquivos": [
+        "2024027986_cache.json",
+        "processo_completo_2024027986-1_cache.json",
+        "processo_completo_2024027986_cache.json"
+      ],
+      "tem_sequencial": false,
+      "sequenciais": []
+    },
+    "2024029107": {
+      "processo": "2024029",
+      "ano": "",
+      "orgao": "107",
+      "num_arquivos": 3,
+      "arquivos": [
+        "2024029107_cache.json",
+        "processo_completo_2024029107-1_cache.json",
+        "processo_completo_2024029107_cache.json"
+      ],
+      "tem_sequencial": false,
+      "sequenciais": []
+    },
+    "2024029668": {
+      "processo": "2024029",
+      "ano": "",
+      "orgao": "668",
+      "num_arquivos": 3,
+      "arquivos": [
+        "2024029668_cache.json",
+        "processo_completo_2024029668-1_cache.json",
+        "processo_completo_2024029668_cache.json"
+      ],
+      "tem_sequencial": false,
+      "sequenciais": []
+    },
+    "2024029684": {
+      "processo": "2024029",
+      "ano": "",
+      "orgao": "684",
+      "num_arquivos": 3,
+      "arquivos": [
+        "2024029684_cache.json",
+        "processo_completo_2024029684-1_cache.json",
+        "processo_completo_2024029684_cache.json"
+      ],
+      "tem_sequencial": false,
+      "sequenciais": []
+    },
+    "2024044044": {
+      "processo": "2024044",
+      "ano": "",
+      "orgao": "044",
+      "num_arquivos": 3,
+      "arquivos": [
+        "2024044044_cache.json",
+        "processo_completo_2024044044-1_cache.json",
+        "processo_completo_2024044044_cache.json"
+      ],
+      "tem_sequencial": false,
+      "sequenciais": []
+    },
+    "00002510202481": {
+      "processo": "0000251",
+      "ano": "0202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "000025102024815._cache.json",
+        "000025102024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5"
+      ]
+    },
+    "00035608202481": {
+      "processo": "0003560",
+      "ano": "8202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0003560820248151_cache.json",
+        "000356082024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00036656202481": {
+      "processo": "0003665",
+      "ano": "6202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0003665620248151_cache.json",
+        "000366562024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00067526202481": {
+      "processo": "0006752",
+      "ano": "6202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0006752620248151_cache.json",
+        "000675262024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00081814202481": {
+      "processo": "0008181",
+      "ano": "4202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0008181420248151_cache.json",
+        "000818142024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00083223202481": {
+      "processo": "0008322",
+      "ano": "3202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0008322320248151_cache.json",
+        "000832232024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00106850202481": {
+      "processo": "0010685",
+      "ano": "0202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0010685020248151_cache.json",
+        "001068502024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00110914202481": {
+      "processo": "0011091",
+      "ano": "4202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0011091420248151_cache.json",
+        "001109142024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "0011710": {
+      "processo": "0011710",
+      "ano": "",
+      "orgao": "",
+      "num_arquivos": 2,
+      "arquivos": [
+        "00117101_cache.json",
+        "0011710_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "1"
+      ]
+    },
+    "00127593202481": {
+      "processo": "0012759",
+      "ano": "3202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0012759320248151_cache.json",
+        "001275932024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00148239202481": {
+      "processo": "0014823",
+      "ano": "9202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0014823920248151_cache.json",
+        "001482392024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00162527202481": {
+      "processo": "0016252",
+      "ano": "7202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0016252720248151_cache.json",
+        "001625272024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00176520202481": {
+      "processo": "0017652",
+      "ano": "0202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0017652020248151_cache.json",
+        "001765202024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00178387202481": {
+      "processo": "0017838",
+      "ano": "7202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0017838720248151_cache.json",
+        "001783872024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00206144202481": {
+      "processo": "0020614",
+      "ano": "4202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0020614420248151_cache.json",
+        "002061442024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00207029202481": {
+      "processo": "0020702",
+      "ano": "9202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0020702920248151_cache.json",
+        "002070292024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00214598202481": {
+      "processo": "0021459",
+      "ano": "8202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0021459820248151_cache.json",
+        "002145982024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00214730202481": {
+      "processo": "0021473",
+      "ano": "0202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0021473020248151_cache.json",
+        "002147302024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00220661202481": {
+      "processo": "0022066",
+      "ano": "1202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0022066120248151_cache.json",
+        "002206612024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00223906202481": {
+      "processo": "0022390",
+      "ano": "6202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0022390620248151_cache.json",
+        "002239062024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00236882202481": {
+      "processo": "0023688",
+      "ano": "2202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0023688220248151_cache.json",
+        "002368822024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00237014202481": {
+      "processo": "0023701",
+      "ano": "4202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0023701420248151_cache.json",
+        "002370142024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00246714202481": {
+      "processo": "0024671",
+      "ano": "4202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0024671420248151_cache.json",
+        "002467142024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    },
+    "00268703202481": {
+      "processo": "0026870",
+      "ano": "3202",
+      "orgao": "481",
+      "num_arquivos": 2,
+      "arquivos": [
+        "0026870320248151_cache.json",
+        "002687032024815_cache.json"
+      ],
+      "tem_sequencial": true,
+      "sequenciais": [
+        "5",
+        "51"
+      ]
+    }
+  }
+}

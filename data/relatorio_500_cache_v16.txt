@@ -1,0 +1,64 @@
+RELATÓRIO DE EXTRAÇÃO - DIRETORIA ESPECIAL V16
+Implementa validações cruzadas entre campos
+================================================================================
+
+ESTATÍSTICAS GERAIS:
+Total de arquivos processados: 500
+Documentos encontrados: 444
+Extraídos com sucesso: 439
+Taxa de sucesso: 98.9%
+
+--------------------------------------------------------------------------------
+
+VALIDAÇÕES APLICADAS:
+interessado_differs_perito: 29 casos
+juizo_without_vara: 6 casos
+
+--------------------------------------------------------------------------------
+
+CORREÇÕES REALIZADAS:
+copied_interessado_to_perito: 2 correções
+copied_perito_to_interessado: 29 correções
+removed_invalid_juizo: 6 correções
+unified_interessado_perito: 29 correções
+
+--------------------------------------------------------------------------------
+
+EXTRAÇÃO POR CAMPO:
+processo            :  388 ( 87.4%)
+juizo               :  404 ( 91.0%)
+comarca             :  403 ( 90.8%)
+perito_nome         :  403 ( 90.8%)
+interessado         :  403 ( 90.8%)
+cpf_perito          :  401 ( 90.3%)
+especialidade       :  428 ( 96.4%)
+valor_arbitrado     :  394 ( 88.7%)
+valor_tabelado      :  325 ( 73.2%)
+numero_autos        :  366 ( 82.4%)
+autor               :  391 ( 88.1%)
+parte_contraria     :  349 ( 78.6%)
+destino             :  395 ( 89.0%)
+
+--------------------------------------------------------------------------------
+
+ESTATÍSTICAS DE CONSOLIDAÇÃO:
+autor_confirmed: 391
+autor_multiple_values: 134
+cpf_perito_confirmed: 401
+cpf_perito_multiple_values: 15
+destino_confirmed: 391
+destino_multiple_values: 302
+especialidade_confirmed: 425
+especialidade_multiple_values: 169
+interessado_confirmed: 374
+juizo_confirmed: 410
+juizo_multiple_values: 295
+numero_autos_confirmed: 366
+parte_contraria_confirmed: 347
+parte_contraria_multiple_values: 129
+perito_nome_by_cpf: 67
+perito_nome_confirmed: 334
+processo_confirmed: 388
+processo_multiple_values: 1
+valor_arbitrado_confirmed: 396
+valor_arbitrado_multiple_values: 4

@@ -1,0 +1,25 @@
+RELATÓRIO - ESTRATÉGIA PAGETEXT (APENAS Pages/TextInfo/PageText)
+================================================================================
+
+ESTATÍSTICAS GERAIS:
+Total de arquivos processados: 1000
+Arquivos com Pages: 1000
+Arquivos com PageText: 41435
+Documentos da Diretoria Especial: 2656
+Extraídos com sucesso: 1382
+Taxa de sucesso: 52.0%
+
+--------------------------------------------------------------------------------
+
+EXTRAÇÃO POR CAMPO:
+processo            :  664 ( 25.0%)
+juizo               : 2352 ( 88.6%)
+comarca             : 2372 ( 89.3%)
+perito_nome         : 1067 ( 40.2%)
+cpf_perito          : 2190 ( 82.5%)
+especialidade       : 2460 ( 92.6%)
+valor_arbitrado     : 1185 ( 44.6%)
+numero_autos        : 1745 ( 65.7%)
+autor               : 2051 ( 77.2%)
+parte_contraria     : 1923 ( 72.4%)
+destino             :  582 ( 21.9%)

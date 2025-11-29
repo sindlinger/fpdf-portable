@@ -1,0 +1,27 @@
+ARQUIVOS SEM NENHUMA EXTRAÇÃO:
+==================================================
+000025102024815._cache.json
+000025102024815_cache.json
+0001344_cache.json
+0004235820248151_cache.json
+0004235820248152_cache.json
+0004235820248153_cache.json
+0004235820248154_cache.json
+000423582024815_cache.json
+000453082024815_cache.json
+000568752024815_cache.json
+000579892024815_cache.json
+0006752620248151_cache.json
+000675262024815_cache.json
+000779792024815_cache.json
+000787982024815_cache.json
+0007952020248151_cache.json
+0007952020248152_cache.json
+000795202024815_cache.json
+
+
+ARQUIVOS COM EXTRAÇÃO PARCIAL:
+==================================================
+000121442024815_cache.json - 3/11 (27.3%) - Faltando: numero_autos, juizo, autor, parte_contraria, perito_nome, cpf_perito, especialidade, valor_arbitrado
+0008322320248151_cache.json - 8/11 (72.7%) - Faltando: perito_nome, cpf_perito, valor_arbitrado
+000832232024815_cache.json - 8/11 (72.7%) - Faltando: perito_nome, cpf_perito, valor_arbitrado

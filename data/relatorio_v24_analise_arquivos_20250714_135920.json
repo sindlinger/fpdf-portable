@@ -1,0 +1,706 @@
+{
+  "timestamp": "2025-07-14T13:59:20.968047",
+  "version": "V24_ANALISE_ARQUIVOS",
+  "total_docs": 50,
+  "diretoria_especial_docs": 0,
+  "multi_page_docs": 0,
+  "field_ratings": {
+    "processo": {
+      "found": 32,
+      "total": 50
+    },
+    "numero_autos": {
+      "found": 31,
+      "total": 50
+    },
+    "juizo": {
+      "found": 31,
+      "total": 50
+    },
+    "comarca": {
+      "found": 32,
+      "total": 50
+    },
+    "autor": {
+      "found": 31,
+      "total": 50
+    },
+    "parte_contraria": {
+      "found": 31,
+      "total": 50
+    },
+    "perito_nome": {
+      "found": 29,
+      "total": 50
+    },
+    "cpf_perito": {
+      "found": 29,
+      "total": 50
+    },
+    "especialidade": {
+      "found": 31,
+      "total": 50
+    },
+    "valor_arbitrado": {
+      "found": 29,
+      "total": 50
+    },
+    "destino": {
+      "found": 32,
+      "total": 50
+    }
+  },
+  "errors": [],
+  "timeouts": 0,
+  "valor_inferido": 0,
+  "processing_time_seconds": 4.050076,
+  "arquivos_sem_extracao": [
+    {
+      "arquivo": "000025102024815._cache.json",
+      "numero": 1,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "000025102024815_cache.json",
+      "numero": 2,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "0001344_cache.json",
+      "numero": 5,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "0004235820248151_cache.json",
+      "numero": 24,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "0004235820248152_cache.json",
+      "numero": 25,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "0004235820248153_cache.json",
+      "numero": 26,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "0004235820248154_cache.json",
+      "numero": 27,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "000423582024815_cache.json",
+      "numero": 28,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "000453082024815_cache.json",
+      "numero": 29,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "000568752024815_cache.json",
+      "numero": 30,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "000579892024815_cache.json",
+      "numero": 34,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "0006752620248151_cache.json",
+      "numero": 35,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "000675262024815_cache.json",
+      "numero": 36,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "000779792024815_cache.json",
+      "numero": 37,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "000787982024815_cache.json",
+      "numero": 38,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "0007952020248151_cache.json",
+      "numero": 39,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "0007952020248152_cache.json",
+      "numero": 40,
+      "motivo": "Nenhum campo extraído"
+    },
+    {
+      "arquivo": "000795202024815_cache.json",
+      "numero": 41,
+      "motivo": "Nenhum campo extraído"
+    }
+  ],
+  "arquivos_com_extracao_parcial": [
+    {
+      "arquivo": "000121442024815_cache.json",
+      "numero": 4,
+      "campos_extraidos": [
+        "processo",
+        "comarca",
+        "destino"
+      ],
+      "campos_faltantes": [
+        "numero_autos",
+        "juizo",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado"
+      ],
+      "taxa": "3/11 (27.3%)"
+    },
+    {
+      "arquivo": "0008322320248151_cache.json",
+      "numero": 44,
+      "campos_extraidos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "especialidade",
+        "destino"
+      ],
+      "campos_faltantes": [
+        "perito_nome",
+        "cpf_perito",
+        "valor_arbitrado"
+      ],
+      "taxa": "8/11 (72.7%)"
+    },
+    {
+      "arquivo": "000832232024815_cache.json",
+      "numero": 45,
+      "campos_extraidos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "especialidade",
+        "destino"
+      ],
+      "campos_faltantes": [
+        "perito_nome",
+        "cpf_perito",
+        "valor_arbitrado"
+      ],
+      "taxa": "8/11 (72.7%)"
+    }
+  ],
+  "arquivos_com_extracao_completa": [
+    {
+      "arquivo": "0001210_cache.json",
+      "numero": 3,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "000183702024815_cache.json",
+      "numero": 6,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0002066420248151_cache.json",
+      "numero": 7,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0002066420248152_cache.json",
+      "numero": 8,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "000206642024815_cache.json",
+      "numero": 9,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0003560820248151_cache.json",
+      "numero": 10,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "000356082024815_cache.json",
+      "numero": 11,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0003665620248151_cache.json",
+      "numero": 12,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "000366562024815_cache.json",
+      "numero": 13,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "000373122024815_cache.json",
+      "numero": 14,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0003754120248151_cache.json",
+      "numero": 15,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0003754120248152_cache.json",
+      "numero": 16,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0003754120248153_cache.json",
+      "numero": 17,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "000375412024815_cache.json",
+      "numero": 18,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0003777020248151_cache.json",
+      "numero": 19,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0003777020248152_cache.json",
+      "numero": 20,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0003777020248153_cache.json",
+      "numero": 21,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "000377702024815_cache.json",
+      "numero": 22,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0003858_cache.json",
+      "numero": 23,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "000570072024815_cache.json",
+      "numero": 31,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "000573022024815_cache.json",
+      "numero": 32,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "000576942024815_cache.json",
+      "numero": 33,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0008181420248151_cache.json",
+      "numero": 42,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "000818142024815_cache.json",
+      "numero": 43,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "000934472024815_cache.json",
+      "numero": 46,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0010227_cache.json",
+      "numero": 47,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0010344220248151_cache.json",
+      "numero": 48,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0010344220248152_cache.json",
+      "numero": 49,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    },
+    {
+      "arquivo": "0010344220248153_cache.json",
+      "numero": 50,
+      "campos": [
+        "processo",
+        "numero_autos",
+        "juizo",
+        "comarca",
+        "autor",
+        "parte_contraria",
+        "perito_nome",
+        "cpf_perito",
+        "especialidade",
+        "valor_arbitrado",
+        "destino"
+      ]
+    }
+  ]
+}

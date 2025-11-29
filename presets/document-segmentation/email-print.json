@@ -1,0 +1,137 @@
+{
+  "name": "Printed Emails",
+  "description": "Para separar e-mails impressos ou exportados",
+  "version": "1.0",
+  
+  "strategies": {
+    "text_patterns": {
+      "enabled": true,
+      "weight": 0.40,
+      "description": "Padrões de cabeçalho de e-mail",
+      "config": {
+        "scan_lines_start": 20,
+        "scan_lines_end": 10,
+        "case_sensitive": false,
+        "start_patterns": [
+          {
+            "pattern": "(From|De):\\s*.+@.+\\.",
+            "weight": 3,
+            "regex": true,
+            "description": "Campo From com e-mail"
+          },
+          {
+            "pattern": "(To|Para):\\s*.+@.+\\.",
+            "weight": 3,
+            "regex": true
+          },
+          {
+            "pattern": "(Subject|Assunto):\\s*.+",
+            "weight": 3,
+            "regex": true
+          },
+          {
+            "pattern": "(Date|Data):\\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Seg|Ter|Qua|Qui|Sex|Sáb|Dom)",
+            "weight": 2,
+            "regex": true
+          },
+          {
+            "pattern": "Sent:\\s*\\d{1,2}[/-]",
+            "weight": 2,
+            "regex": true
+          }
+        ],
+        "end_patterns": [
+          {
+            "pattern": "From:.*Sent:.*To:.*Subject:",
+            "weight": 3,
+            "regex": true,
+            "description": "Início do próximo e-mail"
+          },
+          {
+            "pattern": "(Best|Kind|Warm)\\s+(regards|wishes)",
+            "weight": 1,
+            "regex": true
+          },
+          {
+            "pattern": "(Att\\.|Atenciosamente|Abraços)",
+            "weight": 1,
+            "regex": true
+          }
+        ]
+      }
+    },
+    
+    "font_analysis": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "E-mails podem ter fontes variadas",
+      "config": {}
+    },
+    
+    "page_numbering": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "E-mails impressos raramente têm numeração útil",
+      "config": {}
+    },
+    
+    "blank_pages": {
+      "enabled": true,
+      "weight": 0.20,
+      "description": "Páginas em branco entre e-mails",
+      "config": {
+        "min_words": 5,
+        "max_words": 20,
+        "consider_images": false,
+        "blank_threshold": 0.90
+      }
+    },
+    
+    "layout_changes": {
+      "enabled": true,
+      "weight": 0.20,
+      "description": "Layout muda entre e-mails",
+      "config": {
+        "check_margins": false,
+        "check_columns": false,
+        "check_orientation": false,
+        "check_size": false,
+        "similarity_threshold": 0.4
+      }
+    },
+    
+    "header_footer": {
+      "enabled": true,
+      "weight": 0.20,
+      "description": "Headers de impressão com data/hora",
+      "config": {
+        "check_consistency": false,
+        "extract_top_percent": 5,
+        "extract_bottom_percent": 5,
+        "similarity_threshold": 0.5
+      }
+    },
+    
+    "metadata_hints": {
+      "enabled": false,
+      "weight": 0.0,
+      "config": {}
+    },
+    
+    "content_flow": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "E-mails são independentes",
+      "config": {}
+    }
+  },
+  
+  "global_settings": {
+    "min_confidence_score": 0.4,
+    "min_document_pages": 1,
+    "merge_small_documents": false,
+    "output_format": "summary",
+    "extract_documents": true,
+    "extract_naming": "email_{date}_{subject}"
+  }
+}

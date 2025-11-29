@@ -1,0 +1,82 @@
+# Claude AI rules - DO NOT IGNORE
+!.claude-rules
+.cache/
+.data/
+tests/
+scripts/
+
+# .NET build outputs
+bin/
+obj/
+*.dll
+*.pdb
+
+# But keep the final executables  
+!bin/fpdf
+!bin/Release/publish/fpdf
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio 2015/2017 cache/options directory
+.vs/
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# NuGet Packages
+*.nupkg
+packages/
+*.nuget.props
+*.nuget.targets
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# Visual Studio cache files
+.vscode/
+*.vspscc
+*.vssscc
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Mac desktop service store files
+.DS_Store
+
+# PDF test files (optional - uncomment if needed)
+# *.pdf
+
+# Cache directory
+cache/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*~
+
+# Output files from the tool
+output/
+results/.legacy/

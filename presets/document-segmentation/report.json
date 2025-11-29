@@ -1,0 +1,140 @@
+{
+  "name": "Corporate Reports",
+  "description": "Para relatórios corporativos, atas, memorandos",
+  "version": "1.0",
+  
+  "strategies": {
+    "text_patterns": {
+      "enabled": true,
+      "weight": 0.30,
+      "description": "Padrões de documentos corporativos",
+      "config": {
+        "scan_lines_start": 25,
+        "scan_lines_end": 25,
+        "case_sensitive": false,
+        "start_patterns": [
+          {
+            "pattern": "(RELATÓRIO|REPORT|ATA|MEMORANDO)",
+            "weight": 3,
+            "regex": true
+          },
+          {
+            "pattern": "(CONFIDENCIAL|CONFIDENTIAL|INTERNO|INTERNAL)",
+            "weight": 2,
+            "regex": true
+          },
+          {
+            "pattern": "Para/To:.*De/From:",
+            "weight": 3,
+            "regex": true,
+            "description": "Formato de memorando"
+          },
+          {
+            "pattern": "Data/Date:\\s*\\d{1,2}",
+            "weight": 2,
+            "regex": true
+          },
+          {
+            "pattern": "(Prezado|Dear|Aos|To whom)",
+            "weight": 2,
+            "regex": true
+          }
+        ],
+        "end_patterns": [
+          {
+            "pattern": "Atenciosamente|Cordialmente|Sincerely|Best regards",
+            "weight": 3,
+            "regex": true
+          },
+          {
+            "pattern": "(Assinatura|Signature)\\s*:?\\s*_{10,}",
+            "weight": 2,
+            "regex": true
+          },
+          {
+            "pattern": "(Aprovado por|Approved by|Revisado por|Reviewed by)",
+            "weight": 2,
+            "regex": true
+          }
+        ]
+      }
+    },
+    
+    "font_analysis": {
+      "enabled": true,
+      "weight": 0.15,
+      "description": "Relatórios mantêm formatação consistente",
+      "config": {
+        "similarity_threshold": 0.75,
+        "check_font_count": true,
+        "check_font_names": true,
+        "check_font_sizes": false,
+        "min_font_change": 3
+      }
+    },
+    
+    "page_numbering": {
+      "enabled": true,
+      "weight": 0.20,
+      "description": "Cada relatório tem sua numeração",
+      "config": {
+        "detect_restart": true,
+        "formats": ["numeric", "roman"],
+        "positions": ["footer", "header", "corner"],
+        "restart_indicators": ["1", "i", "I"]
+      }
+    },
+    
+    "blank_pages": {
+      "enabled": false,
+      "weight": 0.0,
+      "config": {}
+    },
+    
+    "layout_changes": {
+      "enabled": true,
+      "weight": 0.15,
+      "description": "Diferentes tipos têm layouts distintos",
+      "config": {
+        "check_margins": true,
+        "check_columns": false,
+        "check_orientation": true,
+        "check_size": false,
+        "similarity_threshold": 0.65
+      }
+    },
+    
+    "header_footer": {
+      "enabled": true,
+      "weight": 0.20,
+      "description": "Headers corporativos com logo/nome",
+      "config": {
+        "check_consistency": true,
+        "extract_top_percent": 12,
+        "extract_bottom_percent": 10,
+        "similarity_threshold": 0.8
+      }
+    },
+    
+    "metadata_hints": {
+      "enabled": false,
+      "weight": 0.0,
+      "config": {}
+    },
+    
+    "content_flow": {
+      "enabled": false,
+      "weight": 0.0,
+      "config": {}
+    }
+  },
+  
+  "global_settings": {
+    "min_confidence_score": 0.5,
+    "min_document_pages": 1,
+    "merge_small_documents": true,
+    "merge_threshold": 3,
+    "output_format": "summary",
+    "extract_documents": false
+  }
+}

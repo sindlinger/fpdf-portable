@@ -1,0 +1,110 @@
+RELATÓRIO DE EXTRAÇÃO - DIRETORIA ESPECIAL V15
+Melhorias: numero_autos flexível, perito_nome por CPF, valor_tabelado inferido
+================================================================================
+
+ESTATÍSTICAS GERAIS:
+Total de arquivos processados: 500
+Documentos encontrados: 444
+Extraídos com sucesso: 434
+Taxa de sucesso: 97.7%
+
+--------------------------------------------------------------------------------
+
+MÉTODOS DE EXTRAÇÃO:
+AdvancedLayout      :   1357
+LayoutPreserving    :   1357
+
+--------------------------------------------------------------------------------
+
+EXTRAÇÃO POR CAMPO:
+processo            :  388 ( 87.4%)
+juizo               :  410 ( 92.3%)
+comarca             :  403 ( 90.8%)
+perito_nome         :  398 ( 89.6%)
+cpf_perito          :  401 ( 90.3%)
+especialidade       :  428 ( 96.4%)
+valor_arbitrado     :  394 ( 88.7%)
+valor_tabelado      :  325 ( 73.2%)
+numero_autos        :  366 ( 82.4%)
+autor               :  391 ( 88.1%)
+parte_contraria     :  349 ( 78.6%)
+destino             :  395 ( 89.0%)
+
+--------------------------------------------------------------------------------
+
+ESTATÍSTICAS DE CONSOLIDAÇÃO:
+autor_confirmed: 391
+autor_multiple_values: 134
+cpf_perito_confirmed: 401
+cpf_perito_multiple_values: 15
+destino_confirmed: 391
+destino_multiple_values: 302
+especialidade_confirmed: 425
+especialidade_multiple_values: 169
+juizo_confirmed: 410
+juizo_multiple_values: 295
+numero_autos_confirmed: 366
+parte_contraria_confirmed: 347
+parte_contraria_multiple_values: 129
+perito_nome_by_cpf: 398
+processo_confirmed: 388
+processo_multiple_values: 1
+valor_arbitrado_confirmed: 396
+valor_arbitrado_multiple_values: 4
+
+--------------------------------------------------------------------------------
+
+VALORES TABELADOS INFERIDOS:
+Assistente Social: 2 documentos
+Cirurgiã
+
+Dentista: 2 documentos
+Cirurgiã Dentista: 4 documentos
+Contador: 4 documentos
+Contador
+
+Os: 1 documentos
+Contador
+
+perito: 2 documentos
+Contador Yves: 1 documentos
+Contadora: 2 documentos
+Contábil Antônio: 1 documentos
+Engenheiro Civil: 42 documentos
+Engenheiro Eletricista: 2 documentos
+Engenheiro Mecânico: 2 documentos
+Engenheiro Químico: 2 documentos
+Engenheiro de: 7 documentos
+Engenheiro do: 1 documentos
+Grafotécnico: 77 documentos
+Grafotécnico
+
+qgpericias: 22 documentos
+Médica: 6 documentos
+Médica Clínica: 1 documentos
+Médica Gabrielle: 1 documentos
+Médico: 70 documentos
+Médico
+
+alissonparaiba: 1 documentos
+Médico
+
+gustavolfm: 1 documentos
+Médico
+
+jlnobrega: 2 documentos
+Médico
+
+lucianojliraamendes: 1 documentos
+Médico Alisson: 5 documentos
+Médico Marcílio: 1 documentos
+Médico Psiquiatra: 17 documentos
+Médico Psiquiátrico: 8 documentos
+Médico gustavolfm: 4 documentos
+Médico georgekennedyss: 1 documentos
+Psicóloga: 2 documentos
+médica: 3 documentos
+médico: 18 documentos
+médico
+
+Luciano: 9 documentos

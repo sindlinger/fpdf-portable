@@ -1,0 +1,119 @@
+RELATÓRIO DE EXTRAÇÃO - DIRETORIA ESPECIAL
+================================================================================
+
+ESTATÍSTICAS GERAIS:
+Total de arquivos processados: 319
+Documentos da Diretoria Especial encontrados: 509
+Documentos extraídos com sucesso: 383
+Falhas na extração: 126
+Taxa de sucesso: 75.2%
+
+--------------------------------------------------------------------------------
+
+EXTRAÇÃO POR CAMPO:
+autor               :    5 (  1.0%)
+comarca             :   19 (  3.7%)
+cpf_perito          :  408 ( 80.2%)
+destino             :  317 ( 62.3%)
+especialidade       :  430 ( 84.5%)
+juizo               :  377 ( 74.1%)
+numero_autos        :   62 ( 12.2%)
+parte_contraria     :    1 (  0.2%)
+perito_nome         :   15 (  2.9%)
+processo            :  372 ( 73.1%)
+valor_arbitrado     :  359 ( 70.5%)
+
+--------------------------------------------------------------------------------
+
+EXEMPLOS DE DADOS EXTRAÍDOS:
+
+Exemplo 1:
+  Arquivo: 0001210_cache.json
+  Processo: 000183-70.2024.8.15
+  Juízo: JUÍZO DA 5ª VARA MISTA DE SOUSA
+  Comarca: None
+  Perito: FELIPE QUEIROGA GADELHA
+  CPF: 021.205.144-02
+  Valor: R$ 256.04
+
+Exemplo 2:
+  Arquivo: 000121442024815_cache.json
+  Processo: 000121-44.2024.8.15
+  Juízo: None
+  Comarca: None
+  Perito: None
+  CPF: None
+  Valor: R$ None
+
+Exemplo 3:
+  Arquivo: 000121442024815_cache.json
+  Processo: 000121-44.2024.8.15
+  Juízo: None
+  Comarca: Piancó
+  Perito: Felipe Queiroga Gadelha
+  CPF: 021.205.144-02
+  Valor: R$ 700.00
+
+Exemplo 4:
+  Arquivo: 000183702024815_cache.json
+  Processo: 000183-70.2024.8.15
+  Juízo: JUÍZO DA 5ª VARA MISTA DE SOUSA
+  Comarca: None
+  Perito: FELIPE QUEIROGA GADELHA
+  CPF: 021.205.144-02
+  Valor: R$ 256.04
+
+Exemplo 5:
+  Arquivo: 0002066420248151_cache.json
+  Processo: 000206-64.2024.8.15
+  Juízo: Juízo da 3ª Vara da Comarca de Sousa
+  Comarca: None
+  Perito: None
+  CPF: 046.443.074-75
+  Valor: R$ 370.00
+
+Exemplo 6:
+  Arquivo: 0002066420248152_cache.json
+  Processo: 000206-64.2024.8.15
+  Juízo: Juízo da 3ª Vara da Comarca de Sousa
+  Comarca: None
+  Perito: None
+  CPF: 046.443.074-75
+  Valor: R$ 370.00
+
+Exemplo 7:
+  Arquivo: 0003560820248151_cache.json
+  Processo: 000356-08.2024.8.15
+  Juízo: Juízo da 5ª Vara Mista da Comarca de Sousa
+  Comarca: None
+  Perito: None
+  CPF: 021.205.144-02
+  Valor: R$ 398.81
+
+Exemplo 8:
+  Arquivo: 000356082024815_cache.json
+  Processo: 000356-08.2024.8.15
+  Juízo: Juízo da 5ª Vara Mista da Comarca de Sousa
+  Comarca: None
+  Perito: None
+  CPF: 021.205.144-02
+  Valor: R$ 398.81
+
+Exemplo 9:
+  Arquivo: 0003665620248151_cache.json
+  Processo: 000366-56.2024.8.15
+  Juízo: Juízo da Vara Única  da Comarca de Alagoa Nova
+  Comarca: None
+  Perito: None
+  CPF: 021.205.144-02
+  Valor: R$ 398.81
+
+Exemplo 10:
+  Arquivo: 000366562024815_cache.json
+  Processo: 000366-56.2024.8.15
+  Juízo: Juízo da Vara Única  da Comarca de Alagoa Nova
+  Comarca: None
+  Perito: None
+  CPF: 021.205.144-02
+  Valor: R$ 398.81
+

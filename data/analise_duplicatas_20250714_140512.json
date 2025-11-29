@@ -1,0 +1,2440 @@
+{
+  "timestamp": "2025-07-14T14:05:12.949346",
+  "total_arquivos": 2170,
+  "processos_unicos": 417,
+  "processos_duplicados": 336,
+  "total_arquivos_duplicados": 1417,
+  "duplicatas": {
+    "2024077": [
+      "20240772091_cache.json",
+      "2024077209_cache.json",
+      "20240772171_cache.json",
+      "20240772172_cache.json",
+      "2024077217_cache.json",
+      "20240772251_cache.json",
+      "2024077225_cache.json",
+      "20240772331_cache.json",
+      "2024077233_cache.json",
+      "20240776611_cache.json",
+      "20240776612_cache.json",
+      "2024077661_cache.json",
+      "20240778031_cache.json",
+      "20240778032_cache.json",
+      "20240778033_cache.json",
+      "2024077803_cache.json",
+      "20240778201_cache.json",
+      "20240778202_cache.json",
+      "2024077820_cache.json",
+      "20240778381_cache.json",
+      "20240778382_cache.json",
+      "2024077838_cache.json",
+      "processo_completo_2024077209_cache.json",
+      "processo_completo_2024077217_cache.json",
+      "processo_completo_2024077225_cache.json",
+      "processo_completo_2024077233_cache.json",
+      "processo_completo_2024077661_cache.json",
+      "processo_completo_2024077803_cache.json",
+      "processo_completo_2024077820_cache.json",
+      "processo_completo_2024077838_cache.json"
+    ],
+    "2024070": [
+      "2024070012_cache.json",
+      "2024070262_cache.json",
+      "20240703671_cache.json",
+      "2024070367_cache.json",
+      "20240703831_cache.json",
+      "2024070383_cache.json",
+      "2024070414_cache.json",
+      "2024070519_cache.json",
+      "2024070527_cache.json",
+      "20240705781_cache.json",
+      "2024070578_cache.json",
+      "2024070692_cache.json",
+      "2024070916_cache.json",
+      "2024070957_cache.json",
+      "processo_completo_2024070012_cache.json",
+      "processo_completo_2024070262_cache.json",
+      "processo_completo_2024070367_cache.json",
+      "processo_completo_2024070383_cache.json",
+      "processo_completo_2024070414_cache.json",
+      "processo_completo_2024070519_cache.json",
+      "processo_completo_2024070527_cache.json",
+      "processo_completo_2024070578_cache.json",
+      "processo_completo_2024070692_cache.json",
+      "processo_completo_2024070916_cache.json",
+      "processo_completo_2024070957_cache.json"
+    ],
+    "2024016": [
+      "20240162311_cache.json",
+      "2024016231_cache.json",
+      "2024016274_cache.json",
+      "20240162821_cache.json",
+      "2024016282_cache.json",
+      "2024016299_cache.json",
+      "2024016338_cache.json",
+      "2024016362_cache.json",
+      "2024016379_cache.json",
+      "2024016395_cache.json",
+      "2024016434_cache.json",
+      "2024016856_cache.json",
+      "2024016944_cache.json",
+      "2024016977_cache.json",
+      "processo_completo_2024016231_cache.json",
+      "processo_completo_2024016274_cache.json",
+      "processo_completo_2024016282_cache.json",
+      "processo_completo_2024016299_cache.json",
+      "processo_completo_2024016338_cache.json",
+      "processo_completo_2024016362_cache.json",
+      "processo_completo_2024016379_cache.json",
+      "processo_completo_2024016395_cache.json",
+      "processo_completo_2024016434_cache.json",
+      "processo_completo_2024016856_cache.json"
+    ],
+    "2024020": [
+      "2024020066_cache.json",
+      "20240207691_cache.json",
+      "2024020769_cache.json",
+      "20240208491_cache.json",
+      "2024020849_cache.json",
+      "20240208731_cache.json",
+      "20240208732_cache.json",
+      "20240208733_cache.json",
+      "2024020873_cache.json",
+      "20240209451_cache.json",
+      "2024020945_cache.json",
+      "processo_completo_2024020066_cache.json",
+      "processo_completo_2024020769_cache.json",
+      "processo_completo_2024020849_cache.json",
+      "processo_completo_2024020873-1_cache.json",
+      "processo_completo_2024020873-2_cache.json",
+      "processo_completo_2024020873-3_cache.json",
+      "processo_completo_2024020873_cache.json",
+      "processo_completo_2024020945-1_cache.json",
+      "processo_completo_2024020945_cache.json"
+    ],
+    "2024026": [
+      "20240261271_cache.json",
+      "2024026127_cache.json",
+      "2024026186_cache.json",
+      "20240262681_cache.json",
+      "20240262682_cache.json",
+      "2024026268_cache.json",
+      "20240264011_cache.json",
+      "2024026401_cache.json",
+      "2024026581_cache.json",
+      "2024026766_cache.json",
+      "processo_completo_2024026127(1)_cache.json",
+      "processo_completo_2024026127_cache.json",
+      "processo_completo_2024026186_cache.json",
+      "processo_completo_2024026268_cache.json",
+      "processo_completo_2024026401-1_cache.json",
+      "processo_completo_2024026401_cache.json",
+      "processo_completo_2024026581_cache.json",
+      "processo_completo_2024026766_cache.json"
+    ],
+    "2024029": [
+      "2024029096_cache.json",
+      "20240291071_cache.json",
+      "2024029107_cache.json",
+      "2024029414_cache.json",
+      "20240295271_cache.json",
+      "2024029527_cache.json",
+      "20240296681_cache.json",
+      "2024029668_cache.json",
+      "20240296841_cache.json",
+      "2024029684_cache.json",
+      "processo_completo_2024029107-1_cache.json",
+      "processo_completo_2024029107_cache.json",
+      "processo_completo_2024029527_cache.json",
+      "processo_completo_2024029668-1_cache.json",
+      "processo_completo_2024029668_cache.json",
+      "processo_completo_2024029684-1_cache.json",
+      "processo_completo_2024029684_cache.json"
+    ],
+    "2023101": [
+      "2023101137_cache.json",
+      "2023101215_cache.json",
+      "2023101266_cache.json",
+      "2023101299_cache.json",
+      "2023101379_cache.json",
+      "2023101395_cache.json",
+      "2023101602_cache.json",
+      "2023101627_cache.json",
+      "2023101651_cache.json",
+      "2023101660_cache.json",
+      "2023101686_cache.json",
+      "2023101725_cache.json",
+      "2023101750_cache.json",
+      "2023101821_cache.json",
+      "2023101864_cache.json",
+      "2023101872_cache.json"
+    ],
+    "2024045": [
+      "20240454141_cache.json",
+      "20240454142_cache.json",
+      "20240454143_cache.json",
+      "2024045414_cache.json",
+      "2024045560_cache.json",
+      "20240456091_cache.json",
+      "2024045609_cache.json",
+      "2024045676_cache.json",
+      "20240458931_cache.json",
+      "2024045893_cache.json",
+      "processo_completo_2024045414_cache.json",
+      "processo_completo_2024045560_cache.json",
+      "processo_completo_2024045609_cache.json",
+      "processo_completo_2024045676_cache.json",
+      "processo_completo_2024045893_cache.json"
+    ],
+    "2024082": [
+      "2024082538_cache.json",
+      "20240826261_cache.json",
+      "2024082626_cache.json",
+      "20240827391_cache.json",
+      "2024082739_cache.json",
+      "20240827471_cache.json",
+      "2024082747_cache.json",
+      "20240827631_cache.json",
+      "20240827632_cache.json",
+      "2024082763_cache.json",
+      "processo_completo_2024082538_cache.json",
+      "processo_completo_2024082626_cache.json",
+      "processo_completo_2024082739_cache.json",
+      "processo_completo_2024082747_cache.json",
+      "processo_completo_2024082763_cache.json"
+    ],
+    "2024024": [
+      "2024024215_cache.json",
+      "2024024223_cache.json",
+      "2024024387_cache.json",
+      "2024024678_cache.json",
+      "20240249281_cache.json",
+      "2024024928_cache.json",
+      "20240249931_cache.json",
+      "2024024993_cache.json",
+      "processo_completo_2024024215_cache.json",
+      "processo_completo_2024024223_cache.json",
+      "processo_completo_2024024387_cache.json",
+      "processo_completo_2024024678_cache.json",
+      "processo_completo_2024024928_cache.json",
+      "processo_completo_2024024993_cache.json"
+    ],
+    "2024025": [
+      "20240250031_cache.json",
+      "2024025003_cache.json",
+      "20240250541_cache.json",
+      "2024025054_cache.json",
+      "20240250951_cache.json",
+      "2024025095_cache.json",
+      "2024025628_cache.json",
+      "processo_completo_2024025003(1)_cache.json",
+      "processo_completo_2024025003_cache.json",
+      "processo_completo_2024025054(1)_cache.json",
+      "processo_completo_2024025054_cache.json",
+      "processo_completo_2024025095(1)_cache.json",
+      "processo_completo_2024025095_cache.json",
+      "processo_completo_2024025628_cache.json"
+    ],
+    "2024044": [
+      "20240440441_cache.json",
+      "2024044044_cache.json",
+      "2024044173_cache.json",
+      "20240446551_cache.json",
+      "2024044655_cache.json",
+      "20240446631_cache.json",
+      "2024044663_cache.json",
+      "2024044809_cache.json",
+      "2024044921_cache.json",
+      "processo_completo_2024044044-1_cache.json",
+      "processo_completo_2024044044_cache.json",
+      "processo_completo_2024044655_cache.json",
+      "processo_completo_2024044663_cache.json",
+      "processo_completo_2024044921_cache.json"
+    ],
+    "2024084": [
+      "2024084271_cache.json",
+      "2024084302_cache.json",
+      "2024084378_cache.json",
+      "2024084677_cache.json",
+      "2024084685_cache.json",
+      "2024084907_cache.json",
+      "2024084974_cache.json",
+      "processo_completo_2024084271_cache.json",
+      "processo_completo_2024084302_cache.json",
+      "processo_completo_2024084378_cache.json",
+      "processo_completo_2024084677_cache.json",
+      "processo_completo_2024084685_cache.json",
+      "processo_completo_2024084907_cache.json",
+      "processo_completo_2024084974_cache.json"
+    ],
+    "2023114": [
+      "2023114460_cache.json",
+      "2023114550_cache.json",
+      "20231145761_cache.json",
+      "2023114576_cache.json",
+      "2023114605_cache.json",
+      "2023114648_cache.json",
+      "2023114710_cache.json",
+      "2023114832_cache.json",
+      "2023114937_cache.json",
+      "2023114953_cache.json",
+      "2023114996_cache.json",
+      "processo_completo_2023114550_cache.json",
+      "processo_completo_2023114576_cache.json"
+    ],
+    "2024033": [
+      "2024033327_cache.json",
+      "2024033505_cache.json",
+      "2024033513_cache.json",
+      "20240337651_cache.json",
+      "2024033765_cache.json",
+      "20240338451_cache.json",
+      "20240338452_cache.json",
+      "2024033845_cache.json",
+      "processo_completo_2024033327_cache.json",
+      "processo_completo_2024033505_cache.json",
+      "processo_completo_2024033513_cache.json",
+      "processo_completo_2024033765_cache.json",
+      "processo_completo_2024033845_cache.json"
+    ],
+    "2024046": [
+      "2024046111_cache.json",
+      "2024046187_cache.json",
+      "2024046605_cache.json",
+      "2024046873_cache.json",
+      "2024046890_cache.json",
+      "20240469291_cache.json",
+      "2024046929_cache.json",
+      "2024046953_cache.json",
+      "processo_completo_2024046111_cache.json",
+      "processo_completo_2024046187_cache.json",
+      "processo_completo_2024046873_cache.json",
+      "processo_completo_2024046929_cache.json",
+      "processo_completo_2024046953_cache.json"
+    ],
+    "2024061": [
+      "2024061270_cache.json",
+      "2024061315_cache.json",
+      "20240613581_cache.json",
+      "2024061358_cache.json",
+      "2024061606_cache.json",
+      "20240617941_cache.json",
+      "2024061794_cache.json",
+      "2024061825_cache.json",
+      "processo_completo_2024061315_cache.json",
+      "processo_completo_2024061358_cache.json",
+      "processo_completo_2024061606_cache.json",
+      "processo_completo_2024061794_cache.json",
+      "processo_completo_2024061825_cache.json"
+    ],
+    "2024075": [
+      "2024075170_cache.json",
+      "2024075207_cache.json",
+      "20240754671_cache.json",
+      "2024075467_cache.json",
+      "2024075651_cache.json",
+      "2024075709_cache.json",
+      "2024075813_cache.json",
+      "processo_completo_2024075170_cache.json",
+      "processo_completo_2024075207_cache.json",
+      "processo_completo_2024075467_cache.json",
+      "processo_completo_2024075651_cache.json",
+      "processo_completo_2024075709_cache.json",
+      "processo_completo_2024075813_cache.json"
+    ],
+    "2024076": [
+      "2024076564_cache.json",
+      "2024076812_cache.json",
+      "20240769401_cache.json",
+      "2024076940_cache.json",
+      "20240769661_cache.json",
+      "20240769662_cache.json",
+      "2024076966_cache.json",
+      "20240769741_cache.json",
+      "2024076974_cache.json",
+      "processo_completo_2024076812_cache.json",
+      "processo_completo_2024076940_cache.json",
+      "processo_completo_2024076966_cache.json",
+      "processo_completo_2024076974_cache.json"
+    ],
+    "2024085": [
+      "2024085127_cache.json",
+      "2024085143_cache.json",
+      "2024085151_cache.json",
+      "2024085186_cache.json",
+      "2024085241_cache.json",
+      "20240852921_cache.json",
+      "2024085292_cache.json",
+      "processo_completo_2024085127_cache.json",
+      "processo_completo_2024085143_cache.json",
+      "processo_completo_2024085151_cache.json",
+      "processo_completo_2024085186_cache.json",
+      "processo_completo_2024085241_cache.json",
+      "processo_completo_2024085292_cache.json"
+    ],
+    "2023144": [
+      "2023144006_cache.json",
+      "2023144014_cache.json",
+      "2023144022_cache.json",
+      "2023144055_cache.json",
+      "2023144071_cache.json",
+      "2023144292_cache.json",
+      "2023144356_cache.json",
+      "2023144372_cache.json",
+      "2023144389_cache.json",
+      "2023144637_cache.json",
+      "2023144653_cache.json",
+      "2023144799_cache.json"
+    ],
+    "2023146": [
+      "2023146001_cache.json",
+      "2023146010_cache.json",
+      "2023146028_cache.json",
+      "2023146036_cache.json",
+      "2023146261_cache.json",
+      "2023146323_cache.json",
+      "2023146340_cache.json",
+      "2023146366_cache.json",
+      "2023146403_cache.json",
+      "2023146420_cache.json",
+      "2023146446_cache.json",
+      "2023146760_cache.json"
+    ],
+    "2023170": [
+      "2023170105_cache.json",
+      "2023170121_cache.json",
+      "2023170156_cache.json",
+      "2023170228_cache.json",
+      "2023170236_cache.json",
+      "2023170277_cache.json",
+      "2023170293_cache.json",
+      "processo_completo_2023170121_cache.json",
+      "processo_completo_2023170156_cache.json",
+      "processo_completo_2023170236_cache.json",
+      "processo_completo_2023170277_cache.json",
+      "processo_completo_2023170293_cache.json"
+    ],
+    "2024041": [
+      "2024041020_cache.json",
+      "2024041206_cache.json",
+      "20240413351_cache.json",
+      "20240413352_cache.json",
+      "2024041335_cache.json",
+      "2024041394_cache.json",
+      "20240415721_cache.json",
+      "2024041572_cache.json",
+      "processo_completo_2024041206_cache.json",
+      "processo_completo_2024041335_cache.json",
+      "processo_completo_2024041394_cache.json",
+      "processo_completo_2024041572_cache.json"
+    ],
+    "2024068": [
+      "2024068046_cache.json",
+      "2024068360_cache.json",
+      "2024068521_cache.json",
+      "20240688961_cache.json",
+      "2024068896_cache.json",
+      "20240689991_cache.json",
+      "2024068999_cache.json",
+      "processo_completo_2024068046_cache.json",
+      "processo_completo_2024068360_cache.json",
+      "processo_completo_2024068521_cache.json",
+      "processo_completo_2024068896_cache.json",
+      "processo_completo_2024068999_cache.json"
+    ],
+    "2023115": [
+      "2023115000_cache.json",
+      "2023115325_cache.json",
+      "2023115333_cache.json",
+      "2023115350_cache.json",
+      "2023115392_cache.json",
+      "2023115405_cache.json",
+      "2023115430_cache.json",
+      "2023115448_cache.json",
+      "2023115489_cache.json",
+      "2023115552_cache.json",
+      "2023115577_cache.json"
+    ],
+    "2023141": [
+      "2023141185_cache.json",
+      "2023141265_cache.json",
+      "2023141407_cache.json",
+      "20231416261_cache.json",
+      "2023141626_cache.json",
+      "2023141909_cache.json",
+      "2023141917_cache.json",
+      "2023141925_cache.json",
+      "processo_completo_2023141185_cache.json",
+      "processo_completo_2023141265_cache.json",
+      "processo_completo_2023141626_cache.json"
+    ],
+    "2023147": [
+      "2023147053_cache.json",
+      "2023147166_cache.json",
+      "2023147246_cache.json",
+      "2023147359_cache.json",
+      "2023147391_cache.json",
+      "2023147422_cache.json",
+      "20231475351_cache.json",
+      "20231475352_cache.json",
+      "2023147535_cache.json",
+      "processo_completo_2023147246_cache.json",
+      "processo_completo_2023147535_cache.json"
+    ],
+    "2024032": [
+      "2024032112_cache.json",
+      "2024032750_cache.json",
+      "2024032784_cache.json",
+      "2024032872_cache.json",
+      "20240329441_cache.json",
+      "2024032944_cache.json",
+      "processo_completo_2024032112_cache.json",
+      "processo_completo_2024032750_cache.json",
+      "processo_completo_2024032784_cache.json",
+      "processo_completo_2024032872_cache.json",
+      "processo_completo_2024032944_cache.json"
+    ],
+    "2024034": [
+      "20240340141_cache.json",
+      "2024034014_cache.json",
+      "2024034194_cache.json",
+      "2024034241_cache.json",
+      "2024034268_cache.json",
+      "2024034321_cache.json",
+      "processo_completo_2024034014_cache.json",
+      "processo_completo_2024034194_cache.json",
+      "processo_completo_2024034241_cache.json",
+      "processo_completo_2024034268_cache.json",
+      "processo_completo_2024034321_cache.json"
+    ],
+    "2024035": [
+      "2024035041_cache.json",
+      "20240351131_cache.json",
+      "2024035113_cache.json",
+      "2024035164_cache.json",
+      "2024035197_cache.json",
+      "2024035734_cache.json",
+      "processo_completo_2024035041_cache.json",
+      "processo_completo_2024035113_cache.json",
+      "processo_completo_2024035164_cache.json",
+      "processo_completo_2024035197_cache.json",
+      "processo_completo_2024035734_cache.json"
+    ],
+    "2024043": [
+      "2024043324_cache.json",
+      "2024043365_cache.json",
+      "20240435071_cache.json",
+      "2024043507_cache.json",
+      "2024043540_cache.json",
+      "2024043574_cache.json",
+      "2024043986_cache.json",
+      "processo_completo_2024043507_cache.json",
+      "processo_completo_2024043540_cache.json",
+      "processo_completo_2024043574_cache.json",
+      "processo_completo_2024043986_cache.json"
+    ],
+    "2024057": [
+      "2024057553_cache.json",
+      "2024057596_cache.json",
+      "2024057607_cache.json",
+      "2024057762_cache.json",
+      "2024057906_cache.json",
+      "2024057922_cache.json",
+      "2024057947_cache.json",
+      "2024057955_cache.json",
+      "2024057963_cache.json",
+      "2024057971_cache.json",
+      "2024057980_cache.json"
+    ],
+    "2024060": [
+      "2024060050_cache.json",
+      "2024060084_cache.json",
+      "2024060357_cache.json",
+      "2024060365_cache.json",
+      "2024060373_cache.json",
+      "2024060638_cache.json",
+      "2024060734_cache.json",
+      "processo_completo_2024060050_cache.json",
+      "processo_completo_2024060365_cache.json",
+      "processo_completo_2024060373_cache.json",
+      "processo_completo_2024060638_cache.json"
+    ],
+    "2024069": [
+      "20240690141_cache.json",
+      "20240690142_cache.json",
+      "2024069014_cache.json",
+      "2024069348_cache.json",
+      "20240696291_cache.json",
+      "2024069629_cache.json",
+      "2024069653_cache.json",
+      "processo_completo_2024069014_cache.json",
+      "processo_completo_2024069348_cache.json",
+      "processo_completo_2024069629_cache.json",
+      "processo_completo_2024069653_cache.json"
+    ],
+    "2022148": [
+      "2022148202_cache.json",
+      "2022148464_cache.json",
+      "2022148472_cache.json",
+      "2022148489_cache.json",
+      "2022148501_cache.json",
+      "2022148528_cache.json",
+      "2022148536_cache.json",
+      "2022148544_cache.json",
+      "2022148569_cache.json",
+      "2022148577_cache.json"
+    ],
+    "2023037": [
+      "2023037224_cache.json",
+      "2023037600_cache.json",
+      "2023037739_cache.json",
+      "2023037747_cache.json",
+      "2023037771_cache.json",
+      "2023037780_cache.json",
+      "2023037798_cache.json",
+      "2023037925_cache.json",
+      "2023037933_cache.json",
+      "2023037941_cache.json"
+    ],
+    "2023039": [
+      "2023039054_cache.json",
+      "2023039191_cache.json",
+      "2023039206_cache.json",
+      "2023039222_cache.json",
+      "2023039394_cache.json",
+      "2023039409_cache.json",
+      "2023039441_cache.json",
+      "2023039468_cache.json",
+      "2023039492_cache.json",
+      "2023039513_cache.json"
+    ],
+    "2023051": [
+      "2023051147_cache.json",
+      "2023051227_cache.json",
+      "2023051251_cache.json",
+      "2023051294_cache.json",
+      "2023051528_cache.json",
+      "2023051761_cache.json",
+      "2023051770_cache.json",
+      "2023051807_cache.json",
+      "2023051946_cache.json",
+      "processo_completo_2023051761_cache.json"
+    ],
+    "2023053": [
+      "2023053144_cache.json",
+      "2023053224_cache.json",
+      "2023053304_cache.json",
+      "2023053407_cache.json",
+      "2023053503_cache.json",
+      "2023053600_cache.json",
+      "2023053667_cache.json",
+      "2023053683_cache.json",
+      "2023053722_cache.json",
+      "2023053802_cache.json"
+    ],
+    "2023071": [
+      "2023071222_cache.json",
+      "2023071239_cache.json",
+      "2023071247_cache.json",
+      "2023071441_cache.json",
+      "2023071450_cache.json",
+      "2023071468_cache.json",
+      "2023071484_cache.json",
+      "2023071492_cache.json",
+      "2023071693_cache.json",
+      "2023071982_cache.json"
+    ],
+    "2023078": [
+      "2023078027_cache.json",
+      "2023078035_cache.json",
+      "2023078043_cache.json",
+      "2023078176_cache.json",
+      "2023078184_cache.json",
+      "2023078205_cache.json",
+      "2023078297_cache.json",
+      "2023078449_cache.json",
+      "2023078481_cache.json",
+      "processo_completo_2023078043_cache.json"
+    ],
+    "2023084": [
+      "2023084705_cache.json",
+      "2023084730_cache.json",
+      "2023084801_cache.json",
+      "2023084828_cache.json",
+      "2023084844_cache.json",
+      "2023084877_cache.json",
+      "2023084908_cache.json",
+      "2023084924_cache.json",
+      "2023084973_cache.json",
+      "processo_completo_2023084705_cache.json"
+    ],
+    "2023188": [
+      "2023188324_cache.json",
+      "2023188332_cache.json",
+      "2023188349_cache.json",
+      "2023188365_cache.json",
+      "2023188373_cache.json",
+      "2023188429_cache.json",
+      "2023188437_cache.json",
+      "2023188461_cache.json",
+      "2023188470_cache.json",
+      "2023188488_cache.json"
+    ],
+    "2024030": [
+      "20240300191_cache.json",
+      "2024030019_cache.json",
+      "2024030264_cache.json",
+      "20240305451_cache.json",
+      "2024030545_cache.json",
+      "2024030859_cache.json",
+      "processo_completo_2024030019_cache.json",
+      "processo_completo_2024030264_cache.json",
+      "processo_completo_2024030545_cache.json",
+      "processo_completo_2024030859_cache.json"
+    ],
+    "2024048": [
+      "2024048176_cache.json",
+      "2024048328_cache.json",
+      "2024048352_cache.json",
+      "2024048416_cache.json",
+      "2024048553_cache.json",
+      "2024048561_cache.json",
+      "2024048658_cache.json",
+      "2024048738_cache.json",
+      "processo_completo_2024048352_cache.json",
+      "processo_completo_2024048416_cache.json"
+    ],
+    "2024050": [
+      "2024050183_cache.json",
+      "2024050425_cache.json",
+      "20240504411_cache.json",
+      "2024050441_cache.json",
+      "2024050492_cache.json",
+      "20240505051_cache.json",
+      "2024050505_cache.json",
+      "2024050896_cache.json",
+      "processo_completo_2024050441_cache.json",
+      "processo_completo_2024050505_cache.json"
+    ],
+    "2024058": [
+      "2024058030_cache.json",
+      "2024058169_cache.json",
+      "2024058177_cache.json",
+      "2024058232_cache.json",
+      "2024058273_cache.json",
+      "2024058739_cache.json",
+      "2024058835_cache.json",
+      "2024058843_cache.json",
+      "2024058860_cache.json",
+      "processo_completo_2024058860_cache.json"
+    ],
+    "2024064": [
+      "20240640261_cache.json",
+      "2024064026_cache.json",
+      "2024064649_cache.json",
+      "2024064657_cache.json",
+      "20240647611_cache.json",
+      "2024064761_cache.json",
+      "processo_completo_2024064026_cache.json",
+      "processo_completo_2024064649_cache.json",
+      "processo_completo_2024064657_cache.json",
+      "processo_completo_2024064761_cache.json"
+    ],
+    "2023062": [
+      "2023062065_cache.json",
+      "2023062073_cache.json",
+      "2023062145_cache.json",
+      "2023062240_cache.json",
+      "2023062418_cache.json",
+      "2023062426_cache.json",
+      "2023062741_cache.json",
+      "2023062952_cache.json",
+      "2023062969_cache.json"
+    ],
+    "2023082": [
+      "2023082041_cache.json",
+      "2023082357_cache.json",
+      "2023082429_cache.json",
+      "2023082599_cache.json",
+      "2023082611_cache.json",
+      "2023082638_cache.json",
+      "2023082654_cache.json",
+      "2023082679_cache.json",
+      "2023082742_cache.json"
+    ],
+    "2023088": [
+      "2023088208_cache.json",
+      "2023088216_cache.json",
+      "2023088290_cache.json",
+      "2023088353_cache.json",
+      "2023088396_cache.json",
+      "2023088722_cache.json",
+      "2023088925_cache.json",
+      "2023088941_cache.json",
+      "processo_completo_2023088208_cache.json"
+    ],
+    "2023090": [
+      "2023090507_cache.json",
+      "2023090515_cache.json",
+      "2023090599_cache.json",
+      "2023090603_cache.json",
+      "2023090687_cache.json",
+      "2023090695_cache.json",
+      "2023090700_cache.json",
+      "2023090935_cache.json",
+      "2023090951_cache.json"
+    ],
+    "2023091": [
+      "2023091420_cache.json",
+      "20230914791_cache.json",
+      "2023091479_cache.json",
+      "2023091905_cache.json",
+      "2023091930_cache.json",
+      "2023091964_cache.json",
+      "2023091989_cache.json",
+      "processo_completo_2023091420_cache.json",
+      "processo_completo_2023091479_cache.json"
+    ],
+    "2023095": [
+      "2023095027_cache.json",
+      "2023095051_cache.json",
+      "2023095256_cache.json",
+      "2023095457_cache.json",
+      "2023095465_cache.json",
+      "2023095596_cache.json",
+      "2023095795_cache.json",
+      "2023095906_cache.json",
+      "processo_completo_2023095256_cache.json"
+    ],
+    "2023100": [
+      "2023100048_cache.json",
+      "2023100089_cache.json",
+      "2023100144_cache.json",
+      "2023100290_cache.json",
+      "2023100466_cache.json",
+      "20231009331_cache.json",
+      "2023100933_cache.json",
+      "processo_completo_2023100466_cache.json",
+      "processo_completo_2023100933_cache.json"
+    ],
+    "2023136": [
+      "20231361271_cache.json",
+      "20231361272_cache.json",
+      "2023136127_cache.json",
+      "2023136723_cache.json",
+      "2023136854_cache.json",
+      "2023136887_cache.json",
+      "2023136942_cache.json",
+      "processo_completo_2023136127_cache.json",
+      "processo_completo_2023136854_cache.json"
+    ],
+    "2023149": [
+      "2023149026_cache.json",
+      "20231490751_cache.json",
+      "2023149075_cache.json",
+      "2023149681_cache.json",
+      "2023149823_cache.json",
+      "2023149899_cache.json",
+      "2023149920_cache.json",
+      "processo_completo_2023149026_cache.json",
+      "processo_completo_2023149075_cache.json"
+    ],
+    "2023152": [
+      "2023152532_cache.json",
+      "2023152549_cache.json",
+      "2023152557_cache.json",
+      "2023152565_cache.json",
+      "202315276611_cache.json",
+      "20231527661_cache.json",
+      "2023152766_cache.json",
+      "2023152895_cache.json",
+      "processo_completo_2023152766_cache.json"
+    ],
+    "2023153": [
+      "2023153156_cache.json",
+      "2023153189_cache.json",
+      "2023153210_cache.json",
+      "2023153252_cache.json",
+      "2023153293_cache.json",
+      "2023153365_cache.json",
+      "2023153839_cache.json",
+      "processo_completo_2023153210_cache.json",
+      "processo_completo_2023153839_cache.json"
+    ],
+    "2024051": [
+      "2024051127_cache.json",
+      "2024051135_cache.json",
+      "2024051313_cache.json",
+      "2024051330_cache.json",
+      "2024051356_cache.json",
+      "2024051428_cache.json",
+      "2024051590_cache.json",
+      "2024051707_cache.json",
+      "processo_completo_2024051707_cache.json"
+    ],
+    "2024066": [
+      "2024066021_cache.json",
+      "2024066329_cache.json",
+      "2024066595_cache.json",
+      "2024066600_cache.json",
+      "2024066878_cache.json",
+      "processo_completo_2024066021_cache.json",
+      "processo_completo_2024066329_cache.json",
+      "processo_completo_2024066595_cache.json",
+      "processo_completo_2024066878_cache.json"
+    ],
+    "2024083": [
+      "20240830901_cache.json",
+      "2024083090_cache.json",
+      "2024083555_cache.json",
+      "2024083571_cache.json",
+      "2024083901_cache.json",
+      "processo_completo_2024083090_cache.json",
+      "processo_completo_2024083555_cache.json",
+      "processo_completo_2024083571_cache.json",
+      "processo_completo_2024083901_cache.json"
+    ],
+    "2022158": [
+      "2022158112_cache.json",
+      "2022158571_cache.json",
+      "2022158635_cache.json",
+      "2022158864_cache.json",
+      "2022158901_cache.json",
+      "2022158928_cache.json",
+      "2022158944_cache.json",
+      "processo_completo_2022158112_cache.json"
+    ],
+    "2023034": [
+      "2023034267_cache.json",
+      "2023034283_cache.json",
+      "2023034291_cache.json",
+      "2023034576_cache.json",
+      "2023034752_cache.json",
+      "2023034808_cache.json",
+      "2023034970_cache.json",
+      "2023034988_cache.json"
+    ],
+    "2023036": [
+      "2023036393_cache.json",
+      "2023036408_cache.json",
+      "2023036703_cache.json",
+      "2023036711_cache.json",
+      "2023036891_cache.json",
+      "2023036914_cache.json",
+      "2023036947_cache.json",
+      "2023036955_cache.json"
+    ],
+    "2023047": [
+      "2023047271_cache.json",
+      "2023047302_cache.json",
+      "2023047513_cache.json",
+      "2023047790_cache.json",
+      "2023047829_cache.json",
+      "2023047845_cache.json",
+      "2023047870_cache.json",
+      "2023047923_cache.json"
+    ],
+    "2023069": [
+      "2023069114_cache.json",
+      "2023069510_cache.json",
+      "2023069528_cache.json",
+      "2023069544_cache.json",
+      "2023069577_cache.json",
+      "2023069761_cache.json",
+      "2023069788_cache.json",
+      "2023069796_cache.json"
+    ],
+    "2023103": [
+      "2023103590_cache.json",
+      "2023103688_cache.json",
+      "2023103696_cache.json",
+      "2023103846_cache.json",
+      "2023103854_cache.json",
+      "2023103918_cache.json",
+      "2023103926_cache.json",
+      "processo_completo_2023103846_cache.json"
+    ],
+    "2023106": [
+      "2023106012_cache.json",
+      "2023106037_cache.json",
+      "2023106053_cache.json",
+      "2023106070_cache.json",
+      "2023106692_cache.json",
+      "2023106836_cache.json",
+      "2023106932_cache.json",
+      "processo_completo_2023106070_cache.json"
+    ],
+    "2023155": [
+      "2023155070_cache.json",
+      "2023155096_cache.json",
+      "2023155115_cache.json",
+      "2023155123_cache.json",
+      "2023155414_cache.json",
+      "2023155705_cache.json",
+      "2023155949_cache.json",
+      "processo_completo_2023155705_cache.json"
+    ],
+    "2023167": [
+      "2023167221_cache.json",
+      "2023167336_cache.json",
+      "2023167352_cache.json",
+      "2023167424_cache.json",
+      "2023167457_cache.json",
+      "2023167699_cache.json",
+      "2023167738_cache.json",
+      "2023167779_cache.json"
+    ],
+    "2023185": [
+      "2023185223_cache.json",
+      "2023185320_cache.json",
+      "2023185338_cache.json",
+      "2023185784_cache.json",
+      "2023185805_cache.json",
+      "2023185848_cache.json",
+      "2023185936_cache.json",
+      "processo_completo_2023185848_cache.json"
+    ],
+    "2023186": [
+      "2023186126_cache.json",
+      "2023186360_cache.json",
+      "2023186386_cache.json",
+      "2023186425_cache.json",
+      "2023186433_cache.json",
+      "2023186450_cache.json",
+      "2023186476_cache.json",
+      "processo_completo_2023186126_cache.json"
+    ],
+    "2024015": [
+      "2024015312_cache.json",
+      "20240154581_cache.json",
+      "2024015458_cache.json",
+      "20240156421_cache.json",
+      "2024015642_cache.json",
+      "processo_completo_2024015312_cache.json",
+      "processo_completo_2024015458_cache.json",
+      "processo_completo_2024015642_cache.json"
+    ],
+    "2024021": [
+      "20240212781_cache.json",
+      "2024021278_cache.json",
+      "20240212861_cache.json",
+      "2024021286_cache.json",
+      "2024021866_cache.json",
+      "processo_completo_2024021278_cache.json",
+      "processo_completo_2024021286_cache.json",
+      "processo_completo_2024021866_cache.json"
+    ],
+    "2024022": [
+      "20240224731_cache.json",
+      "2024022473_cache.json",
+      "2024022529_cache.json",
+      "2024022570_cache.json",
+      "processo_completo_2024022473-1_cache.json",
+      "processo_completo_2024022473_cache.json",
+      "processo_completo_2024022529_cache.json",
+      "processo_completo_2024022570_cache.json"
+    ],
+    "2024027": [
+      "2024027324_cache.json",
+      "2024027437_cache.json",
+      "20240279861_cache.json",
+      "2024027986_cache.json",
+      "2024027994_cache.json",
+      "processo_completo_2024027324_cache.json",
+      "processo_completo_2024027986-1_cache.json",
+      "processo_completo_2024027986_cache.json"
+    ],
+    "2024037": [
+      "2024037502_cache.json",
+      "20240376331_cache.json",
+      "2024037633_cache.json",
+      "20240378101_cache.json",
+      "2024037810_cache.json",
+      "processo_completo_2024037502_cache.json",
+      "processo_completo_2024037633_cache.json",
+      "processo_completo_2024037810_cache.json"
+    ],
+    "2024039": [
+      "2024039155_cache.json",
+      "2024039198_cache.json",
+      "2024039243_cache.json",
+      "2024039593_cache.json",
+      "2024039866_cache.json",
+      "processo_completo_2024039198_cache.json",
+      "processo_completo_2024039243_cache.json",
+      "processo_completo_2024039593_cache.json"
+    ],
+    "2024055": [
+      "2024055267_cache.json",
+      "2024055380_cache.json",
+      "2024055398_cache.json",
+      "2024055427_cache.json",
+      "2024055777_cache.json",
+      "2024055929_cache.json",
+      "processo_completo_2024055777_cache.json",
+      "processo_completo_2024055929_cache.json"
+    ],
+    "2022147": [
+      "2022147066_cache.json",
+      "2022147541_cache.json",
+      "2022147605_cache.json",
+      "2022147630_cache.json",
+      "2022147664_cache.json",
+      "2022147697_cache.json",
+      "2022147701_cache.json"
+    ],
+    "2023038": [
+      "2023038081_cache.json",
+      "2023038090_cache.json",
+      "2023038104_cache.json",
+      "2023038112_cache.json",
+      "2023038258_cache.json",
+      "2023038985_cache.json",
+      "2023038993_cache.json"
+    ],
+    "2023048": [
+      "2023048047_cache.json",
+      "2023048098_cache.json",
+      "2023048102_cache.json",
+      "2023048135_cache.json",
+      "2023048532_cache.json",
+      "2023048862_cache.json",
+      "2023048895_cache.json"
+    ],
+    "2023123": [
+      "2023123083_cache.json",
+      "2023123260_cache.json",
+      "2023123392_cache.json",
+      "2023123456_cache.json",
+      "2023123501_cache.json",
+      "2023123528_cache.json",
+      "2023123987_cache.json"
+    ],
+    "2023131": [
+      "2023131075_cache.json",
+      "2023131122_cache.json",
+      "2023131171_cache.json",
+      "2023131317_cache.json",
+      "2023131430_cache.json",
+      "2023131649_cache.json",
+      "2023131665_cache.json"
+    ],
+    "2023139": [
+      "2023139203_cache.json",
+      "2023139480_cache.json",
+      "2023139519_cache.json",
+      "2023139713_cache.json",
+      "2023139836_cache.json",
+      "2023139973_cache.json",
+      "processo_completo_2023139713_cache.json"
+    ],
+    "2023140": [
+      "2023140086_cache.json",
+      "2023140117_cache.json",
+      "2023140150_cache.json",
+      "2023140658_cache.json",
+      "2023140711_cache.json",
+      "processo_completo_2023140150_cache.json",
+      "processo_completo_2023140711_cache.json"
+    ],
+    "2023143": [
+      "2023143685_cache.json",
+      "2023143773_cache.json",
+      "2023143829_cache.json",
+      "2023143853_cache.json",
+      "2023143888_cache.json",
+      "2023143974_cache.json",
+      "2023143982_cache.json"
+    ],
+    "2023154": [
+      "2023154044_cache.json",
+      "2023154245_cache.json",
+      "2023154288_cache.json",
+      "2023154366_cache.json",
+      "2023154727_cache.json",
+      "2023154809_cache.json",
+      "processo_completo_2023154288_cache.json"
+    ],
+    "2023159": [
+      "2023159136_cache.json",
+      "2023159396_cache.json",
+      "2023159722_cache.json",
+      "20231599331_cache.json",
+      "2023159933_cache.json",
+      "processo_completo_2023159136_cache.json",
+      "processo_completo_2023159933_cache.json"
+    ],
+    "2023172": [
+      "2023172166_cache.json",
+      "20231721991_cache.json",
+      "2023172199_cache.json",
+      "2023172300_cache.json",
+      "2023172334_cache.json",
+      "processo_completo_2023172199_cache.json",
+      "processo_completo_2023172334_cache.json"
+    ],
+    "2023182": [
+      "2023182464_cache.json",
+      "2023182569_cache.json",
+      "2023182632_cache.json",
+      "2023182665_cache.json",
+      "2023182681_cache.json",
+      "2023182704_cache.json",
+      "2023182737_cache.json"
+    ],
+    "2024006": [
+      "2024006125_cache.json",
+      "2024006168_cache.json",
+      "2024006213_cache.json",
+      "2024006631_cache.json",
+      "2024006682_cache.json",
+      "2024006720_cache.json",
+      "processo_completo_2024006631_cache.json"
+    ],
+    "2024040": [
+      "2024040016_cache.json",
+      "2024040379_cache.json",
+      "20240408301_cache.json",
+      "2024040830_cache.json",
+      "processo_completo_2024040016_cache.json",
+      "processo_completo_2024040379_cache.json",
+      "processo_completo_2024040830_cache.json"
+    ],
+    "2024049": [
+      "2024049048_cache.json",
+      "2024049110_cache.json",
+      "2024049152_cache.json",
+      "2024049169_cache.json",
+      "2024049177_cache.json",
+      "2024049193_cache.json",
+      "processo_completo_2024049152_cache.json"
+    ],
+    "2024081": [
+      "20240810601_cache.json",
+      "2024081060_cache.json",
+      "2024081117_cache.json",
+      "2024081800_cache.json",
+      "processo_completo_2024081060_cache.json",
+      "processo_completo_2024081117_cache.json",
+      "processo_completo_2024081800_cache.json"
+    ],
+    "2022145": [
+      "20221451571_cache.json",
+      "2022145157_cache.json",
+      "2022145892_cache.json",
+      "2022145905_cache.json",
+      "2022145921_cache.json",
+      "processo_completo_2022145157_cache.json"
+    ],
+    "2023010": [
+      "2023010018_cache.json",
+      "2023010067_cache.json",
+      "2023010874_cache.json",
+      "2023010882_cache.json",
+      "2023010903_cache.json",
+      "2023010938_cache.json"
+    ],
+    "2023035": [
+      "2023035026_cache.json",
+      "2023035042_cache.json",
+      "2023035083_cache.json",
+      "2023035106_cache.json",
+      "2023035122_cache.json",
+      "2023035712_cache.json"
+    ],
+    "2023043": [
+      "2023043059_cache.json",
+      "2023043286_cache.json",
+      "2023043608_cache.json",
+      "2023043616_cache.json",
+      "2023043840_cache.json",
+      "2023043954_cache.json"
+    ],
+    "2023061": [
+      "2023061013_cache.json",
+      "2023061021_cache.json",
+      "2023061048_cache.json",
+      "2023061056_cache.json",
+      "2023061064_cache.json",
+      "2023061169_cache.json"
+    ],
+    "2023083": [
+      "2023083124_cache.json",
+      "2023083165_cache.json",
+      "2023083212_cache.json",
+      "2023083358_cache.json",
+      "2023083366_cache.json",
+      "2023083727_cache.json"
+    ],
+    "2023085": [
+      "2023085031_cache.json",
+      "2023085099_cache.json",
+      "2023085259_cache.json",
+      "20230852751_cache.json",
+      "2023085275_cache.json",
+      "processo_completo_2023085275_cache.json"
+    ],
+    "2023086": [
+      "2023086552_cache.json",
+      "2023086585_cache.json",
+      "2023086593_cache.json",
+      "2023086823_cache.json",
+      "2023086858_cache.json",
+      "2023086938_cache.json"
+    ],
+    "2023113": [
+      "2023113246_cache.json",
+      "2023113318_cache.json",
+      "2023113326_cache.json",
+      "2023113367_cache.json",
+      "2023113375_cache.json",
+      "2023113383_cache.json"
+    ],
+    "2023126": [
+      "20231263621_cache.json",
+      "2023126362_cache.json",
+      "2023126741_cache.json",
+      "2023126944_cache.json",
+      "processo_completo_2023126362_cache.json",
+      "processo_completo_2023126944_cache.json"
+    ],
+    "2023127": [
+      "2023127118_cache.json",
+      "2023127351_cache.json",
+      "2023127425_cache.json",
+      "2023127601_cache.json",
+      "2023127677_cache.json",
+      "2023127845_cache.json"
+    ],
+    "2023145": [
+      "2023145017_cache.json",
+      "2023145025_cache.json",
+      "2023145978_cache.json",
+      "2023145994_cache.json",
+      "processo_completo_2023145017_cache.json",
+      "processo_completo_2023145025_cache.json"
+    ],
+    "2023157": [
+      "2023157376_cache.json",
+      "2023157456_cache.json",
+      "2023157472_cache.json",
+      "2023157501_cache.json",
+      "processo_completo_2023157472_cache.json",
+      "processo_completo_2023157501_cache.json"
+    ],
+    "2023180": [
+      "2023180045_cache.json",
+      "2023180668_cache.json",
+      "2023180932_cache.json",
+      "2023180957_cache.json",
+      "2023180990_cache.json",
+      "processo_completo_2023180045_cache.json"
+    ],
+    "2023181": [
+      "20231818731_cache.json",
+      "2023181873_cache.json",
+      "20231819961_cache.json",
+      "2023181996_cache.json",
+      "processo_completo_2023181873_cache.json",
+      "processo_completo_2023181996_cache.json"
+    ],
+    "2024014": [
+      "2024014787_cache.json",
+      "2024014955_cache.json",
+      "2024014971_cache.json",
+      "processo_completo_2024014787_cache.json",
+      "processo_completo_2024014955_cache.json",
+      "processo_completo_2024014971_cache.json"
+    ],
+    "2024053": [
+      "2024053010_cache.json",
+      "2024053052_cache.json",
+      "2024053743_cache.json",
+      "processo_completo_2024053010_cache.json",
+      "processo_completo_2024053052_cache.json",
+      "processo_completo_2024053743_cache.json"
+    ],
+    "2024065": [
+      "20240657621_cache.json",
+      "2024065762_cache.json",
+      "20240659981_cache.json",
+      "2024065998_cache.json",
+      "processo_completo_2024065762_cache.json",
+      "processo_completo_2024065998_cache.json"
+    ],
+    "2024074": [
+      "2024074128_cache.json",
+      "2024074466_cache.json",
+      "2024074474_cache.json",
+      "processo_completo_2024074128_cache.json",
+      "processo_completo_2024074466_cache.json",
+      "processo_completo_2024074474_cache.json"
+    ],
+    "2024078": [
+      "20240782931_cache.json",
+      "2024078293_cache.json",
+      "20240783811_cache.json",
+      "2024078381_cache.json",
+      "processo_completo_2024078293_cache.json",
+      "processo_completo_2024078381_cache.json"
+    ],
+    "0004235": [
+      "0004235820248151_cache.json",
+      "0004235820248152_cache.json",
+      "0004235820248153_cache.json",
+      "0004235820248154_cache.json",
+      "000423582024815_cache.json"
+    ],
+    "2022168": [
+      "2022168241_cache.json",
+      "2022168268_cache.json",
+      "2022168276_cache.json",
+      "2022168305_cache.json",
+      "2022168731_cache.json"
+    ],
+    "2023018": [
+      "2023018037_cache.json",
+      "2023018455_cache.json",
+      "2023018650_cache.json",
+      "2023018684_cache.json",
+      "2023018916_cache.json"
+    ],
+    "2023026": [
+      "2023026174_cache.json",
+      "2023026748_cache.json",
+      "2023026965_cache.json",
+      "2023026973_cache.json",
+      "2023026981_cache.json"
+    ],
+    "2023041": [
+      "2023041633_cache.json",
+      "2023041641_cache.json",
+      "2023041869_cache.json",
+      "2023041908_cache.json",
+      "2023041916_cache.json"
+    ],
+    "2023052": [
+      "2023052125_cache.json",
+      "2023052141_cache.json",
+      "2023052168_cache.json",
+      "2023052184_cache.json",
+      "2023052875_cache.json"
+    ],
+    "2023055": [
+      "20230552141_cache.json",
+      "2023055214_cache.json",
+      "2023055351_cache.json",
+      "2023055597_cache.json",
+      "processo_completo_2023055214_cache.json"
+    ],
+    "2023056": [
+      "2023056356_cache.json",
+      "2023056372_cache.json",
+      "2023056397_cache.json",
+      "2023056401_cache.json",
+      "2023056410_cache.json"
+    ],
+    "2023058": [
+      "2023058044_cache.json",
+      "2023058093_cache.json",
+      "2023058116_cache.json",
+      "2023058132_cache.json",
+      "2023058270_cache.json"
+    ],
+    "2023066": [
+      "2023066190_cache.json",
+      "2023066288_cache.json",
+      "2023066296_cache.json",
+      "2023066307_cache.json",
+      "2023066500_cache.json"
+    ],
+    "2023067": [
+      "2023067053_cache.json",
+      "2023067131_cache.json",
+      "2023067578_cache.json",
+      "2023067756_cache.json",
+      "2023067869_cache.json"
+    ],
+    "2023068": [
+      "2023068275_cache.json",
+      "2023068322_cache.json",
+      "2023068533_cache.json",
+      "2023068541_cache.json",
+      "2023068576_cache.json"
+    ],
+    "2023073": [
+      "2023073172_cache.json",
+      "2023073488_cache.json",
+      "2023073679_cache.json",
+      "2023073718_cache.json",
+      "2023073847_cache.json"
+    ],
+    "2023081": [
+      "2023081313_cache.json",
+      "2023081321_cache.json",
+      "2023081428_cache.json",
+      "2023081485_cache.json",
+      "processo_completo_2023081485_cache.json"
+    ],
+    "2023108": [
+      "2023108091_cache.json",
+      "2023108569_cache.json",
+      "2023108585_cache.json",
+      "2023108874_cache.json",
+      "processo_completo_2023108569_cache.json"
+    ],
+    "2023121": [
+      "2023121045_cache.json",
+      "2023121203_cache.json",
+      "2023121502_cache.json",
+      "2023121609_cache.json",
+      "2023121916_cache.json"
+    ],
+    "2023124": [
+      "2023124109_cache.json",
+      "2023124176_cache.json",
+      "2023124457_cache.json",
+      "2023124473_cache.json",
+      "2023124545_cache.json"
+    ],
+    "2023128": [
+      "2023128268_cache.json",
+      "2023128389_cache.json",
+      "2023128549_cache.json",
+      "2023128774_cache.json",
+      "processo_completo_2023128774_cache.json"
+    ],
+    "2023137": [
+      "2023137210_cache.json",
+      "2023137791_cache.json",
+      "2023137855_cache.json",
+      "processo_completo_2023137210_cache.json",
+      "processo_completo_2023137791_cache.json"
+    ],
+    "2023150": [
+      "2023150580_cache.json",
+      "2023150598_cache.json",
+      "2023150619_cache.json",
+      "2023150627_cache.json",
+      "2023150660_cache.json"
+    ],
+    "2023156": [
+      "2023156066_cache.json",
+      "2023156283_cache.json",
+      "2023156322_cache.json",
+      "2023156613_cache.json",
+      "2023156873_cache.json"
+    ],
+    "2023177": [
+      "2023177320_cache.json",
+      "2023177346_cache.json",
+      "2023177379_cache.json",
+      "processo_completo_2023177320_cache.json",
+      "processo_completo_2023177379_cache.json"
+    ],
+    "2024038": [
+      "20240382911_cache.json",
+      "2024038291_cache.json",
+      "2024038656_cache.json",
+      "processo_completo_2024038291_cache.json",
+      "processo_completo_2024038656_cache.json"
+    ],
+    "2024042": [
+      "2024042549_cache.json",
+      "2024042766_cache.json",
+      "2024042934_cache.json",
+      "processo_completo_2024042549_cache.json",
+      "processo_completo_2024042766_cache.json"
+    ],
+    "2024062": [
+      "2024062070_cache.json",
+      "2024062246_cache.json",
+      "2024062543_cache.json",
+      "2024062676_cache.json",
+      "2024062721_cache.json"
+    ],
+    "2024072": [
+      "20240721551_cache.json",
+      "2024072155_cache.json",
+      "2024072632_cache.json",
+      "processo_completo_2024072155_cache.json",
+      "processo_completo_2024072632_cache.json"
+    ],
+    "0003754": [
+      "0003754120248151_cache.json",
+      "0003754120248152_cache.json",
+      "0003754120248153_cache.json",
+      "000375412024815_cache.json"
+    ],
+    "0003777": [
+      "0003777020248151_cache.json",
+      "0003777020248152_cache.json",
+      "0003777020248153_cache.json",
+      "000377702024815_cache.json"
+    ],
+    "0010344": [
+      "0010344220248151_cache.json",
+      "0010344220248152_cache.json",
+      "0010344220248153_cache.json",
+      "001034422024815_cache.json"
+    ],
+    "0019378": [
+      "0019378920248151_cache.json",
+      "0019378920248152_cache.json",
+      "0019378920248153_cache.json",
+      "001937892024815_cache.json"
+    ],
+    "0029056": [
+      "0029056020248151_cache.json",
+      "0029056020248152_cache.json",
+      "0029056020248153_cache.json",
+      "002905602024815_cache.json"
+    ],
+    "2022155": [
+      "2022155260_cache.json",
+      "20221559201_cache.json",
+      "2022155920_cache.json",
+      "processo_completo_2022155920_cache.json"
+    ],
+    "2022161": [
+      "2022161053_cache.json",
+      "2022161061_cache.json",
+      "2022161158_cache.json",
+      "2022161908_cache.json"
+    ],
+    "2023015": [
+      "2023015022_cache.json",
+      "2023015364_cache.json",
+      "2023015372_cache.json",
+      "2023015581_cache.json"
+    ],
+    "2023023": [
+      "2023023731_cache.json",
+      "2023023879_cache.json",
+      "2023023942_cache.json",
+      "2023023991_cache.json"
+    ],
+    "2023092": [
+      "2023092287_cache.json",
+      "2023092713_cache.json",
+      "2023092836_cache.json",
+      "processo_completo_2023092836_cache.json"
+    ],
+    "2023097": [
+      "2023097112_cache.json",
+      "2023097129_cache.json",
+      "2023097137_cache.json",
+      "2023097231_cache.json"
+    ],
+    "2023104": [
+      "2023104041_cache.json",
+      "2023104068_cache.json",
+      "2023104488_cache.json",
+      "2023104847_cache.json"
+    ],
+    "2023112": [
+      "2023112044_cache.json",
+      "2023112698_cache.json",
+      "2023112817_cache.json",
+      "2023112876_cache.json"
+    ],
+    "2023151": [
+      "2023151183_cache.json",
+      "2023151263_cache.json",
+      "2023151425_cache.json",
+      "2023151724_cache.json"
+    ],
+    "2023158": [
+      "2023158133_cache.json",
+      "2023158795_cache.json",
+      "processo_completo_2023158133_cache.json",
+      "processo_completo_2023158795_cache.json"
+    ],
+    "2023165": [
+      "2023165200_cache.json",
+      "2023165226_cache.json",
+      "2023165970_cache.json",
+      "processo_completo_2023165226_cache.json"
+    ],
+    "2023176": [
+      "2023176021_cache.json",
+      "2023176136_cache.json",
+      "2023176273_cache.json",
+      "processo_completo_2023176273_cache.json"
+    ],
+    "2023178": [
+      "2023178247_cache.json",
+      "2023178327_cache.json",
+      "2023178386_cache.json",
+      "processo_completo_2023178247_cache.json"
+    ],
+    "2023189": [
+      "20231891811_cache.json",
+      "2023189181_cache.json",
+      "2023189212_cache.json",
+      "processo_completo_2023189181_cache.json"
+    ],
+    "2024002": [
+      "2024002204_cache.json",
+      "2024002892_cache.json",
+      "2024002913_cache.json",
+      "processo_completo_2024002204_cache.json"
+    ],
+    "2024013": [
+      "2024013552_cache.json",
+      "2024013938_cache.json",
+      "processo_completo_2024013552_cache.json",
+      "processo_completo_2024013938_cache.json"
+    ],
+    "2024018": [
+      "2024018276_cache.json",
+      "2024018887_cache.json",
+      "processo_completo_2024018276_cache.json",
+      "processo_completo_2024018887_cache.json"
+    ],
+    "2024052": [
+      "2024052121_cache.json",
+      "2024052197_cache.json",
+      "2024052687_cache.json",
+      "processo_completo_2024052121_cache.json"
+    ],
+    "2024056": [
+      "2024056091_cache.json",
+      "2024056251_cache.json",
+      "2024056309_cache.json",
+      "2024056946_cache.json"
+    ],
+    "2024059": [
+      "2024059379_cache.json",
+      "2024059952_cache.json",
+      "2024059969_cache.json",
+      "processo_completo_2024059379_cache.json"
+    ],
+    "2024067": [
+      "2024067598_cache.json",
+      "2024067627_cache.json",
+      "processo_completo_2024067598_cache.json",
+      "processo_completo_2024067627_cache.json"
+    ],
+    "0002066": [
+      "0002066420248151_cache.json",
+      "0002066420248152_cache.json",
+      "000206642024815_cache.json"
+    ],
+    "0007952": [
+      "0007952020248151_cache.json",
+      "0007952020248152_cache.json",
+      "000795202024815_cache.json"
+    ],
+    "0011710": [
+      "00117101_cache.json",
+      "0011710_cache.json",
+      "SEI_0011710_Despacho_cache.json"
+    ],
+    "0017697": [
+      "0017697820248151_cache.json",
+      "0017697820248152_cache.json",
+      "001769782024815_cache.json"
+    ],
+    "0030461": [
+      "0030461920248151_cache.json",
+      "0030461920248152_cache.json",
+      "003046192024815_cache.json"
+    ],
+    "0032972": [
+      "0032972120248151_cache.json",
+      "0032972120248152_cache.json",
+      "003297212024815_cache.json"
+    ],
+    "0050831": [
+      "0050831920248151_cache.json",
+      "0050831920248152_cache.json",
+      "005083192024815_cache.json"
+    ],
+    "0051883": [
+      "0051883820248151_cache.json",
+      "0051883820248152_cache.json",
+      "005188382024815_cache.json"
+    ],
+    "2022075": [
+      "20220759541_cache.json",
+      "2022075954_cache.json",
+      "processo_completo_2022075954_cache.json"
+    ],
+    "2022123": [
+      "20221239061_cache.json",
+      "2022123906_cache.json",
+      "processo_completo_2022123906_cache.json"
+    ],
+    "2022132": [
+      "2022132273_cache.json",
+      "2022132667_cache.json",
+      "2022132976_cache.json"
+    ],
+    "2022159": [
+      "2022159011_cache.json",
+      "2022159046_cache.json",
+      "2022159513_cache.json"
+    ],
+    "2022170": [
+      "2022170584_cache.json",
+      "2022170592_cache.json",
+      "2022170689_cache.json"
+    ],
+    "2023005": [
+      "2023005024_cache.json",
+      "2023005274_cache.json",
+      "2023005539_cache.json"
+    ],
+    "2023014": [
+      "2023014038_cache.json",
+      "2023014441_cache.json",
+      "2023014999_cache.json"
+    ],
+    "2023020": [
+      "2023020110_cache.json",
+      "2023020595_cache.json",
+      "2023020771_cache.json"
+    ],
+    "2023046": [
+      "2023046223_cache.json",
+      "2023046467_cache.json",
+      "2023046678_cache.json"
+    ],
+    "2023059": [
+      "2023059318_cache.json",
+      "2023059990_cache.json",
+      "processo_completo_2023059990_cache.json"
+    ],
+    "2023065": [
+      "2023065515_cache.json",
+      "2023065734_cache.json",
+      "2023065927_cache.json"
+    ],
+    "2023076": [
+      "2023076195_cache.json",
+      "2023076533_cache.json",
+      "2023076541_cache.json"
+    ],
+    "2023079": [
+      "2023079193_cache.json",
+      "2023079894_cache.json",
+      "2023079968_cache.json"
+    ],
+    "2023080": [
+      "2023080054_cache.json",
+      "2023080484_cache.json",
+      "2023080589_cache.json"
+    ],
+    "2023087": [
+      "2023087230_cache.json",
+      "2023087393_cache.json",
+      "2023087762_cache.json"
+    ],
+    "2023093": [
+      "2023093605_cache.json",
+      "2023093613_cache.json",
+      "2023093672_cache.json"
+    ],
+    "2023094": [
+      "2023094219_cache.json",
+      "2023094745_cache.json",
+      "processo_completo_2023094219_cache.json"
+    ],
+    "2023110": [
+      "2023110055_cache.json",
+      "2023110127_cache.json",
+      "2023110926_cache.json"
+    ],
+    "2023111": [
+      "2023111076_cache.json",
+      "2023111105_cache.json",
+      "2023111172_cache.json"
+    ],
+    "2023116": [
+      "2023116248_cache.json",
+      "2023116256_cache.json",
+      "2023116297_cache.json"
+    ],
+    "2023117": [
+      "2023117423_cache.json",
+      "2023117968_cache.json",
+      "2023117992_cache.json"
+    ],
+    "2023120": [
+      "2023120403_cache.json",
+      "2023120567_cache.json",
+      "2023120778_cache.json"
+    ],
+    "2023122": [
+      "2023122179_cache.json",
+      "2023122218_cache.json",
+      "2023122234_cache.json"
+    ],
+    "2023130": [
+      "2023130494_cache.json",
+      "2023130605_cache.json",
+      "processo_completo_2023130494_cache.json"
+    ],
+    "2023134": [
+      "2023134459_cache.json",
+      "2023134467_cache.json",
+      "2023134483_cache.json"
+    ],
+    "2023135": [
+      "2023135038_cache.json",
+      "2023135054_cache.json",
+      "2023135343_cache.json"
+    ],
+    "2023160": [
+      "2023160142_cache.json",
+      "2023160589_cache.json",
+      "processo_completo_2023160589_cache.json"
+    ],
+    "2023163": [
+      "2023163044_cache.json",
+      "2023163964_cache.json",
+      "processo_completo_2023163044_cache.json"
+    ],
+    "2023168": [
+      "2023168415_cache.json",
+      "2023168886_cache.json",
+      "processo_completo_2023168415_cache.json"
+    ],
+    "2023173": [
+      "2023173541_cache.json",
+      "2023173873_cache.json",
+      "processo_completo_2023173873_cache.json"
+    ],
+    "2024003": [
+      "2024003220_cache.json",
+      "2024003828_cache.json",
+      "2024003836_cache.json"
+    ],
+    "2024007": [
+      "20240077061_cache.json",
+      "2024007706_cache.json",
+      "processo_completo_2024007706_cache.json"
+    ],
+    "2024008": [
+      "2024008320_cache.json",
+      "2024008901_cache.json",
+      "processo_completo_2024008320_cache.json"
+    ],
+    "2024011": [
+      "2024011383_cache.json",
+      "2024011439_cache.json",
+      "2024011668_cache.json"
+    ],
+    "2024012": [
+      "2024012824_cache.json",
+      "2024012988_cache.json",
+      "processo_completo_2024012988_cache.json"
+    ],
+    "2024031": [
+      "20240315111_cache.json",
+      "2024031511_cache.json",
+      "processo_completo_2024031511_cache.json"
+    ],
+    "2024063": [
+      "2024063517_cache.json",
+      "2024063630_cache.json",
+      "processo_completo_2024063630_cache.json"
+    ],
+    "2024086": [
+      "20240864291_cache.json",
+      "2024086429_cache.json",
+      "processo_completo_2024086429_cache.json"
+    ],
+    "0000251": [
+      "000025102024815._cache.json",
+      "000025102024815_cache.json"
+    ],
+    "0001210": [
+      "0001210_cache.json",
+      "SEI_0001210_Despacho_cache.json"
+    ],
+    "0001344": [
+      "0001344_cache.json",
+      "SEI_0001344_Despacho_cache.json"
+    ],
+    "0003560": [
+      "0003560820248151_cache.json",
+      "000356082024815_cache.json"
+    ],
+    "0003665": [
+      "0003665620248151_cache.json",
+      "000366562024815_cache.json"
+    ],
+    "0003858": [
+      "0003858_cache.json",
+      "SEI_0003858_Despacho_cache.json"
+    ],
+    "0006752": [
+      "0006752620248151_cache.json",
+      "000675262024815_cache.json"
+    ],
+    "0008181": [
+      "0008181420248151_cache.json",
+      "000818142024815_cache.json"
+    ],
+    "0008322": [
+      "0008322320248151_cache.json",
+      "000832232024815_cache.json"
+    ],
+    "0010227": [
+      "0010227_cache.json",
+      "SEI_0010227_Despacho_cache.json"
+    ],
+    "0010685": [
+      "0010685020248151_cache.json",
+      "001068502024815_cache.json"
+    ],
+    "0011091": [
+      "0011091420248151_cache.json",
+      "001109142024815_cache.json"
+    ],
+    "0012759": [
+      "0012759320248151_cache.json",
+      "001275932024815_cache.json"
+    ],
+    "0012999": [
+      "0012999_cache.json",
+      "SEI_0012999_Despacho_cache.json"
+    ],
+    "0013996": [
+      "0013996_cache.json",
+      "SEI_0013996_Despacho_cache.json"
+    ],
+    "0014823": [
+      "0014823920248151_cache.json",
+      "001482392024815_cache.json"
+    ],
+    "0016252": [
+      "0016252720248151_cache.json",
+      "001625272024815_cache.json"
+    ],
+    "0017652": [
+      "0017652020248151_cache.json",
+      "001765202024815_cache.json"
+    ],
+    "0017838": [
+      "0017838720248151_cache.json",
+      "001783872024815_cache.json"
+    ],
+    "0020614": [
+      "0020614420248151_cache.json",
+      "002061442024815_cache.json"
+    ],
+    "0020702": [
+      "0020702920248151_cache.json",
+      "002070292024815_cache.json"
+    ],
+    "0021459": [
+      "0021459820248151_cache.json",
+      "002145982024815_cache.json"
+    ],
+    "0021473": [
+      "0021473020248151_cache.json",
+      "002147302024815_cache.json"
+    ],
+    "0022066": [
+      "0022066120248151_cache.json",
+      "002206612024815_cache.json"
+    ],
+    "0022390": [
+      "0022390620248151_cache.json",
+      "002239062024815_cache.json"
+    ],
+    "0023688": [
+      "0023688220248151_cache.json",
+      "002368822024815_cache.json"
+    ],
+    "0023701": [
+      "0023701420248151_cache.json",
+      "002370142024815_cache.json"
+    ],
+    "0024671": [
+      "0024671420248151_cache.json",
+      "002467142024815_cache.json"
+    ],
+    "0026870": [
+      "0026870320248151_cache.json",
+      "002687032024815_cache.json"
+    ],
+    "0027122": [
+      "0027122620248151_cache.json",
+      "002712262024815_cache.json"
+    ],
+    "0027227": [
+      "0027227420248151_cache.json",
+      "002722742024815_cache.json"
+    ],
+    "0027427": [
+      "0027427320248151_cache.json",
+      "002742732024815_cache.json"
+    ],
+    "0027715": [
+      "0027715720248151_cache.json",
+      "002771572024815_cache.json"
+    ],
+    "0027722": [
+      "0027722320248151_cache.json",
+      "002772232024815_cache.json"
+    ],
+    "0027745": [
+      "0027745220248151_cache.json",
+      "002774522024815_cache.json"
+    ],
+    "0027768": [
+      "0027768120248151_cache.json",
+      "002776812024815_cache.json"
+    ],
+    "0027797": [
+      "0027797620248151_cache.json",
+      "002779762024815_cache.json"
+    ],
+    "0027827": [
+      "0027827120248151_cache.json",
+      "002782712024815_cache.json"
+    ],
+    "0027856": [
+      "0027856620248151_cache.json",
+      "002785662024815_cache.json"
+    ],
+    "0027858": [
+      "0027858_cache.json",
+      "SEI_0027858_Despacho_cache.json"
+    ],
+    "0027945": [
+      "0027945_cache.json",
+      "SEI_0027945_Despacho_cache.json"
+    ],
+    "0028287": [
+      "0028287_cache.json",
+      "SEI_0028287_Despacho_cache.json"
+    ],
+    "0028633": [
+      "0028633320248151_cache.json",
+      "002863332024815_cache.json"
+    ],
+    "0028885": [
+      "0028885620248151_cache.json",
+      "002888562024815_cache.json"
+    ],
+    "0028915": [
+      "0028915120248151_cache.json",
+      "002891512024815_cache.json"
+    ],
+    "0028974": [
+      "0028974120248151_cache.json",
+      "002897412024815_cache.json"
+    ],
+    "0032113": [
+      "0032113520248151_cache.json",
+      "003211352024815_cache.json"
+    ],
+    "0032424": [
+      "0032424820248151_cache.json",
+      "003242482024815_cache.json"
+    ],
+    "0033312": [
+      "0033312920248151_cache.json",
+      "003331292024815_cache.json"
+    ],
+    "0034142": [
+      "0034142020248151_cache.json",
+      "003414202024815_cache.json"
+    ],
+    "0037074": [
+      "0037074920248151_cache.json",
+      "003707492024815_cache.json"
+    ],
+    "0038585": [
+      "0038585620248151_cache.json",
+      "003858562024815_cache.json"
+    ],
+    "0038821": [
+      "0038821620248151_cache.json",
+      "003882162024815_cache.json"
+    ],
+    "0045152": [
+      "0045152820248151_cache.json",
+      "004515282024815_cache.json"
+    ],
+    "0045768": [
+      "0045768820248151_cache.json",
+      "004576882024815_cache.json"
+    ],
+    "0046257": [
+      "0046257120248151_cache.json",
+      "004625712024815_cache.json"
+    ],
+    "0047181": [
+      "0047181320248151_cache.json",
+      "004718132024815_cache.json"
+    ],
+    "0049137": [
+      "0049137620248151_cache.json",
+      "004913762024815_cache.json"
+    ],
+    "0049232": [
+      "0049232720248151_cache.json",
+      "004923272024815_cache.json"
+    ],
+    "0050507": [
+      "0050507420248151_cache.json",
+      "005050742024815_cache.json"
+    ],
+    "0050595": [
+      "0050595920248151_cache.json",
+      "005059592024815_cache.json"
+    ],
+    "0050618": [
+      "0050618820248151_cache.json",
+      "005061882024815_cache.json"
+    ],
+    "0050625": [
+      "0050625420248151_cache.json",
+      "005062542024815_cache.json"
+    ],
+    "0050648": [
+      "0050648320248151_cache.json",
+      "005064832024815_cache.json"
+    ],
+    "0050677": [
+      "0050677820248151_cache.json",
+      "005067782024815_cache.json"
+    ],
+    "0050766": [
+      "0050766320248151_cache.json",
+      "005076632024815_cache.json"
+    ],
+    "0050854": [
+      "0050854820248151_cache.json",
+      "005085482024815_cache.json"
+    ],
+    "0051795": [
+      "0051795320248151_cache.json",
+      "005179532024815_cache.json"
+    ],
+    "0053528": [
+      "0053528820248151_cache.json",
+      "005352882024815_cache.json"
+    ],
+    "0053571": [
+      "0053571520248151_cache.json",
+      "005357152024815_cache.json"
+    ],
+    "2020167": [
+      "2020167511_cache.json",
+      "processo_completo_2020167511_cache.json"
+    ],
+    "2021036": [
+      "2021036199_cache.json",
+      "processo_completo_2021036199_cache.json"
+    ],
+    "2021084": [
+      "2021084913_cache.json",
+      "2021084964_cache.json"
+    ],
+    "2021129": [
+      "2021129327_cache.json",
+      "processo_completo_2021129327_cache.json"
+    ],
+    "2021139": [
+      "2021139349_cache.json",
+      "2021139726_cache.json"
+    ],
+    "2021144": [
+      "2021144207_cache.json",
+      "2021144215_cache.json"
+    ],
+    "2021152": [
+      "2021152395_cache.json",
+      "2021152442_cache.json"
+    ],
+    "2022112": [
+      "2022112893_cache.json",
+      "2022112908_cache.json"
+    ],
+    "2022114": [
+      "2022114243_cache.json",
+      "2022114831_cache.json"
+    ],
+    "2022138": [
+      "2022138498_cache.json",
+      "processo_completo_2022138498_cache.json"
+    ],
+    "2022143": [
+      "2022143557_cache.json",
+      "2022143604_cache.json"
+    ],
+    "2022149": [
+      "2022149424_cache.json",
+      "2022149615_cache.json"
+    ],
+    "2022154": [
+      "2022154347_cache.json",
+      "2022154398_cache.json"
+    ],
+    "2022160": [
+      "2022160817_cache.json",
+      "2022160948_cache.json"
+    ],
+    "2022167": [
+      "2022167652_cache.json",
+      "2022167693_cache.json"
+    ],
+    "2022171": [
+      "2022171309_cache.json",
+      "2022171384_cache.json"
+    ],
+    "2023000": [
+      "2023000924_cache.json",
+      "2023000949_cache.json"
+    ],
+    "2023004": [
+      "2023004249_cache.json",
+      "2023004396_cache.json"
+    ],
+    "2023006": [
+      "2023006222_cache.json",
+      "2023006302_cache.json"
+    ],
+    "2023008": [
+      "2023008453_cache.json",
+      "2023008611_cache.json"
+    ],
+    "2023017": [
+      "2023017374_cache.json",
+      "2023017671_cache.json"
+    ],
+    "2023049": [
+      "2023049277_cache.json",
+      "2023049308_cache.json"
+    ],
+    "2023060": [
+      "2023060980_cache.json",
+      "2023060998_cache.json"
+    ],
+    "2023063": [
+      "2023063038_cache.json",
+      "2023063958_cache.json"
+    ],
+    "2023064": [
+      "2023064014_cache.json",
+      "2023064854_cache.json"
+    ],
+    "2023070": [
+      "2023070602_cache.json",
+      "2023070741_cache.json"
+    ],
+    "2023072": [
+      "2023072590_cache.json",
+      "2023072758_cache.json"
+    ],
+    "2023077": [
+      "2023077067_cache.json",
+      "2023077448_cache.json"
+    ],
+    "2023089": [
+      "2023089475_cache.json",
+      "2023089539_cache.json"
+    ],
+    "2023096": [
+      "2023096329_cache.json",
+      "2023096353_cache.json"
+    ],
+    "2023098": [
+      "2023098263_cache.json",
+      "2023098812_cache.json"
+    ],
+    "2023099": [
+      "2023099305_cache.json",
+      "2023099846_cache.json"
+    ],
+    "2023109": [
+      "2023109891_cache.json",
+      "2023109939_cache.json"
+    ],
+    "2023119": [
+      "2023119669_cache.json",
+      "2023119888_cache.json"
+    ],
+    "2023125": [
+      "2023125177_cache.json",
+      "processo_completo_2023125177_cache.json"
+    ],
+    "2023132": [
+      "2023132051_cache.json",
+      "2023132141_cache.json"
+    ],
+    "2023133": [
+      "2023133013_cache.json",
+      "2023133755_cache.json"
+    ],
+    "2023142": [
+      "2023142104_cache.json",
+      "2023142910_cache.json"
+    ],
+    "2023148": [
+      "2023148380_cache.json",
+      "2023148824_cache.json"
+    ],
+    "2023162": [
+      "2023162734_cache.json",
+      "2023162902_cache.json"
+    ],
+    "2023164": [
+      "2023164123_cache.json",
+      "2023164924_cache.json"
+    ],
+    "2023179": [
+      "2023179774_cache.json",
+      "processo_completo_2023179774_cache.json"
+    ],
+    "2024005": [
+      "2024005456_cache.json",
+      "2024005954_cache.json"
+    ],
+    "2024010": [
+      "2024010296_cache.json",
+      "2024010698_cache.json"
+    ],
+    "2024019": [
+      "2024019373_cache.json",
+      "processo_completo_2024019373_cache.json"
+    ],
+    "2024023": [
+      "2024023780_cache.json",
+      "processo_completo_2024023780_cache.json"
+    ],
+    "2024028": [
+      "2024028010_cache.json",
+      "2024028438_cache.json"
+    ],
+    "2024036": [
+      "2024036606_cache.json",
+      "processo_completo_2024036606_cache.json"
+    ],
+    "2024047": [
+      "2024047317_cache.json",
+      "2024047745_cache.json"
+    ],
+    "2024071": [
+      "2024071873_cache.json",
+      "processo_completo_2024071873_cache.json"
+    ],
+    "2024073": [
+      "2024073086_cache.json",
+      "processo_completo_2024073086_cache.json"
+    ]
+  },
+  "padroes_nomenclatura": {
+    "com_ponto_antes_cache": 1,
+    "apenas_numeros": 1617,
+    "outros": 223,
+    "processo_completo": 329
+  }
+}

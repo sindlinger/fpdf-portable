@@ -1,0 +1,11 @@
+{
+  "mode": "custom",
+  "no_multimedia": true,
+  "no_embedded_files": true,
+  "include_objects": false,
+  "include_streams": false,
+  "workers": 4,
+  "input_dir": "/mnt/c/Users/pichau/Desktop/geral_pdf/pdf_cache",
+  "output_dir": ".cache",
+  "show_progress": true
+}

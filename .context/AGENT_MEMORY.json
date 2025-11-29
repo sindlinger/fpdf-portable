@@ -1,0 +1,124 @@
+{
+  "project": {
+    "name": "FilterPDF",
+    "executable": "fpdf",
+    "version": "3.11.0",
+    "namespace": "FilterPDF",
+    "originalName": "LayoutPDF",
+    "refactoredDate": "2024",
+    "developer": "Eduardo Candeia Gonçalves"
+  },
+  "criticalRules": {
+    "neverUse": [
+      "layoutpdf",
+      "LayoutPDF", 
+      "lpdf",
+      "LPDF",
+      "filter as intermediary command",
+      "LAYOUTPDF_ environment variables",
+      "LayoutPDFC#.csproj"
+    ],
+    "alwaysUse": [
+      "fpdf as executable",
+      "FilterPDF namespace",
+      "Direct command syntax",
+      "FPDF_ environment variables",
+      "fpdf.csproj"
+    ]
+  },
+  "architecture": {
+    "pattern": "Command Pattern",
+    "entryPoint": "FilterPDFCLI",
+    "commandRegistry": "CommandRegistry",
+    "commandExecutor": "CommandExecutor",
+    "security": "SecurityValidator",
+    "progressTracking": "ProgressTracker"
+  },
+  "currentState": {
+    "cacheStats": {
+      "totalPDFs": 3209,
+      "cacheSize": "3.2 GB",
+      "processingMode": "images-only"
+    },
+    "features": {
+      "statsCommand": "Single PDF detailed analysis, range aggregated statistics",
+      "progressTracking": "Real-time progress bars for batch operations",
+      "symbolicLink": "Automatic creation post-build",
+      "security": "Path traversal protection enabled"
+    },
+    "status": "Production-ready, no known issues"
+  },
+  "commands": {
+    "syntax": "fpdf [file/range] [command] [options]",
+    "examples": [
+      "fpdf 1 pages --word \"contract\"",
+      "fpdf 1-50 documents --format json",
+      "fpdf cache list",
+      "fpdf load images-only --input-dir /path --num-workers 16"
+    ],
+    "categories": {
+      "core": ["extract", "load", "cache", "stats"],
+      "analysis": ["pages", "documents", "words", "bookmarks", "annotations"],
+      "metadata": ["objects", "fonts", "metadata", "structure", "modifications"],
+      "resources": ["images", "base64", "scanned"]
+    }
+  },
+  "configuration": {
+    "files": [".env", "fpdf.config.json"],
+    "environmentPrefix": "FPDF_",
+    "keyVariables": [
+      "FPDF_DEBUG",
+      "FPDF_ALLOWED_DIRS", 
+      "FPDF_DEFAULT_WORKERS",
+      "FPDF_CACHE_DIR"
+    ]
+  },
+  "buildAndDeploy": {
+    "buildCommand": "dotnet build fpdf.csproj",
+    "publishCommand": "dotnet publish fpdf.csproj -c Release",
+    "binaryLocation": "/mnt/b/dev-2/fpdf/bin/fpdf",
+    "installLocation": "/usr/local/bin/fpdf",
+    "postBuildAction": "Automatic symbolic link creation"
+  },
+  "codePatterns": {
+    "commandBase": "BaseCommand abstract class",
+    "optionsParsing": "Dictionary<string, string> ParseOptions(args)",
+    "errorHandling": "Try-catch with meaningful messages",
+    "serialization": "Newtonsoft.Json",
+    "namingConvention": "PascalCase for classes, camelCase for variables"
+  },
+  "securityModel": {
+    "validator": "SecurityValidator class",
+    "pathProtection": "Path traversal prevention",
+    "allowedDirectories": "Configurable whitelist",
+    "defaultSecurity": "Enabled by default"
+  },
+  "performance": {
+    "concurrency": "Configurable worker threads",
+    "caching": "JSON-based cache files",
+    "progressTracking": "Real-time feedback",
+    "batchProcessing": "Optimized for large collections"
+  },
+  "agentInstructions": {
+    "beforeWork": [
+      "Read /mnt/b/dev-2/fpdf/CLAUDE.md",
+      "Verify project identity (FilterPDF)",
+      "Check git status",
+      "Validate command syntax"
+    ],
+    "duringWork": [
+      "Never use LayoutPDF patterns",
+      "Always use direct command syntax",
+      "Maintain FilterPDF namespace",
+      "Preserve security validations"
+    ],
+    "afterWork": [
+      "Update context files",
+      "Commit with clear messages",
+      "Document new patterns",
+      "Update version if needed"
+    ]
+  },
+  "lastUpdated": "2025-08-15T00:00:00Z",
+  "contextVersion": "1.0.0"
+}

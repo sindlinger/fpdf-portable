@@ -1,0 +1,54 @@
+{
+  "timestamp": "2025-07-14T13:23:04.822149",
+  "version": "V22_QUEUE_FIX",
+  "total_docs": 100,
+  "diretoria_especial_docs": 74,
+  "field_ratings": {
+    "processo": {
+      "found": 73,
+      "total": 100
+    },
+    "numero_autos": {
+      "found": 71,
+      "total": 100
+    },
+    "juizo": {
+      "found": 73,
+      "total": 100
+    },
+    "comarca": {
+      "found": 65,
+      "total": 100
+    },
+    "autor": {
+      "found": 64,
+      "total": 100
+    },
+    "parte_contraria": {
+      "found": 65,
+      "total": 100
+    },
+    "perito_nome": {
+      "found": 59,
+      "total": 100
+    },
+    "cpf_perito": {
+      "found": 66,
+      "total": 100
+    },
+    "especialidade": {
+      "found": 70,
+      "total": 100
+    },
+    "valor_arbitrado": {
+      "found": 66,
+      "total": 100
+    },
+    "destino": {
+      "found": 65,
+      "total": 100
+    }
+  },
+  "errors": [],
+  "processing_time_seconds": 2.313534
+}

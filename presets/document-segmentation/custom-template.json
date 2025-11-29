@@ -1,0 +1,138 @@
+{
+  "name": "Custom Template",
+  "description": "Template para criar sua própria configuração de segmentação",
+  "version": "1.0",
+  "instructions": "Copie este arquivo e ajuste conforme necessário. Leia o README.md para detalhes.",
+  
+  "strategies": {
+    "text_patterns": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "Configure seus próprios padrões de texto",
+      "config": {
+        "scan_lines_start": 30,
+        "scan_lines_end": 30,
+        "case_sensitive": false,
+        "start_patterns": [
+          {
+            "pattern": "",
+            "weight": 3,
+            "regex": false,
+            "description": "Adicione seus padrões de início aqui"
+          }
+        ],
+        "end_patterns": [
+          {
+            "pattern": "",
+            "weight": 3,
+            "regex": false,
+            "description": "Adicione seus padrões de fim aqui"
+          }
+        ]
+      }
+    },
+    
+    "font_analysis": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "Detecta mudanças nas fontes",
+      "config": {
+        "similarity_threshold": 0.7,
+        "check_font_count": true,
+        "check_font_names": true,
+        "check_font_sizes": true,
+        "min_font_change": 2
+      }
+    },
+    
+    "page_numbering": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "Detecta reinício de numeração",
+      "config": {
+        "detect_restart": true,
+        "formats": ["numeric", "roman", "alpha"],
+        "positions": ["footer", "header", "corner"],
+        "restart_indicators": ["1", "i", "I", "a", "A"]
+      }
+    },
+    
+    "blank_pages": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "Usa páginas em branco como separadores",
+      "config": {
+        "min_words": 10,
+        "max_words": 50,
+        "consider_images": false,
+        "blank_threshold": 0.95
+      }
+    },
+    
+    "layout_changes": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "Detecta mudanças no layout",
+      "config": {
+        "check_margins": true,
+        "check_columns": true,
+        "check_orientation": true,
+        "check_size": true,
+        "similarity_threshold": 0.6
+      }
+    },
+    
+    "header_footer": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "Analisa cabeçalhos e rodapés",
+      "config": {
+        "check_consistency": true,
+        "extract_top_percent": 10,
+        "extract_bottom_percent": 10,
+        "similarity_threshold": 0.8
+      }
+    },
+    
+    "metadata_hints": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "Usa metadados do PDF",
+      "config": {
+        "use_bookmarks": true,
+        "use_annotations": true,
+        "use_structure": true,
+        "bookmark_level": 1
+      }
+    },
+    
+    "content_flow": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "Verifica continuidade do texto",
+      "config": {
+        "check_sentence_continuation": true,
+        "check_paragraph_continuation": true,
+        "min_overlap_chars": 20,
+        "language": "pt"
+      }
+    }
+  },
+  
+  "global_settings": {
+    "min_confidence_score": 0.5,
+    "min_document_pages": 1,
+    "merge_small_documents": false,
+    "merge_threshold": 3,
+    "output_format": "summary",
+    "extract_documents": false,
+    "verbose": false
+  },
+  
+  "tips": {
+    "weight_sum": "Os pesos não precisam somar 1.0, são normalizados automaticamente",
+    "strategy_selection": "Ative apenas estratégias relevantes para seu tipo de documento",
+    "testing": "Use --verbose para ver detalhes do processo de decisão",
+    "patterns": "Teste seus padrões regex em regex101.com antes de usar"
+  }
+}

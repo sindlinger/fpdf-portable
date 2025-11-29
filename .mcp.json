@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "regex-mcp": {
+      "command": "python3",
+      "args": [
+        "/mnt/b/dev/regex-diesp/regex-mcp/server_stdio.py"
+      ],
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    },
+    "ripgrep": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-ripgrep@latest"
+      ]
+    }
+  }
+}

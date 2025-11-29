@@ -1,0 +1,66 @@
+RELATÓRIO - V2 COM REGEX ROBUSTO E VALIDAÇÃO RIGOROSA
+================================================================================
+
+ESTATÍSTICAS GERAIS POR ESTRATÉGIA:
+--------------------------------------------------------------------------------
+Métrica                                    PageText  AdvancedLayout LayoutPreserving
+--------------------------------------------------------------------------------
+Total de arquivos                                10              10              10
+Arquivos com dados                               10              10              10
+Páginas com dados                               249             249             249
+Docs Diretoria Especial                          23              23              23
+Extraídos com sucesso                            23              23              23
+Valores inferidos                                 0               0               0
+Buscas multi-página                              23              23              23
+Perito por CPF                                    0               0               0
+--------------------------------------------------------------------------------
+Taxa de sucesso PageText            :  100.0%
+Taxa de sucesso AdvancedLayout      :  100.0%
+Taxa de sucesso LayoutPreserving    :  100.0%
+
+
+EXTRAÇÃO POR CAMPO:
+--------------------------------------------------------------------------------
+Campo                            PageText       AdvancedLayout     LayoutPreserving
+--------------------------------------------------------------------------------
+processo                   23 (100.0%)       23 (100.0%)       23 (100.0%)
+numero_autos               23 (100.0%)       23 (100.0%)       23 (100.0%)
+juizo                      23 (100.0%)       23 (100.0%)       23 (100.0%)
+comarca                    23 (100.0%)       23 (100.0%)       23 (100.0%)
+perito_nome                23 (100.0%)       23 (100.0%)       23 (100.0%)
+cpf_perito                 23 (100.0%)       23 (100.0%)       23 (100.0%)
+especialidade              23 (100.0%)       23 (100.0%)       23 (100.0%)
+valor_arbitrado            23 (100.0%)       23 (100.0%)       23 (100.0%)
+autor                      23 (100.0%)       23 (100.0%)       23 (100.0%)
+parte_contraria            23 (100.0%)       23 (100.0%)       23 (100.0%)
+destino                    23 (100.0%)       23 (100.0%)       23 (100.0%)
+
+
+FALHAS DE VALIDAÇÃO POR CAMPO:
+--------------------------------------------------------------------------------
+Campo                       PageText  AdvancedLayout LayoutPreserving
+--------------------------------------------------------------------------------
+processo                                                            
+numero_autos                                                        
+juizo                                                               
+comarca                                                             
+perito_nome                                                         
+cpf_perito                                                          
+especialidade                                                       
+valor_arbitrado                                                     
+autor                                                               
+parte_contraria                                                     
+destino                                                             
+
+
+ANÁLISE ESPECÍFICA DE NUMERO_AUTOS:
+--------------------------------------------------------------------------------
+
+PageText:
+  Total encontrados: 23
+  Exemplos normalizados:
+    • 0800556-88.2018.8.15.0601
+    • 0800556-88.2018.8.15.0601
+    • 0800556-88.2018.8.15.0601
+    • 0800556-88.2018.8.15.0601
+    • 0808633-24.2023.8.15.0371

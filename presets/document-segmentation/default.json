@@ -1,0 +1,141 @@
+{
+  "name": "Default Document Segmentation",
+  "description": "Configuração padrão balanceada para a maioria dos documentos",
+  "version": "1.0",
+  
+  "strategies": {
+    "text_patterns": {
+      "enabled": true,
+      "weight": 0.30,
+      "description": "Busca padrões de texto no início e fim das páginas",
+      "config": {
+        "scan_lines_start": 30,
+        "scan_lines_end": 30,
+        "case_sensitive": false,
+        "start_patterns": [
+          {
+            "pattern": "",
+            "weight": 3,
+            "regex": false,
+            "description": "Deixe vazio ou preencha com seus padrões"
+          }
+        ],
+        "end_patterns": [
+          {
+            "pattern": "",
+            "weight": 3,
+            "regex": false,
+            "description": "Deixe vazio ou preencha com seus padrões"
+          }
+        ]
+      }
+    },
+    
+    "font_analysis": {
+      "enabled": true,
+      "weight": 0.20,
+      "description": "Detecta mudanças significativas nas fontes utilizadas",
+      "config": {
+        "similarity_threshold": 0.7,
+        "check_font_count": true,
+        "check_font_names": true,
+        "check_font_sizes": true,
+        "min_font_change": 2
+      }
+    },
+    
+    "page_numbering": {
+      "enabled": true,
+      "weight": 0.25,
+      "description": "Identifica reinício de numeração de páginas",
+      "config": {
+        "detect_restart": true,
+        "formats": ["numeric", "roman", "alpha"],
+        "positions": ["footer", "header", "corner"],
+        "restart_indicators": ["1", "i", "I", "a", "A"]
+      }
+    },
+    
+    "blank_pages": {
+      "enabled": false,
+      "weight": 0.15,
+      "description": "Usa páginas em branco como separadores",
+      "config": {
+        "min_words": 10,
+        "max_words": 50,
+        "consider_images": false,
+        "blank_threshold": 0.95
+      }
+    },
+    
+    "layout_changes": {
+      "enabled": true,
+      "weight": 0.15,
+      "description": "Detecta mudanças drásticas no layout",
+      "config": {
+        "check_margins": true,
+        "check_columns": true,
+        "check_orientation": true,
+        "check_size": true,
+        "similarity_threshold": 0.6
+      }
+    },
+    
+    "header_footer": {
+      "enabled": true,
+      "weight": 0.20,
+      "description": "Analisa mudanças em cabeçalhos e rodapés",
+      "config": {
+        "check_consistency": true,
+        "extract_top_percent": 10,
+        "extract_bottom_percent": 10,
+        "similarity_threshold": 0.8
+      }
+    },
+    
+    "metadata_hints": {
+      "enabled": false,
+      "weight": 0.10,
+      "description": "Usa metadados do PDF como bookmarks",
+      "config": {
+        "use_bookmarks": true,
+        "use_annotations": true,
+        "use_structure": true,
+        "bookmark_level": 1
+      }
+    },
+    
+    "content_flow": {
+      "enabled": false,
+      "weight": 0.15,
+      "description": "Verifica continuidade do texto entre páginas",
+      "config": {
+        "check_sentence_continuation": true,
+        "check_paragraph_continuation": true,
+        "min_overlap_chars": 20,
+        "language": "pt"
+      }
+    }
+  },
+  
+  "global_settings": {
+    "min_confidence_score": 0.5,
+    "min_document_pages": 1,
+    "merge_small_documents": false,
+    "merge_threshold": 3,
+    "output_format": "summary",
+    "extract_documents": false,
+    "verbose": false
+  },
+  
+  "conflict_warnings": [
+    {
+      "strategies": ["blank_pages", "content_flow"],
+      "reason": "Páginas em branco interrompem o fluxo de conteúdo"
+    },
+    {
+      "strategies": ["page_numbering", "header_footer"],
+      "reason": "Podem dar sinais contraditórios em documentos com numeração contínua"
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+RELATÓRIO DE EXTRAÇÃO - DIRETORIA ESPECIAL V14
+Baseado em CLAUDE_EXTRATOR_HONORARIOS.md
+================================================================================
+
+ESTATÍSTICAS GERAIS:
+Total de arquivos processados: 500
+Documentos da Diretoria Especial encontrados: 444
+Documentos multi-página: 203
+Documentos extraídos com sucesso: 400
+Falhas na extração: 44
+Taxa de sucesso: 90.1%
+
+--------------------------------------------------------------------------------
+
+MÉTODOS DE EXTRAÇÃO UTILIZADOS:
+AdvancedLayout      :   1357
+ColumnDetection     :      0
+LayoutPreserving    :   1357
+PageText            :      0
+TextInfo            :      0
+
+--------------------------------------------------------------------------------
+
+EXTRAÇÃO POR CAMPO:
+processo            :  388 ( 87.4%)
+juizo               :  410 ( 92.3%)
+comarca             :  403 ( 90.8%)
+perito_nome         :  334 ( 75.2%)
+cpf_perito          :  401 ( 90.3%)
+especialidade       :  428 ( 96.4%)
+valor_arbitrado     :  394 ( 88.7%)
+valor_tabelado      :    0 (  0.0%)
+numero_autos        :  263 ( 59.2%)
+autor               :  391 ( 88.1%)
+parte_contraria     :  349 ( 78.6%)
+destino             :  395 ( 89.0%)
+
+--------------------------------------------------------------------------------
+
+ANÁLISE DE CONFIANÇA (campos com múltiplas confirmações):
+autor com confiança 2: 218 vezes
+autor com confiança 3: 4 vezes
+autor com confiança 4: 166 vezes
+autor com confiança 6: 3 vezes
+cpf_perito com confiança 2: 86 vezes
+cpf_perito com confiança 4: 315 vezes
+destino com confiança 1: 4 vezes
+destino com confiança 2: 382 vezes
+destino com confiança 4: 9 vezes
+especialidade com confiança 1: 3 vezes
+especialidade com confiança 2: 217 vezes
+especialidade com confiança 20: 1 vezes
+especialidade com confiança 4: 207 vezes
+juizo com confiança 2: 408 vezes
+juizo com confiança 4: 2 vezes
+numero_autos com confiança 2: 72 vezes
+numero_autos com confiança 4: 191 vezes
+parte_contraria com confiança 1: 2 vezes
+parte_contraria com confiança 2: 198 vezes
+parte_contraria com confiança 4: 149 vezes
+perito_nome com confiança 2: 333 vezes
+perito_nome com confiança 4: 1 vezes
+processo com confiança 10: 1 vezes
+processo com confiança 12: 1 vezes
+processo com confiança 124: 1 vezes
+processo com confiança 14: 2 vezes
+processo com confiança 16: 1 vezes
+processo com confiança 2: 2 vezes
+processo com confiança 20: 2 vezes
+processo com confiança 32: 3 vezes
+processo com confiança 34: 1 vezes
+processo com confiança 36: 1 vezes
+processo com confiança 38: 2 vezes
+processo com confiança 4: 345 vezes
+processo com confiança 40: 3 vezes
+processo com confiança 44: 2 vezes
+processo com confiança 48: 6 vezes
+processo com confiança 6: 14 vezes
+processo com confiança 8: 1 vezes
+valor_arbitrado com confiança 2: 105 vezes
+valor_arbitrado com confiança 4: 290 vezes
+valor_arbitrado com confiança 6: 1 vezes
+
+--------------------------------------------------------------------------------
+
+CAMPOS COM MENOR TAXA DE EXTRAÇÃO:
+valor_tabelado: 0 docs (0.0%)
+numero_autos: 263 docs (59.2%)
+perito_nome: 334 docs (75.2%)
+autor: 391 docs (88.1%)

@@ -1,0 +1,88 @@
+{
+  "timestamp": "2025-07-14T12:53:20.014253",
+  "version": "V19_COMPLETO_FINAL",
+  "total_docs": 38,
+  "diretoria_especial_docs": 109,
+  "multi_page_docs": 109,
+  "pages_analyzed": 430,
+  "strategy_success": {
+    "PageText": 35,
+    "AdvancedLayout": 35,
+    "LayoutPreserving": 35
+  },
+  "field_ratings": {
+    "processo": {
+      "found": 36,
+      "total": 38
+    },
+    "numero_autos": {
+      "found": 35,
+      "total": 38
+    },
+    "juizo": {
+      "found": 35,
+      "total": 38
+    },
+    "comarca": {
+      "found": 35,
+      "total": 38
+    },
+    "autor": {
+      "found": 36,
+      "total": 38
+    },
+    "parte_contraria": {
+      "found": 36,
+      "total": 38
+    },
+    "perito_nome": {
+      "found": 35,
+      "total": 38
+    },
+    "cpf_perito": {
+      "found": 35,
+      "total": 38
+    },
+    "especialidade": {
+      "found": 35,
+      "total": 38
+    },
+    "valor_arbitrado": {
+      "found": 35,
+      "total": 38
+    },
+    "destino": {
+      "found": 36,
+      "total": 38
+    }
+  },
+  "perito_por_cpf": 0,
+  "valor_inferido": 3,
+  "validation_failures": {
+    "comarca": 94,
+    "parte_contraria": 6,
+    "perito_nome": 332,
+    "valor_arbitrado": 21
+  },
+  "extraction_methods": {
+    "processo_pattern_0": 109,
+    "numero_autos_pattern_0": 85,
+    "juizo_pattern_0": 97,
+    "comarca_pattern_0": 106,
+    "autor_pattern_0": 106,
+    "parte_contraria_pattern_0": 105,
+    "perito_nome_pattern_4": 90,
+    "cpf_perito_pattern_0": 105,
+    "especialidade_pattern_1": 105,
+    "valor_arbitrado_pattern_0": 102,
+    "destino_pattern_0": 99,
+    "numero_autos_pattern_2": 15,
+    "autor_pattern_2": 3,
+    "parte_contraria_pattern_2": 3,
+    "numero_autos_pattern_16": 6,
+    "perito_nome_pattern_0": 15,
+    "destino_pattern_3": 9,
+    "juizo_pattern_2": 9
+  },
+  "processing_time_seconds": 67.445768
+}

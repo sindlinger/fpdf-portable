@@ -1,0 +1,156 @@
+{
+  "name": "Academic Papers and Articles",
+  "description": "Para separar artigos científicos, papers e trabalhos acadêmicos",
+  "version": "1.0",
+  
+  "strategies": {
+    "text_patterns": {
+      "enabled": true,
+      "weight": 0.25,
+      "description": "Padrões de artigos acadêmicos",
+      "config": {
+        "scan_lines_start": 50,
+        "scan_lines_end": 30,
+        "case_sensitive": false,
+        "start_patterns": [
+          {
+            "pattern": "Abstract",
+            "weight": 3,
+            "regex": false,
+            "description": "Início comum de papers"
+          },
+          {
+            "pattern": "(Resumo|RESUMO)",
+            "weight": 3,
+            "regex": true
+          },
+          {
+            "pattern": "(Introduction|INTRODUCTION|1\\.\\s*Introduction)",
+            "weight": 2,
+            "regex": true
+          },
+          {
+            "pattern": "Keywords:",
+            "weight": 2,
+            "regex": false
+          },
+          {
+            "pattern": "doi:\\s*10\\.",
+            "weight": 2,
+            "regex": true
+          }
+        ],
+        "end_patterns": [
+          {
+            "pattern": "(References|REFERENCES|Referências|REFERÊNCIAS)",
+            "weight": 3,
+            "regex": true
+          },
+          {
+            "pattern": "(Acknowledgments|Agradecimentos)",
+            "weight": 2,
+            "regex": true
+          },
+          {
+            "pattern": "\\[\\d+\\].*\\(\\d{4}\\)",
+            "weight": 2,
+            "regex": true,
+            "description": "Padrão de referência bibliográfica"
+          }
+        ]
+      }
+    },
+    
+    "font_analysis": {
+      "enabled": true,
+      "weight": 0.20,
+      "description": "Papers mantêm fontes consistentes",
+      "config": {
+        "similarity_threshold": 0.85,
+        "check_font_count": true,
+        "check_font_names": true,
+        "check_font_sizes": true,
+        "min_font_change": 2
+      }
+    },
+    
+    "page_numbering": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "Papers compilados podem ter numeração contínua",
+      "config": {}
+    },
+    
+    "blank_pages": {
+      "enabled": true,
+      "weight": 0.15,
+      "description": "Pode haver páginas em branco entre artigos",
+      "config": {
+        "min_words": 10,
+        "max_words": 30,
+        "consider_images": false,
+        "blank_threshold": 0.95
+      }
+    },
+    
+    "layout_changes": {
+      "enabled": true,
+      "weight": 0.20,
+      "description": "Diferentes journals têm layouts distintos",
+      "config": {
+        "check_margins": true,
+        "check_columns": true,
+        "check_orientation": false,
+        "check_size": false,
+        "similarity_threshold": 0.6
+      }
+    },
+    
+    "header_footer": {
+      "enabled": true,
+      "weight": 0.20,
+      "description": "Headers com nome do journal/conferência",
+      "config": {
+        "check_consistency": true,
+        "extract_top_percent": 8,
+        "extract_bottom_percent": 8,
+        "similarity_threshold": 0.75
+      }
+    },
+    
+    "metadata_hints": {
+      "enabled": false,
+      "weight": 0.0,
+      "config": {}
+    },
+    
+    "content_flow": {
+      "enabled": false,
+      "weight": 0.0,
+      "description": "Artigos são independentes",
+      "config": {}
+    }
+  },
+  
+  "global_settings": {
+    "min_confidence_score": 0.5,
+    "min_document_pages": 3,
+    "merge_small_documents": true,
+    "merge_threshold": 2,
+    "output_format": "summary",
+    "extract_documents": false
+  },
+  
+  "paper_sections": {
+    "typical_structure": [
+      "Title/Authors",
+      "Abstract",
+      "Introduction",
+      "Methodology/Methods",
+      "Results",
+      "Discussion",
+      "Conclusion",
+      "References"
+    ]
+  }
+}

@@ -1,0 +1,140 @@
+RELATÓRIO DE EXTRAÇÃO - DIRETORIA ESPECIAL V8
+Extração de TODOS os métodos com combinação e confiança
+================================================================================
+
+ESTATÍSTICAS GERAIS:
+Total de arquivos processados: 1000
+Documentos da Diretoria Especial encontrados: 3357
+Documentos multi-página: 3316
+Documentos extraídos com sucesso: 1653
+Falhas na extração: 1704
+Documentos com extração multi-método: 3357
+Taxa de sucesso: 49.2%
+
+--------------------------------------------------------------------------------
+
+MÉTODOS DE EXTRAÇÃO UTILIZADOS:
+AdvancedLayout                : 10958
+ColumnDetection               : 10863
+LayoutPreserving              : 10866
+
+--------------------------------------------------------------------------------
+
+EXTRAÇÃO POR CAMPO:
+autor               : 2358 ( 70.2%)
+comarca             : 1382 ( 41.2%)
+cpf_perito          : 2418 ( 72.0%)
+destino             : 1591 ( 47.4%)
+especialidade       : 3102 ( 92.4%)
+juizo               : 1568 ( 46.7%)
+numero_autos        : 1065 ( 31.7%)
+parte_contraria     : 2211 ( 65.9%)
+perito_nome         : 1234 ( 36.8%)
+processo            :  726 ( 21.6%)
+valor_arbitrado     : 1864 ( 55.5%)
+
+--------------------------------------------------------------------------------
+
+ANÁLISE DE CONFIANÇA (campos confirmados em múltiplos métodos):
+cpf_perito          : média 2.8, alta confiança em 2418/2418 docs
+especialidade       : média 2.5, alta confiança em 2914/3102 docs
+valor_arbitrado     : média 2.3, alta confiança em 1573/1864 docs
+numero_autos        : média 2.3, alta confiança em 1065/1065 docs
+autor               : média 2.2, alta confiança em 2348/2358 docs
+destino             : média 2.0, alta confiança em 1506/1591 docs
+juizo               : média 2.0, alta confiança em 1533/1568 docs
+perito_nome         : média 2.1, alta confiança em 1225/1234 docs
+comarca             : média 2.1, alta confiança em 1376/1382 docs
+parte_contraria     : média 2.3, alta confiança em 2176/2211 docs
+processo            : média 2.6, alta confiança em 726/726 docs
+
+--------------------------------------------------------------------------------
+
+EXEMPLOS COM ALTA CONFIANÇA (múltiplos métodos confirmaram):
+
+Exemplo 1 (confiança máxima: 67):
+  Arquivo: 2022105785_cache.json
+  juizo: Juízo da 2ª Vara Cível da Comarca de Campina Grande (confirmado em 4 métodos)
+  perito_nome: Paola Danuta Barbosa Ramos (confirmado em 4 métodos)
+  cpf_perito: 054.923.764-03 (confirmado em 2 métodos)
+  especialidade: Grafotécnica (confirmado em 67 métodos)
+  valor_arbitrado: 666.67 (confirmado em 2 métodos)
+  autor: BENEDITA GINUINO DA CUNHA (confirmado em 2 métodos)
+  parte_contraria: BANCO BRADESCO S.A . (confirmado em 2 métodos)
+  destino: Gerência de Programação Orçamentária (confirmado em 2 métodos)
+  comarca: Comarca de Campina Grande (confirmado em 4 métodos)
+
+Exemplo 2 (confiança máxima: 58):
+  Arquivo: 2023098263_cache.json
+  juizo: Juízo da 1ª Vara Mista da Comarca de Sapé (confirmado em 2 métodos)
+  perito_nome: Anderson Dantas Torres (confirmado em 2 métodos)
+  cpf_perito: 002.541.475-50 (confirmado em 2 métodos)
+  especialidade: Judicial (confirmado em 58 métodos)
+  valor_arbitrado: 20000.00 (confirmado em 3 métodos)
+  autor: Tarciano Pereira do Espírito Santo (confirmado em 2 métodos)
+  parte_contraria: Phenix Construtora Ltda. ME (confirmado em 2 métodos)
+  destino: Conselho da Magistratura (confirmado em 2 métodos)
+  comarca: Comarca de Sapé (confirmado em 2 métodos)
+
+Exemplo 3 (confiança máxima: 40):
+  Arquivo: 2023095465_cache.json
+  juizo: JOSE ALVES DOS SANTOS (confirmado em 2 métodos)
+  perito_nome: Allan Pierre Dias de Souza (confirmado em 2 métodos)
+  cpf_perito: 021.967.214-84 (confirmado em 3 métodos)
+  especialidade: Judicial Especialista (confirmado em 40 métodos)
+  valor_arbitrado: 1000.00 (confirmado em 6 métodos)
+  autor: JOSÉ ALVES (confirmado em 2 métodos)
+  parte_contraria: BANCO AGIBANK S/A (confirmado em 2 métodos)
+  destino: Gerência de Programação Orçamentária (confirmado em 2 métodos)
+  comarca: Comarca de João Pessoa (confirmado em 2 métodos)
+
+Exemplo 4 (confiança máxima: 40):
+  Arquivo: 2022155920_cache.json
+  juizo: Juízo da 2ª Vara da Fazenda Pública de Campina Grande (confirmado em 2 métodos)
+  perito_nome: Fagner Campos dos Santos (confirmado em 2 métodos)
+  cpf_perito: 037.551.444-92 (confirmado em 2 métodos)
+  especialidade: JUDICIAL (confirmado em 40 métodos)
+  destino: Gerência de Programação Orçamentária (confirmado em 2 métodos)
+
+Exemplo 5 (confiança máxima: 40):
+  Arquivo: 20221559201_cache.json
+  juizo: Juízo da 2ª Vara da Fazenda Pública de Campina Grande (confirmado em 2 métodos)
+  perito_nome: Fagner Campos dos Santos (confirmado em 2 métodos)
+  cpf_perito: 037.551.444-92 (confirmado em 2 métodos)
+  especialidade: JUDICIAL (confirmado em 40 métodos)
+  destino: Gerência de Programação Orçamentária (confirmado em 2 métodos)
+
+Exemplo 6 (confiança máxima: 20):
+  Arquivo: 001789772024815_cache.json
+  processo: 001789-77.2024.8.15 (confirmado em 4 métodos)
+  especialidade: e laudo (confirmado em 20 métodos)
+
+Exemplo 7 (confiança máxima: 18):
+  Arquivo: 0008322320248151_cache.json
+  processo: 000832-23.2024.8.15 (confirmado em 4 métodos)
+  especialidade: Clóvis de (confirmado em 18 métodos)
+  valor_arbitrado: 571.63 (confirmado em 3 métodos)
+  parte_contraria: IRANILDO FELIX ALENCAR. (confirmado em 4 métodos)
+
+Exemplo 8 (confiança máxima: 18):
+  Arquivo: 000832232024815_cache.json
+  processo: 000832-23.2024.8.15 (confirmado em 4 métodos)
+  especialidade: Clóvis de (confirmado em 18 métodos)
+  valor_arbitrado: 571.63 (confirmado em 3 métodos)
+  parte_contraria: IRANILDO FELIX ALENCAR. (confirmado em 4 métodos)
+
+Exemplo 9 (confiança máxima: 14):
+  Arquivo: 003189072024815_cache.json
+  processo: 003189-07.2024.8.15 (confirmado em 4 métodos)
+  cpf_perito: 701.876.111-57 (confirmado em 2 métodos)
+  especialidade: Grafotécnico CONPEJ (confirmado em 14 métodos)
+
+Exemplo 10 (confiança máxima: 12):
+  Arquivo: 2022138498_cache.json
+  juizo: Juízo da 12ª Vara Cível da Comarca da Capital (confirmado em 2 métodos)
+  perito_nome: Anastásio Alonso Varela (confirmado em 2 métodos)
+  cpf_perito: 701.876.111-57 (confirmado em 2 métodos)
+  especialidade: Grafotécnico CONPEJ (confirmado em 12 métodos)
+  destino: Gerência de Programação Orçamentária (confirmado em 2 métodos)
+  comarca: Comarca de João Pessoa (confirmado em 2 métodos)
+

@@ -1,0 +1,92 @@
+{
+  "timestamp": "2025-07-14T14:20:58.109154",
+  "version": "V23_COMPLETO_ESTAVEL",
+  "parameters": {
+    "input_dir": ".cache",
+    "output_dir": ".",
+    "workers": 1,
+    "number": 400
+  },
+  "total_docs": 12,
+  "diretoria_especial_docs": 27,
+  "multi_page_docs": 27,
+  "pages_analyzed": 105,
+  "strategy_success": {
+    "PageText": 8,
+    "AdvancedLayout": 8,
+    "LayoutPreserving": 8
+  },
+  "field_ratings": {
+    "processo": {
+      "found": 9,
+      "total": 12
+    },
+    "numero_autos": {
+      "found": 8,
+      "total": 12
+    },
+    "juizo": {
+      "found": 8,
+      "total": 12
+    },
+    "comarca": {
+      "found": 8,
+      "total": 12
+    },
+    "autor": {
+      "found": 9,
+      "total": 12
+    },
+    "parte_contraria": {
+      "found": 9,
+      "total": 12
+    },
+    "perito_nome": {
+      "found": 8,
+      "total": 12
+    },
+    "cpf_perito": {
+      "found": 8,
+      "total": 12
+    },
+    "especialidade": {
+      "found": 8,
+      "total": 12
+    },
+    "valor_arbitrado": {
+      "found": 8,
+      "total": 12
+    },
+    "destino": {
+      "found": 9,
+      "total": 12
+    }
+  },
+  "perito_por_cpf": 0,
+  "valor_inferido": 0,
+  "validation_failures": {
+    "perito_nome": 63,
+    "comarca": 12
+  },
+  "extraction_methods": {
+    "processo_pattern_0": 27,
+    "numero_autos_pattern_2": 15,
+    "juizo_pattern_0": 24,
+    "comarca_pattern_0": 24,
+    "autor_pattern_0": 24,
+    "parte_contraria_pattern_0": 24,
+    "perito_nome_pattern_4": 18,
+    "cpf_perito_pattern_0": 24,
+    "especialidade_pattern_1": 24,
+    "valor_arbitrado_pattern_0": 24,
+    "destino_pattern_0": 27,
+    "autor_pattern_2": 3,
+    "parte_contraria_pattern_2": 3,
+    "numero_autos_pattern_16": 6,
+    "perito_nome_pattern_0": 6,
+    "numero_autos_pattern_0": 3
+  },
+  "timeouts": 0,
+  "errors": [],
+  "processing_time_seconds": 9.727986
+}

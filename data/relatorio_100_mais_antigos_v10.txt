@@ -1,0 +1,182 @@
+RELATÓRIO DE EXTRAÇÃO - DIRETORIA ESPECIAL V10
+Usando apenas AdvancedLayout e LayoutPreserving (ignorando ColumnDetection)
+================================================================================
+
+ESTATÍSTICAS GERAIS:
+Total de arquivos processados: 100
+Documentos da Diretoria Especial encontrados: 130
+Documentos multi-página: 60
+Documentos extraídos com sucesso: 130
+Falhas na extração: 0
+Documentos com extração multi-método: 130
+Taxa de sucesso: 100.0%
+
+--------------------------------------------------------------------------------
+
+MÉTODOS DE EXTRAÇÃO UTILIZADOS:
+AdvancedLayout                :  396
+LayoutPreserving              :  378
+
+--------------------------------------------------------------------------------
+
+EXTRAÇÃO POR CAMPO:
+autor               :  115 ( 88.5%)
+comarca             :  110 ( 84.6%)
+cpf_perito          :  120 ( 92.3%)
+destino             :  115 ( 88.5%)
+especialidade       :  124 ( 95.4%)
+juizo               :  113 ( 86.9%)
+numero_autos        :   72 ( 55.4%)
+parte_contraria     :  115 ( 88.5%)
+perito_nome         :  105 ( 80.8%)
+processo            :  118 ( 90.8%)
+valor_arbitrado     :  118 ( 90.8%)
+
+--------------------------------------------------------------------------------
+
+ANÁLISE DE CONFIANÇA (campos confirmados em múltiplos métodos):
+processo            : média 3.2, alta confiança em 118/118 docs
+juizo               : média 2.0, alta confiança em 113/113 docs
+perito_nome         : média 2.0, alta confiança em 105/105 docs
+cpf_perito          : média 3.6, alta confiança em 120/120 docs
+especialidade       : média 3.0, alta confiança em 122/124 docs
+valor_arbitrado     : média 3.7, alta confiança em 118/118 docs
+numero_autos        : média 3.3, alta confiança em 72/72 docs
+autor               : média 2.8, alta confiança em 115/115 docs
+parte_contraria     : média 3.1, alta confiança em 115/115 docs
+destino             : média 2.0, alta confiança em 115/115 docs
+comarca             : média 2.0, alta confiança em 110/110 docs
+
+--------------------------------------------------------------------------------
+
+EXEMPLOS COM ALTA CONFIANÇA (múltiplos métodos confirmaram):
+
+Exemplo 1 (confiança máxima: 20):
+  Arquivo: 001789772024815_cache.json
+  processo: 001789-77.2024.8.15 (confirmado em 4 métodos)
+  especialidade: e laudo (confirmado em 20 métodos)
+
+Exemplo 2 (confiança máxima: 4):
+  Arquivo: 002070292024815_cache.json
+  processo: 002070-29.2024.8.15 (confirmado em 4 métodos)
+  juizo: Juízo da 2ª Vara da Fazenda Pública da Comarca de Campina Grande (confirmado em 2 métodos)
+  perito_nome: Raphael Pedro Ribeiro Pontes (confirmado em 2 métodos)
+  cpf_perito: 700.648.894-08 (confirmado em 4 métodos)
+  especialidade: Médico (confirmado em 4 métodos)
+  valor_arbitrado: 491.86 (confirmado em 4 métodos)
+  numero_autos: 0805194-48.2023.8.15.0001 (confirmado em 4 métodos)
+  autor: THAYSE SANTOS SILVA (confirmado em 2 métodos)
+  parte_contraria: MUNICÍPIO DE CAMPINA GRANDE (confirmado em 4 métodos)
+  destino: Conselho da Magistratura (confirmado em 2 métodos)
+  comarca: Comarca de Campina Grande (confirmado em 2 métodos)
+
+Exemplo 3 (confiança máxima: 4):
+  Arquivo: 0020702920248151_cache.json
+  processo: 002070-29.2024.8.15 (confirmado em 4 métodos)
+  juizo: Juízo da 2ª Vara da Fazenda Pública da Comarca de Campina Grande (confirmado em 2 métodos)
+  perito_nome: Raphael Pedro Ribeiro Pontes (confirmado em 2 métodos)
+  cpf_perito: 700.648.894-08 (confirmado em 4 métodos)
+  especialidade: Médico (confirmado em 4 métodos)
+  valor_arbitrado: 491.86 (confirmado em 4 métodos)
+  numero_autos: 0805194-48.2023.8.15.0001 (confirmado em 4 métodos)
+  autor: THAYSE SANTOS SILVA (confirmado em 2 métodos)
+  parte_contraria: MUNICÍPIO DE CAMPINA GRANDE (confirmado em 4 métodos)
+  destino: Conselho da Magistratura (confirmado em 2 métodos)
+  comarca: Comarca de Campina Grande (confirmado em 2 métodos)
+
+Exemplo 4 (confiança máxima: 4):
+  Arquivo: 002003762024815_cache.json
+  processo: 002003-76.2024.8.15 (confirmado em 4 métodos)
+  juizo: Juízo da 2º Vara Mista da Comarca de Santa Rita (confirmado em 2 métodos)
+  cpf_perito: 049.260.444-47 (confirmado em 4 métodos)
+  especialidade: Engenheira Civil (confirmado em 2 métodos)
+  valor_arbitrado: 491.86 (confirmado em 4 métodos)
+  numero_autos: 0802819-64.2017.8.15.0331 (confirmado em 2 métodos)
+  autor: Elaine Fátima da Silva Farias (confirmado em 4 métodos)
+  parte_contraria: Yury Andrews Saraiva de Sousa Santos (confirmado em 2 métodos)
+  destino: Conselho da Magistratura (confirmado em 2 métodos)
+  comarca: Comarca de Santa Rita (confirmado em 2 métodos)
+
+Exemplo 5 (confiança máxima: 4):
+  Arquivo: 001969682024815_cache.json
+  processo: 001969-68.2024.8.15 (confirmado em 4 métodos)
+  juizo: Juízo da 4ª Vara Cível da Comarca da Capital (confirmado em 2 métodos)
+  perito_nome: EXPERTISE CONSULTORIA E AUDITORIA CONTABIL E TRIBUTARIA LTDA (confirmado em 2 métodos)
+  cpf_perito: 046.889.464-06 (confirmado em 4 métodos)
+  valor_arbitrado: 491.86 (confirmado em 4 métodos)
+  autor: MÉRCIA CRISTIANE DA SILVA (confirmado em 4 métodos)
+  parte_contraria: MAPFRE SEGUROS GERAIS S/A (confirmado em 2 métodos)
+  destino: Conselho da Magistratura (confirmado em 2 métodos)
+  comarca: Comarca de João Pessoa (confirmado em 2 métodos)
+
+Exemplo 6 (confiança máxima: 4):
+  Arquivo: 001627562024815_cache.json
+  processo: 001627-56.2024.8.15 (confirmado em 2 métodos)
+  juizo: Juízo da Vara Única de Remígio (confirmado em 2 métodos)
+  perito_nome: Ravel Carneiro Evaristo (confirmado em 2 métodos)
+  cpf_perito: 061.473.314-69 (confirmado em 4 métodos)
+  especialidade: Grafocopista (confirmado em 2 métodos)
+  valor_arbitrado: 370.00 (confirmado em 4 métodos)
+  numero_autos: 0800965-78.2022.8.15.0551 (confirmado em 4 métodos)
+  autor: Maria Selma dos Santos Pereira (confirmado em 4 métodos)
+  parte_contraria: Banco BMG S/A (confirmado em 4 métodos)
+  destino: Conselho da Magistratura (confirmado em 2 métodos)
+  comarca: Comarca de Remígio (confirmado em 2 métodos)
+
+Exemplo 7 (confiança máxima: 4):
+  Arquivo: 001684582024815_cache.json
+  juizo: Juízo da 2ª Vara da Comarca de Piancó (confirmado em 2 métodos)
+  perito_nome: Anderson Ataíde Santos Lemos (confirmado em 2 métodos)
+  cpf_perito: 047.236.494-41 (confirmado em 4 métodos)
+  especialidade: Contador
+
+perito (confirmado em 2 métodos)
+  valor_arbitrado: 1500.00 (confirmado em 4 métodos)
+  autor: Leila Marta Alves Pereira de Souza CPF (confirmado em 2 métodos)
+  parte_contraria: MUNICÍPIO DE PIANCÓ (confirmado em 4 métodos)
+  destino: Conselho da Magistratura (confirmado em 2 métodos)
+  comarca: Comarca de Piancó (confirmado em 2 métodos)
+
+Exemplo 8 (confiança máxima: 4):
+  Arquivo: 001685242024815_cache.json
+  juizo: Juízo da 2ª Vara da Comarca de Piancó (confirmado em 2 métodos)
+  perito_nome: Anderson Ataíde Santos Lemos (confirmado em 2 métodos)
+  cpf_perito: 047.236.494-41 (confirmado em 4 métodos)
+  especialidade: Contador
+
+perito (confirmado em 2 métodos)
+  valor_arbitrado: 1500.00 (confirmado em 4 métodos)
+  numero_autos: 0800048-95.2018.8.15.0261 (confirmado em 4 métodos)
+  autor: MARIA DE LOURDES MARCELINO LOPES (confirmado em 4 métodos)
+  parte_contraria: MUNICÍPIO DE PIANCÓ (confirmado em 2 métodos)
+  destino: Conselho da Magistratura (confirmado em 2 métodos)
+  comarca: Comarca de Piancó (confirmado em 2 métodos)
+
+Exemplo 9 (confiança máxima: 4):
+  Arquivo: 001640022024815_cache.json
+  processo: 001640-02.2024.8.15 (confirmado em 4 métodos)
+  juizo: Juízo da 2ª Vara Mista da Comarca de Araruna (confirmado em 2 métodos)
+  perito_nome: Felipe Queiroga Gadelha (confirmado em 2 métodos)
+  cpf_perito: 021.205.144-02 (confirmado em 4 métodos)
+  especialidade: Grafotécnico (confirmado em 4 métodos)
+  valor_arbitrado: 300.00 (confirmado em 4 métodos)
+  numero_autos: 0801259-41.2021.8.15.0301 (confirmado em 4 métodos)
+  autor: MARIA IZABEL NETA (confirmado em 4 métodos)
+  parte_contraria: BANCO BRADESCO S.A. (confirmado em 4 métodos)
+  destino: Conselho da Magistratura (confirmado em 2 métodos)
+  comarca: Comarca de Araruna (confirmado em 2 métodos)
+
+Exemplo 10 (confiança máxima: 4):
+  Arquivo: 0017697820248152_cache.json
+  processo: 001769-78.2024.8.15 (confirmado em 4 métodos)
+  juizo: Juízo da 1ª Vara Mista da Comarca de Mamanguape (confirmado em 2 métodos)
+  perito_nome: Felipe Queiroga Gadelha (confirmado em 2 métodos)
+  cpf_perito: 021.205.144-02 (confirmado em 4 métodos)
+  especialidade: Grafotécnico (confirmado em 4 métodos)
+  valor_arbitrado: 491.86 (confirmado em 4 métodos)
+  numero_autos: 0801734-76.2022.8.15.0231 (confirmado em 2 métodos)
+  autor: ANTONIO MENINO (confirmado em 2 métodos)
+  parte_contraria: BANCO BRADESCO SA (confirmado em 4 métodos)
+  destino: Conselho da Magistratura (confirmado em 2 métodos)
+  comarca: Comarca de Mamanguape (confirmado em 2 métodos)
+

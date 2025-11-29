@@ -1,0 +1,126 @@
+{
+  "timestamp": "2025-07-14T14:03:19.369797",
+  "version": "V23_COMPLETO_ESTAVEL",
+  "parameters": {
+    "input_dir": ".cache",
+    "output_dir": ".",
+    "workers": 1,
+    "number": 400
+  },
+  "total_docs": 396,
+  "diretoria_especial_docs": 908,
+  "multi_page_docs": 908,
+  "pages_analyzed": 3554,
+  "strategy_success": {
+    "PageText": 261,
+    "AdvancedLayout": 261,
+    "LayoutPreserving": 261
+  },
+  "field_ratings": {
+    "processo": {
+      "found": 215,
+      "total": 396
+    },
+    "numero_autos": {
+      "found": 300,
+      "total": 396
+    },
+    "juizo": {
+      "found": 300,
+      "total": 396
+    },
+    "comarca": {
+      "found": 267,
+      "total": 396
+    },
+    "autor": {
+      "found": 300,
+      "total": 396
+    },
+    "parte_contraria": {
+      "found": 304,
+      "total": 396
+    },
+    "perito_nome": {
+      "found": 273,
+      "total": 396
+    },
+    "cpf_perito": {
+      "found": 298,
+      "total": 396
+    },
+    "especialidade": {
+      "found": 256,
+      "total": 396
+    },
+    "valor_arbitrado": {
+      "found": 289,
+      "total": 396
+    },
+    "destino": {
+      "found": 254,
+      "total": 396
+    }
+  },
+  "perito_por_cpf": 30,
+  "valor_inferido": 6,
+  "validation_failures": {
+    "perito_nome": 1932,
+    "comarca": 579,
+    "valor_arbitrado": 90,
+    "parte_contraria": 18,
+    "especialidade": 6,
+    "destino": 3
+  },
+  "extraction_methods": {
+    "processo_pattern_0": 643,
+    "numero_autos_pattern_2": 159,
+    "juizo_pattern_0": 800,
+    "comarca_pattern_0": 787,
+    "autor_pattern_0": 672,
+    "parte_contraria_pattern_0": 685,
+    "perito_nome_pattern_4": 463,
+    "cpf_perito_pattern_0": 728,
+    "especialidade_pattern_1": 653,
+    "valor_arbitrado_pattern_0": 666,
+    "destino_pattern_0": 525,
+    "autor_pattern_2": 62,
+    "parte_contraria_pattern_2": 166,
+    "numero_autos_pattern_16": 24,
+    "perito_nome_pattern_0": 244,
+    "numero_autos_pattern_0": 483,
+    "destino_pattern_3": 174,
+    "juizo_pattern_2": 81,
+    "especialidade_pattern_3": 137,
+    "numero_autos_pattern_10": 83,
+    "autor_pattern_1": 151,
+    "cpf_perito_pattern_3": 95,
+    "perito_nome_pattern_8": 48,
+    "numero_autos_pattern_9": 116,
+    "parte_contraria_pattern_1": 54,
+    "perito_nome_pattern_6": 6,
+    "cpf_perito_pattern_9": 45,
+    "especialidade_pattern_9": 12,
+    "valor_arbitrado_pattern_11": 69,
+    "valor_arbitrado_pattern_5": 107,
+    "comarca_pattern_1": 6,
+    "destino_pattern_1": 56,
+    "especialidade_pattern_0": 22,
+    "valor_arbitrado_pattern_17": 18,
+    "numero_autos_pattern_8": 9,
+    "especialidade_pattern_2": 6,
+    "perito_nome_pattern_5": 27,
+    "juizo_pattern_4": 12,
+    "numero_autos_pattern_13": 3,
+    "destino_pattern_2": 6,
+    "numero_autos_pattern_4": 18,
+    "especialidade_pattern_7": 3,
+    "comarca_pattern_6": 3,
+    "cpf_perito_pattern_2": 6,
+    "cpf_perito_pattern_1": 21,
+    "especialidade_pattern_8": 2
+  },
+  "timeouts": 4,
+  "errors": [],
+  "processing_time_seconds": 206.566511
+}

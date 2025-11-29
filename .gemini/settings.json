@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "regex-commander": {
+      "command": "/usr/bin/python3",
+      "args": ["/mnt/b/dev/mcp-regex_commander/server.py"],
+      "cwd": "/mnt/b/dev/mcp-regex_commander",
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}

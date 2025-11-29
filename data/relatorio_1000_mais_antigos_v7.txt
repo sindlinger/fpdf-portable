@@ -1,0 +1,67 @@
+RELATÓRIO DE EXTRAÇÃO - DIRETORIA ESPECIAL V7
+Parsers específicos + correções de comarca e autor
+================================================================================
+
+ESTATÍSTICAS GERAIS:
+Total de arquivos processados: 1000
+Documentos da Diretoria Especial encontrados: 478
+Documentos multi-página: 211
+Documentos extraídos com sucesso: 410
+Falhas na extração: 68
+Taxa de sucesso: 85.8%
+
+--------------------------------------------------------------------------------
+
+MÉTODOS DE EXTRAÇÃO UTILIZADOS:
+AdvancedLayout      : 47717
+ColumnDetection     :    0
+LayoutPreserving    :    0
+Other               :    0
+
+--------------------------------------------------------------------------------
+
+EXTRAÇÃO POR CAMPO:
+autor               :  398 ( 83.3%)
+comarca             :  355 ( 74.3%)
+cpf_perito          :  417 ( 87.2%)
+destino             :  393 ( 82.2%)
+especialidade       :  460 ( 96.2%)
+juizo               :  407 ( 85.1%)
+numero_autos        :  277 ( 57.9%)
+parte_contraria     :  351 ( 73.4%)
+perito_nome         :  344 ( 72.0%)
+processo            :  376 ( 78.7%)
+valor_arbitrado     :  409 ( 85.6%)
+
+--------------------------------------------------------------------------------
+
+SUCESSO POR MÉTODO DE EXTRAÇÃO:
+
+AdvancedLayout:
+  Total documentos: 410
+  juizo: 366 (89.3%)
+  perito_nome: 344 (83.9%)
+  cpf_perito: 368 (89.8%)
+  valor_arbitrado: 358 (87.3%)
+  autor: 352 (85.9%)
+  comarca: 351 (85.6%)
+  processo: 376 (91.7%)
+
+--------------------------------------------------------------------------------
+
+ANÁLISE DE COMARCA:
+  Comarca de Sousa: 77
+  None: 59
+  Comarca de João Pessoa: 39
+  Comarca de Pombal: 33
+  Comarca de Remígio: 21
+  Comarca de Campina Grande: 18
+  Comarca de Mamanguape: 15
+  Comarca de Cajazeiras: 14
+  Comarca de Alagoa Nova: 14
+  Comarca de Princesa Isabel: 13
+  Comarca de Piancó: 13
+  Comarca de Catolé do Rocha: 12
+  Comarca de Bayeux: 11
+  Comarca de Patos: 10
+  Comarca de Cabedelo: 8

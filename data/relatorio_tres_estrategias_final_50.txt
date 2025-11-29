@@ -1,0 +1,109 @@
+RELATÓRIO COMPARATIVO - 3 ESTRATÉGIAS (VERSÃO FINAL)
+================================================================================
+
+ESTATÍSTICAS GERAIS POR ESTRATÉGIA:
+--------------------------------------------------------------------------------
+Métrica                               PageText  AdvancedLayout LayoutPreserving
+--------------------------------------------------------------------------------
+Total de arquivos                           10              10              10
+Arquivos com dados                          10              10              10
+Páginas com dados                          249             249             249
+Docs Diretoria Especial                     23              23              23
+Extraídos com sucesso                       20              20              20
+--------------------------------------------------------------------------------
+Taxa de sucesso (%)                      87.0%           87.0%           87.0%
+
+
+EXTRAÇÃO POR CAMPO:
+--------------------------------------------------------------------------------
+Campo                            PageText       AdvancedLayout     LayoutPreserving
+--------------------------------------------------------------------------------
+processo                   21 ( 91.3%)       21 ( 91.3%)       21 ( 91.3%)
+numero_autos               20 ( 87.0%)       20 ( 87.0%)       20 ( 87.0%)
+juizo                      22 ( 95.7%)       22 ( 95.7%)       22 ( 95.7%)
+comarca                    20 ( 87.0%)       20 ( 87.0%)       20 ( 87.0%)
+perito_nome                20 ( 87.0%)       20 ( 87.0%)       20 ( 87.0%)
+cpf_perito                 20 ( 87.0%)       20 ( 87.0%)       20 ( 87.0%)
+especialidade              20 ( 87.0%)       20 ( 87.0%)       20 ( 87.0%)
+valor_arbitrado            20 ( 87.0%)       20 ( 87.0%)       20 ( 87.0%)
+autor                      22 ( 95.7%)       20 ( 87.0%)       22 ( 95.7%)
+parte_contraria            23 (100.0%)       23 (100.0%)       23 (100.0%)
+destino                    22 ( 95.7%)       22 ( 95.7%)       22 ( 95.7%)
+
+
+ANÁLISE DE PARTE_CONTRARIA (com regex melhorado):
+--------------------------------------------------------------------------------
+
+PageText:
+  - Total de documentos extraídos: 20
+  - Partes contrárias complexas: 14
+  - Partes contrárias truncadas: 2
+  - Exemplos complexos:
+    • BANCO BRADESCO FINANCIAMENTOS S.A
+    • COSTA E PAULINO LTDA (NOME
+    • COSTA E PAULINO LTDA (NOME FANTASIA CASA DA
+CONSTRUÇÃO)
+    • GERALDO VICENTE FILHO
+    • BANCO
+SANTANDER BRASIL S.A
+
+AdvancedLayout:
+  - Total de documentos extraídos: 20
+  - Partes contrárias complexas: 14
+  - Partes contrárias truncadas: 2
+  - Exemplos complexos:
+    • BANCO BRADESCO FINANCIAMENTOS S.A
+    • COSTA E PAULINO LTDA (NOME
+    • COSTA   E   PAULINO   LTDA   (NOME   FANTASIA   CASA   DA
+
+CONSTRUÇÃO)
+    • GERALDO  VICENTE  FILHO
+    • GERALDO VICENTE FILHO
+
+LayoutPreserving:
+  - Total de documentos extraídos: 20
+  - Partes contrárias complexas: 14
+  - Partes contrárias truncadas: 2
+  - Exemplos complexos:
+    • BANCO  BRADESCO  FINANCIAMENTOS  S.A
+    • COSTA  E  PAULINO  LTDA  (NOME
+    • COSTA     E     PAULINO     LTDA     (NOME     FANTASIA     CASA     DA
+CONSTRUÇÃO)
+    • GERALDO  VICENTE  FILHO
+    • GERALDO VICENTE FILHO
+
+
+COMPARAÇÃO DE QUALIDADE:
+--------------------------------------------------------------------------------
+
+PROCESSO:
+  PageText: 18 encontrados
+    Exemplo: 000025-10.2024.8.15
+  AdvancedLayout: 18 encontrados
+    Exemplo: 000025-10.2024.8.15
+  LayoutPreserving: 18 encontrados
+    Exemplo: 000025-10.2024.8.15
+
+PERITO_NOME:
+  PageText: 20 encontrados
+    Exemplo: Grafotécnico
+  AdvancedLayout: 20 encontrados
+    Exemplo: Grafotécnico
+  LayoutPreserving: 20 encontrados
+    Exemplo: Grafotécnico
+
+VALOR_ARBITRADO:
+  PageText: 20 encontrados
+    Exemplo: 350.00
+  AdvancedLayout: 20 encontrados
+    Exemplo: 350.00
+  LayoutPreserving: 20 encontrados
+    Exemplo: 350.00
+
+PARTE_CONTRARIA:
+  PageText: 20 encontrados
+    Exemplo: BANCO
+  AdvancedLayout: 20 encontrados
+    Exemplo: BANCO
+  LayoutPreserving: 20 encontrados
+    Exemplo: BANCO

@@ -1,0 +1,99 @@
+{
+  "timestamp": "2025-07-14T13:43:14.369646",
+  "version": "V23_COMPLETO_ESTAVEL",
+  "parameters": {
+    "input_dir": ".cache",
+    "output_dir": ".",
+    "workers": 1,
+    "number": 50
+  },
+  "total_docs": 50,
+  "diretoria_especial_docs": 96,
+  "multi_page_docs": 96,
+  "pages_analyzed": 369,
+  "strategy_success": {
+    "PageText": 29,
+    "AdvancedLayout": 29,
+    "LayoutPreserving": 29
+  },
+  "field_ratings": {
+    "processo": {
+      "found": 32,
+      "total": 50
+    },
+    "numero_autos": {
+      "found": 31,
+      "total": 50
+    },
+    "juizo": {
+      "found": 31,
+      "total": 50
+    },
+    "comarca": {
+      "found": 29,
+      "total": 50
+    },
+    "autor": {
+      "found": 32,
+      "total": 50
+    },
+    "parte_contraria": {
+      "found": 32,
+      "total": 50
+    },
+    "perito_nome": {
+      "found": 31,
+      "total": 50
+    },
+    "cpf_perito": {
+      "found": 31,
+      "total": 50
+    },
+    "especialidade": {
+      "found": 31,
+      "total": 50
+    },
+    "valor_arbitrado": {
+      "found": 29,
+      "total": 50
+    },
+    "destino": {
+      "found": 30,
+      "total": 50
+    }
+  },
+  "perito_por_cpf": 0,
+  "valor_inferido": 3,
+  "validation_failures": {
+    "perito_nome": 267,
+    "comarca": 60,
+    "valor_arbitrado": 21
+  },
+  "extraction_methods": {
+    "processo_pattern_0": 96,
+    "numero_autos_pattern_2": 24,
+    "juizo_pattern_0": 90,
+    "comarca_pattern_0": 87,
+    "autor_pattern_0": 87,
+    "parte_contraria_pattern_0": 87,
+    "perito_nome_pattern_4": 72,
+    "cpf_perito_pattern_0": 87,
+    "especialidade_pattern_1": 81,
+    "valor_arbitrado_pattern_0": 84,
+    "destino_pattern_0": 81,
+    "autor_pattern_2": 3,
+    "parte_contraria_pattern_2": 9,
+    "numero_autos_pattern_16": 6,
+    "perito_nome_pattern_0": 21,
+    "numero_autos_pattern_0": 57,
+    "destino_pattern_3": 9,
+    "juizo_pattern_2": 3,
+    "especialidade_pattern_3": 12,
+    "numero_autos_pattern_10": 6,
+    "autor_pattern_1": 6,
+    "cpf_perito_pattern_3": 6
+  },
+  "timeouts": 0,
+  "errors": [],
+  "processing_time_seconds": 12.826961
+}

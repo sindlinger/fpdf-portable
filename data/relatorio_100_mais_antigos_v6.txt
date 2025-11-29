@@ -1,0 +1,194 @@
+RELATÓRIO DE EXTRAÇÃO - DIRETORIA ESPECIAL V6
+Versão com correções para comarca e processo
+================================================================================
+
+ESTATÍSTICAS GERAIS:
+Total de arquivos processados: 100
+Documentos da Diretoria Especial encontrados: 130
+Documentos multi-página: 60
+Documentos extraídos com sucesso: 130
+Falhas na extração: 0
+Taxa de sucesso: 100.0%
+
+--------------------------------------------------------------------------------
+
+EXTRAÇÃO POR CAMPO:
+comarca             :  110 ( 84.6%)
+cpf_perito          :  120 ( 92.3%)
+destino             :  115 ( 88.5%)
+especialidade       :  124 ( 95.4%)
+juizo               :  113 ( 86.9%)
+numero_autos        :   72 ( 55.4%)
+parte_contraria     :  115 ( 88.5%)
+perito_nome         :  105 ( 80.8%)
+processo            :  118 ( 90.8%)
+valor_arbitrado     :  118 ( 90.8%)
+
+--------------------------------------------------------------------------------
+
+ANÁLISE DE COMARCA:
+  Comarca de Sousa: 30
+  None: 20
+  Comarca da João Pessoa: 11
+  Comarca de Piancó: 11
+  Comarca de Alagoa Nova: 11
+  Comarca de Santa Rita: 7
+  Comarca de Mamanguape: 6
+  Comarca de Pombal: 6
+  Comarca de Campina Grande: 5
+  Comarca de Catolé do Rocha: 5
+
+--------------------------------------------------------------------------------
+
+EXEMPLOS DE DADOS EXTRAÍDOS:
+
+Exemplo 1:
+  Arquivo: 002070292024815_cache.json
+  Páginas: 20 a 21
+  Processo: 002070-29.2024.8.15
+  Juízo: None
+  Comarca: None
+  Perito: None
+  CPF: None
+  Valor: R$ None
+
+Exemplo 2:
+  Arquivo: 002070292024815_cache.json
+  Páginas: 22 a 23
+  Processo: 002070-29.2024.8.15
+  Juízo: Juízo da 2ª Vara da Fazenda Pública da Comarca de Campina Grande
+  Comarca: Comarca de Campina Grande
+  Perito: Raphael Pedro Ribeiro Pontes
+  CPF: 700.648.894-08
+  Valor: R$ 491.86
+
+Exemplo 3:
+  Arquivo: 0020702920248151_cache.json
+  Páginas: 20 a 21
+  Processo: 002070-29.2024.8.15
+  Juízo: None
+  Comarca: None
+  Perito: None
+  CPF: None
+  Valor: R$ None
+
+Exemplo 4:
+  Arquivo: 0020702920248151_cache.json
+  Páginas: 22 a 23
+  Processo: 002070-29.2024.8.15
+  Juízo: Juízo da 2ª Vara da Fazenda Pública da Comarca de Campina Grande
+  Comarca: Comarca de Campina Grande
+  Perito: Raphael Pedro Ribeiro Pontes
+  CPF: 700.648.894-08
+  Valor: R$ 491.86
+
+Exemplo 5:
+  Arquivo: 002003762024815_cache.json
+  Páginas: 33 a 34
+  Processo: 002003-76.2024.8.15
+  Juízo: Juízo da 2º Vara Mista da Comarca de Santa Rita
+  Comarca: Comarca de Santa Rita
+  Perito: None
+  CPF: 049.260.444-47
+  Valor: R$ 491.86
+
+Exemplo 6:
+  Arquivo: 001969682024815_cache.json
+  Páginas: 30 a 31
+  Processo: 001969-68.2024.8.15
+  Juízo: Juízo da 4ª Vara Cível da Comarca da Capital
+  Comarca: Comarca da João Pessoa
+  Perito: EXPERTISE  CONSULTORIA  E  AUDITORIA  CONTABIL  E  TRIBUTARIA  LTDA
+  CPF: 046.889.464-06
+  Valor: R$ 491.86
+
+Exemplo 7:
+  Arquivo: 001627562024815_cache.json
+  Páginas: 39 a 40
+  Processo: 001627-56.2024.8.15
+  Juízo: Juízo da Vara Única de Remígio
+  Comarca: Comarca de Remígio
+  Perito: Ravel Carneiro Evaristo
+  CPF: 061.473.314-69
+  Valor: R$ 370.00
+
+Exemplo 8:
+  Arquivo: 001684582024815_cache.json
+  Páginas: 40 a 41
+  Processo: None
+  Juízo: Juízo da 2ª Vara da Comarca de Piancó
+  Comarca: Comarca de Piancó
+  Perito: Anderson Ataíde Santos Lemos
+  CPF: 047.236.494-41
+  Valor: R$ 1500.00
+
+Exemplo 9:
+  Arquivo: 001685242024815_cache.json
+  Páginas: 39 a 40
+  Processo: None
+  Juízo: Juízo da 2ª Vara da Comarca de Piancó
+  Comarca: Comarca de Piancó
+  Perito: Anderson Ataíde Santos Lemos
+  CPF: 047.236.494-41
+  Valor: R$ 1500.00
+
+Exemplo 10:
+  Arquivo: 001640022024815_cache.json
+  Páginas: 25 a 26
+  Processo: 001640-02.2024.8.15
+  Juízo: Juízo da 2ª Vara Mista da Comarca de Araruna
+  Comarca: Comarca de Araruna
+  Perito: Felipe Queiroga Gadelha
+  CPF: 021.205.144-02
+  Valor: R$ 300.00
+
+Exemplo 11:
+  Arquivo: 0017697820248152_cache.json
+  Páginas: 26 a 27
+  Processo: 001769-78.2024.8.15
+  Juízo: Juízo da 1ª Vara Mista da Comarca de Mamanguape
+  Comarca: Comarca de Mamanguape
+  Perito: Felipe Queiroga Gadelha
+  CPF: 021.205.144-02
+  Valor: R$ 491.86
+
+Exemplo 12:
+  Arquivo: 0017697820248151_cache.json
+  Páginas: 26 a 27
+  Processo: 001769-78.2024.8.15
+  Juízo: Juízo da 1ª Vara Mista da Comarca de Mamanguape
+  Comarca: Comarca de Mamanguape
+  Perito: Felipe Queiroga Gadelha
+  CPF: 021.205.144-02
+  Valor: R$ 491.86
+
+Exemplo 13:
+  Arquivo: 001681632024815_cache.json
+  Páginas: 10 a 11
+  Processo: 001681-63.2024.8.15
+  Juízo: Juízo da 5ª Vara Mista da Comarca de Sousa
+  Comarca: Comarca de Sousa
+  Perito: Felipe Queiroga Gadelha
+  CPF: 021.205.144-02
+  Valor: R$ None
+
+Exemplo 14:
+  Arquivo: 001681632024815_cache.json
+  Páginas: 32 a 33
+  Processo: 001681-63.2024.8.15
+  Juízo: Juízo da 5ª Vara Mista da Comarca de Sousa
+  Comarca: Comarca de Sousa
+  Perito: Felipe Queiroga Gadelha
+  CPF: 021.205.144-02
+  Valor: R$ 398.81
+
+Exemplo 15:
+  Arquivo: 001769782024815_cache.json
+  Páginas: 26 a 27
+  Processo: 001769-78.2024.8.15
+  Juízo: Juízo da 1ª Vara Mista da Comarca de Mamanguape
+  Comarca: Comarca de Mamanguape
+  Perito: Felipe Queiroga Gadelha
+  CPF: 021.205.144-02
+  Valor: R$ 491.86
+

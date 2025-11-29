@@ -1,0 +1,147 @@
+RELATÓRIO DE EXTRAÇÃO - DIRETORIA ESPECIAL V8
+Extração de TODOS os métodos com combinação e confiança
+================================================================================
+
+ESTATÍSTICAS GERAIS:
+Total de arquivos processados: 100
+Documentos da Diretoria Especial encontrados: 250
+Documentos multi-página: 248
+Documentos extraídos com sucesso: 248
+Falhas na extração: 2
+Documentos com extração multi-método: 250
+Taxa de sucesso: 99.2%
+
+--------------------------------------------------------------------------------
+
+MÉTODOS DE EXTRAÇÃO UTILIZADOS:
+AdvancedLayout                :  928
+ColumnDetection               :  882
+LayoutPreserving              :  882
+
+--------------------------------------------------------------------------------
+
+EXTRAÇÃO POR CAMPO:
+autor               :  214 ( 85.6%)
+comarca             :  120 ( 48.0%)
+cpf_perito          :  220 ( 88.0%)
+destino             :  213 ( 85.2%)
+especialidade       :  233 ( 93.2%)
+juizo               :  133 ( 53.2%)
+numero_autos        :  118 ( 47.2%)
+parte_contraria     :  210 ( 84.0%)
+perito_nome         :  112 ( 44.8%)
+processo            :  234 ( 93.6%)
+valor_arbitrado     :  237 ( 94.8%)
+
+--------------------------------------------------------------------------------
+
+ANÁLISE DE CONFIANÇA (campos confirmados em múltiplos métodos):
+processo            : média 2.8, alta confiança em 234/234 docs
+juizo               : média 2.0, alta confiança em 132/133 docs
+perito_nome         : média 2.0, alta confiança em 109/112 docs
+cpf_perito          : média 2.0, alta confiança em 220/220 docs
+especialidade       : média 2.4, alta confiança em 220/233 docs
+valor_arbitrado     : média 2.0, alta confiança em 218/237 docs
+numero_autos        : média 2.0, alta confiança em 118/118 docs
+autor               : média 2.0, alta confiança em 210/214 docs
+parte_contraria     : média 2.0, alta confiança em 210/210 docs
+destino             : média 1.9, alta confiança em 185/213 docs
+comarca             : média 2.0, alta confiança em 120/120 docs
+
+--------------------------------------------------------------------------------
+
+EXEMPLOS COM ALTA CONFIANÇA (múltiplos métodos confirmaram):
+
+Exemplo 1 (confiança máxima: 20):
+  Arquivo: 001789772024815_cache.json
+  processo: 001789-77.2024.8.15 (confirmado em 4 métodos)
+  especialidade: e laudo (confirmado em 20 métodos)
+
+Exemplo 2 (confiança máxima: 18):
+  Arquivo: 0008322320248151_cache.json
+  processo: 000832-23.2024.8.15 (confirmado em 4 métodos)
+  especialidade: Clóvis de (confirmado em 18 métodos)
+  valor_arbitrado: 571.63 (confirmado em 3 métodos)
+  parte_contraria: IRANILDO FELIX ALENCAR. (confirmado em 4 métodos)
+
+Exemplo 3 (confiança máxima: 18):
+  Arquivo: 000832232024815_cache.json
+  processo: 000832-23.2024.8.15 (confirmado em 4 métodos)
+  especialidade: Clóvis de (confirmado em 18 métodos)
+  valor_arbitrado: 571.63 (confirmado em 3 métodos)
+  parte_contraria: IRANILDO FELIX ALENCAR. (confirmado em 4 métodos)
+
+Exemplo 4 (confiança máxima: 10):
+  Arquivo: 001684582024815_cache.json
+  processo: 001684-58.2024.8.15 (confirmado em 10 métodos)
+  cpf_perito: 047.236.494-41 (confirmado em 2 métodos)
+  especialidade: Contador (confirmado em 4 métodos)
+  valor_arbitrado: 1500.00 (confirmado em 2 métodos)
+  autor: Leila Marta Alves (confirmado em 2 métodos)
+  parte_contraria: MUNICÍPIO DE PIANCÓ (confirmado em 2 métodos)
+
+Exemplo 5 (confiança máxima: 10):
+  Arquivo: 0017697820248152_cache.json
+  processo: 001769-78.2024.8.15 (confirmado em 10 métodos)
+  juizo: Juízo da 1ª Vara Mista da Comarca de (confirmado em 2 métodos)
+  cpf_perito: 021.205.144-02 (confirmado em 2 métodos)
+  especialidade: Grafotécnico (confirmado em 4 métodos)
+  valor_arbitrado: 491.86 (confirmado em 2 métodos)
+  autor: ANTONIO MENINO DE ARRUDA (confirmado em 2 métodos)
+  parte_contraria: BANCO BRADESCO SA (confirmado em 2 métodos)
+  comarca: Comarca de Comarca de (confirmado em 2 métodos)
+
+Exemplo 6 (confiança máxima: 10):
+  Arquivo: 0017697820248151_cache.json
+  processo: 001769-78.2024.8.15 (confirmado em 10 métodos)
+  juizo: Juízo da 1ª Vara Mista da Comarca de (confirmado em 2 métodos)
+  cpf_perito: 021.205.144-02 (confirmado em 2 métodos)
+  especialidade: Grafotécnico (confirmado em 4 métodos)
+  valor_arbitrado: 491.86 (confirmado em 2 métodos)
+  autor: ANTONIO MENINO DE ARRUDA (confirmado em 2 métodos)
+  parte_contraria: BANCO BRADESCO SA (confirmado em 2 métodos)
+  comarca: Comarca de Comarca de (confirmado em 2 métodos)
+
+Exemplo 7 (confiança máxima: 10):
+  Arquivo: 001769782024815_cache.json
+  processo: 001769-78.2024.8.15 (confirmado em 10 métodos)
+  juizo: Juízo da 1ª Vara Mista da Comarca de (confirmado em 2 métodos)
+  cpf_perito: 021.205.144-02 (confirmado em 2 métodos)
+  especialidade: Grafotécnico (confirmado em 4 métodos)
+  valor_arbitrado: 491.86 (confirmado em 2 métodos)
+  autor: ANTONIO MENINO DE ARRUDA (confirmado em 2 métodos)
+  parte_contraria: BANCO BRADESCO SA (confirmado em 2 métodos)
+  comarca: Comarca de Comarca de (confirmado em 2 métodos)
+
+Exemplo 8 (confiança máxima: 10):
+  Arquivo: 001503042024815_cache.json
+  processo: 001503-04.2024.8.15 (confirmado em 10 métodos)
+  juizo: Juízo da 2ª Vara Regional Cível de (confirmado em 2 métodos)
+  cpf_perito: 021.205.144-02 (confirmado em 2 métodos)
+  especialidade: Grafotécnico (confirmado em 2 métodos)
+  valor_arbitrado: 498.52 (confirmado em 2 métodos)
+  numero_autos: 0803903-21.2023.8.15.2003 (confirmado em 2 métodos)
+  autor: JOSÉLIA MARIA GOMES BORGES (confirmado em 2 métodos)
+  parte_contraria: AUSÊNCIA JUSTIFICADA DO RELATOR QUE SE ENCONTRA EM GOZO DE FÉRIAS. (confirmado em 2 métodos)
+
+Exemplo 9 (confiança máxima: 10):
+  Arquivo: 000453082024815_cache.json
+  processo: 000453-08.2024.8.15 (confirmado em 10 métodos)
+  cpf_perito: 029.829.494-07 (confirmado em 2 métodos)
+  especialidade: Grafoscópico (confirmado em 2 métodos)
+  valor_arbitrado: 1500.00 (confirmado em 2 métodos)
+  numero_autos: 0863096-07.2022.8.15.2001 (confirmado em 2 métodos)
+  autor: MARCOS EVANGELISTA GONDIM DE VASCONCELOS (confirmado em 2 métodos)
+  parte_contraria: BANCO (confirmado em 2 métodos)
+
+Exemplo 10 (confiança máxima: 10):
+  Arquivo: 000121442024815_cache.json
+  processo: 000121-44.2024.8.15 (confirmado em 10 métodos)
+  juizo: Juízo da 2ª Vara Mista da Comarca de (confirmado em 2 métodos)
+  cpf_perito: 021.205.144-02 (confirmado em 2 métodos)
+  especialidade: Felipe Queiroga (confirmado em 2 métodos)
+  valor_arbitrado: 700.00 (confirmado em 2 métodos)
+  autor: IAGO MINERVINO DE CARVALHO (confirmado em 2 métodos)
+  parte_contraria: COSTA E PAU- (confirmado em 2 métodos)
+  comarca: Comarca de Comarca de (confirmado em 2 métodos)
+

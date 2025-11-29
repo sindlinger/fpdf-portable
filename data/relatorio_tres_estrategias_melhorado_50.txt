@@ -1,0 +1,51 @@
+RELATÓRIO - 3 ESTRATÉGIAS COM MELHORIAS IMPLEMENTADAS
+================================================================================
+
+ESTATÍSTICAS GERAIS POR ESTRATÉGIA:
+--------------------------------------------------------------------------------
+Métrica                                    PageText  AdvancedLayout LayoutPreserving
+--------------------------------------------------------------------------------
+Total de arquivos                                10              10              10
+Arquivos com dados                               10              10              10
+Páginas com dados                               249             249             249
+Docs Diretoria Especial                          23              23              23
+Extraídos com sucesso                            23              23              23
+Valores inferidos (tabela CNJ)                    0               0               0
+Buscas multi-página                              23              23              23
+Perito encontrado por CPF                         0               0               0
+--------------------------------------------------------------------------------
+Taxa de sucesso (%)                          100.0%          100.0%          100.0%
+
+
+EXTRAÇÃO POR CAMPO (COMPARAÇÃO COM VERSÃO ANTERIOR):
+--------------------------------------------------------------------------------
+Campo                            PageText     Anterior PT   Melhoria
+--------------------------------------------------------------------------------
+processo                   23 (100.0%)           91.3% ✓ +   8.7%
+numero_autos               21 ( 91.3%)           87.0% ✓ +   4.3%
+juizo                      23 (100.0%)           95.7% ✓ +   4.3%
+comarca                    23 (100.0%)           87.0% ✓ +  13.0%
+perito_nome                23 (100.0%)           87.0% ✓ +  13.0%
+cpf_perito                 23 (100.0%)           87.0% ✓ +  13.0%
+especialidade              23 (100.0%)           87.0% ✓ +  13.0%
+valor_arbitrado            23 (100.0%)           87.0% ✓ +  13.0%
+autor                      23 (100.0%)           95.7% ✓ +   4.3%
+parte_contraria            23 (100.0%)          100.0% →    0.0%
+destino                    23 (100.0%)           95.7% ✓ +   4.3%
+
+
+ANÁLISE DAS MELHORIAS IMPLEMENTADAS:
+--------------------------------------------------------------------------------
+
+PageText:
+  ✓ 23 buscas expandidas para páginas adjacentes
+
+AdvancedLayout:
+  ✓ 23 buscas expandidas para páginas adjacentes
+
+LayoutPreserving:
+  ✓ 23 buscas expandidas para páginas adjacentes
+
+
+DOCUMENTOS QUE AINDA FALHARAM:
+--------------------------------------------------------------------------------

@@ -1,0 +1,77 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>fpdf</AssemblyName>
+    <RootNamespace>FilterPDF</RootNamespace>
+    <StartupObject>FilterPDF.FilterPDFCLI_Refactored</StartupObject>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PublishDir>bin/</PublishDir>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <Version>3.47.0</Version>
+    <AssemblyVersion>3.47.0.0</AssemblyVersion>
+    <FileVersion>3.47.0.0</FileVersion>
+    <NoWarn>NU1701;CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CS8619;CS8625</NoWarn>
+    <DebugType>None</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BouncyCastle" Version="1.8.9" />
+    <PackageReference Include="iTextSharp" Version="5.5.13.3" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="6.0.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Serilog" Version="2.12.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="3.1.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="4.1.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+    <PackageReference Include="System.Drawing.Common" Version="6.0.0" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="6.0.0" />
+    <PackageReference Include="EPPlus" Version="6.2.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="old_code/**" />
+    <Compile Remove="tools/**" />
+    <Compile Remove="backups/**" />
+    <Compile Remove="tests/**" />
+    <Compile Remove="src/CLI/**" />
+  </ItemGroup>
+
+  <!-- Post-publish cleanup and installation -->
+  <Target Name="PostPublishCleanup" AfterTargets="Publish">
+    <PropertyGroup>
+      <PublishedBinary>$(PublishDir)fpdf</PublishedBinary>
+      <UserBinDir>$(HOME)/.local/bin</UserBinDir>
+    </PropertyGroup>
+    
+    <!-- Clean broken symlinks and old installations -->
+    <Exec Command="rm -f /usr/local/bin/fpdf 2>/dev/null || true" ContinueOnError="true" />
+    <Exec Command="sudo rm -f /usr/local/bin/fpdf 2>/dev/null || true" ContinueOnError="true" />
+    
+    <!-- Ensure user bin directory exists -->
+    <Exec Command="mkdir -p $(UserBinDir)" />
+    
+    <!-- Remove old installations in user directory -->
+    <Exec Command="rm -f $(UserBinDir)/fpdf 2>/dev/null || true" ContinueOnError="true" />
+    
+    <!-- Copy binary to user bin (NOT symlink) -->
+    <Exec Command="cp $(PublishedBinary) $(UserBinDir)/fpdf" />
+    <Exec Command="chmod +x $(UserBinDir)/fpdf" />
+    
+    <!-- Force bash to forget cached path -->
+    <Exec Command="hash -d fpdf 2>/dev/null || true" ContinueOnError="true" />
+    
+    <Message Text="Installed fpdf to $(UserBinDir)/fpdf" Importance="high" />
+    <Message Text="Run 'hash -r' in your terminal if fpdf is not found" Importance="high" />
+  </Target>
+
+</Project>
