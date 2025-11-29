@@ -18,8 +18,7 @@ namespace FilterPDF
     {
         public void Execute(string inputFile, PDFAnalysisResult analysis, string[] args)
         {
-            string dbPath = null;
-            bool useMcp = false;
+            string dbPath = "data/sqlite/sqlite-mcp.db";
 
             var terms = new List<string>();
             var headerTerms = new List<string>();
@@ -39,7 +38,6 @@ namespace FilterPDF
             {
                 var a = args[i];
                 if (a == "--db-path" && i + 1 < args.Length) { dbPath = args[++i]; continue; }
-                if (a == "--use-mcp") { useMcp = true; continue; }
                 if (a == "--header" && i + 1 < args.Length) { headerTerms.Add(args[++i]); continue; }
                 if (a == "--footer" && i + 1 < args.Length) { footerTerms.Add(args[++i]); continue; }
                 if (a == "--docs" && i + 1 < args.Length) { docTerms.Add(args[++i]); continue; }
@@ -59,13 +57,7 @@ namespace FilterPDF
 
             var hits = new List<Hit>();
 
-            // Se tiver db-path e existir, tenta buscar via SQLite; se usar MCP, ainda não implementado (aviso)
-            if (useMcp)
-            {
-                Console.WriteLine("(INFO) --use-mcp ainda não implementado; usando modo offline/local.");
-            }
-
-            if (!string.IsNullOrEmpty(dbPath) && File.Exists(dbPath) && !useMcp)
+            if (!string.IsNullOrEmpty(dbPath) && File.Exists(dbPath))
             {
                 try
                 {
@@ -74,79 +66,15 @@ namespace FilterPDF
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"(WARN) Falha ao buscar no SQLite ({dbPath}): {ex.Message}; usando cache in-memory");
+                    Console.WriteLine($"(WARN) Falha ao buscar no SQLite ({dbPath}): {ex.Message}");
+                    return;
                 }
             }
-
-            var pageSet = BuildPageSet(pageRange, analysis.Pages.Count);
-
-            // Texto (inclui header/footer se pedidos)
-            if (terms.Count > 0 || regexPattern != null)
+            else
             {
-                foreach (var page in analysis.Pages)
-                {
-                    if (limit.HasValue && hits.Count >= limit.Value) break;
-                    if (pageSet != null && !pageSet.Contains(page.PageNumber)) continue;
-                    if (minWords.HasValue && page.TextInfo?.WordCount < minWords.Value) continue;
-                    if (maxWords.HasValue && page.TextInfo?.WordCount > maxWords.Value) continue;
-                    if (!TypeMatches(typeFilter, page)) continue;
-
-                    var text = page.TextInfo?.PageText ?? string.Empty;
-                    var lines = text.Split('\n');
-
-                    if (headerTerms.Count > 0)
-                    {
-                        var header = string.Join("\n", lines.Take(5));
-                        CollectTextHits(page.PageNumber, "header", header, headerTerms, regexPattern, hits, limit);
-                    }
-                    if (footerTerms.Count > 0)
-                    {
-                        var footer = string.Join("\n", lines.Reverse().Take(5).Reverse());
-                        CollectTextHits(page.PageNumber, "footer", footer, footerTerms, regexPattern, hits, limit);
-                    }
-                    if (terms.Count > 0 && headerTerms.Count == 0 && footerTerms.Count == 0)
-                    {
-                        CollectTextHits(page.PageNumber, "text", text, terms, regexPattern, hits, limit);
-                    }
-                    if (limit.HasValue && hits.Count >= limit.Value) break;
-                }
+                Console.WriteLine($"Banco não encontrado em {dbPath}. Rode 'fpdf ingest-db .cache --db-path {dbPath}' primeiro.");
+                return;
             }
-
-            // Docs
-            foreach (var term in docTerms)
-            {
-                hits.AddRange(SearchInDocNames(analysis, term, pageSet, typeFilter, limit - hits.Count));
-                if (limit.HasValue && hits.Count >= limit.Value) break;
-            }
-
-            // Meta
-            foreach (var term in metaTerms)
-            {
-                var metaConcat = string.Join("\n", new[] { analysis.DocumentInfo?.Title, analysis.DocumentInfo?.Subject, analysis.DocumentInfo?.Keywords, analysis.DocumentInfo?.Author }.Where(s => !string.IsNullOrEmpty(s)));
-                if (!string.IsNullOrEmpty(metaConcat) && WordOption.Matches(metaConcat, term))
-                    hits.Add(new Hit { Page = 0, Scope = "meta", Term = term, Snippet = metaConcat });
-                if (limit.HasValue && hits.Count >= limit.Value) break;
-            }
-
-            // Fonts
-            foreach (var term in fontTerms)
-            {
-                var fonts = analysis.Fonts?.Select(f => f.Name).Where(n => !string.IsNullOrEmpty(n)).ToList() ?? new List<string>();
-                if (fonts.Any(f => WordOption.Matches(f, term)))
-                    hits.Add(new Hit { Page = 0, Scope = "fonts", Term = term, Snippet = string.Join(", ", fonts.Take(5)) });
-                if (limit.HasValue && hits.Count >= limit.Value) break;
-            }
-
-            // Objects
-            foreach (var term in objectTerms)
-            {
-                var objs = analysis.Objects?.Select(o => o.Type + " " + o.Name).ToList() ?? new List<string>();
-                if (objs.Any(o => WordOption.Matches(o, term)))
-                    hits.Add(new Hit { Page = 0, Scope = "objects", Term = term, Snippet = string.Join(", ", objs.Take(5)) });
-                if (limit.HasValue && hits.Count >= limit.Value) break;
-            }
-
-            Emit(hits, format);
         }
 
         private record Hit
