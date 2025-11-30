@@ -61,6 +61,9 @@ namespace FilterPDF.Utils
                     header TEXT,
                     footer TEXT,
                     type TEXT,
+                    has_money INTEGER DEFAULT 0,
+                    has_cpf INTEGER DEFAULT 0,
+                    fonts TEXT,
                     UNIQUE(cache_id, page_number)
                 );
 
@@ -91,6 +94,24 @@ namespace FilterPDF.Utils
                 CREATE INDEX IF NOT EXISTS idx_documents_process ON documents(process_id);
             ";
             cmd.ExecuteNonQuery();
+
+            // Migração leve: garantir colunas novas sem quebrar bases existentes
+            void TryAlter(string sql)
+            {
+                try
+                {
+                    using var c = conn.CreateCommand();
+                    c.CommandText = sql;
+                    c.ExecuteNonQuery();
+                }
+                catch
+                {
+                    // ignora se já existe
+                }
+            }
+            TryAlter("ALTER TABLE pages ADD COLUMN has_money INTEGER DEFAULT 0;");
+            TryAlter("ALTER TABLE pages ADD COLUMN has_cpf INTEGER DEFAULT 0;");
+            TryAlter("ALTER TABLE pages ADD COLUMN fonts TEXT;");
         }
 
         public static bool CacheExists(string dbPath, string cacheName)
@@ -127,11 +148,22 @@ namespace FilterPDF.Utils
                 foreach (var page in analysis.Pages)
                 {
                     var text = page?.TextInfo?.PageText ?? "";
+                    var header = string.Join("\n", text.Split('\n').Take(5));
+                    var footer = string.Join("\n", text.Split('\n').Reverse().Take(5).Reverse());
+                    var fonts = page?.TextInfo?.Fonts != null ? string.Join("|", page.TextInfo.Fonts.Select(f => f.Name)) : "";
+                    var hasMoney = HasMoney(text) ? 1 : 0;
+                    var hasCpf = HasCpf(text) ? 1 : 0;
                     using var ins = conn.CreateCommand();
-                    ins.CommandText = "INSERT INTO pages(cache_id,page_number,text) VALUES (@c,@p,@t)";
+                    ins.CommandText = @"INSERT INTO pages(cache_id,page_number,text,header,footer,has_money,has_cpf,fonts)
+                                        VALUES (@c,@p,@t,@h,@f,@m,@cpf,@fonts)";
                     ins.Parameters.AddWithValue("@c", cacheId);
                     ins.Parameters.AddWithValue("@p", page?.PageNumber ?? 0);
                     ins.Parameters.AddWithValue("@t", text);
+                    ins.Parameters.AddWithValue("@h", header);
+                    ins.Parameters.AddWithValue("@f", footer);
+                    ins.Parameters.AddWithValue("@m", hasMoney);
+                    ins.Parameters.AddWithValue("@cpf", hasCpf);
+                    ins.Parameters.AddWithValue("@fonts", fonts);
                     ins.ExecuteNonQuery();
                 }
             }
@@ -213,6 +245,18 @@ namespace FilterPDF.Utils
                 // swallow; return what we have
             }
             return list;
+        }
+
+        private static bool HasMoney(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            return System.Text.RegularExpressions.Regex.IsMatch(text, @"R\$ ?[0-9]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        }
+
+        private static bool HasCpf(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            return System.Text.RegularExpressions.Regex.IsMatch(text, @"\b\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}\\b|\b\\d{11}\\b");
         }
     }
 }

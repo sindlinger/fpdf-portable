@@ -60,7 +60,8 @@ namespace FilterPDF.Services
             // Check direct commands (formerly filter commands)
             var directCommands = new[] { "pages", "bookmarks", "words", "annotations", 
                                         "objects", "fonts", "metadata", "structure", 
-                                        "modifications", "documents", "images", "base64", "scanned", "stats", "doctypes" };
+                                        "modifications", "documents", "images", "base64", "scanned", "stats", "doctypes",
+                                        "doctype-set" };
             return directCommands.Contains(name.ToLower());
         }
 

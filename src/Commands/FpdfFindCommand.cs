@@ -34,6 +34,8 @@ namespace FilterPDF
             string format = "txt";
             bool wantBBox = false;
             string regexPattern = null;
+            bool? hasMoney = null;
+            bool? hasCpf = null;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -52,6 +54,8 @@ namespace FilterPDF
                 if (a == "--meta" && i + 1 < args.Length) { metaTerms.Add(args[++i]); continue; }
                 if (a == "--fonts" && i + 1 < args.Length) { fontTerms.Add(args[++i]); continue; }
                 if (a == "--objects" && i + 1 < args.Length) { objectTerms.Add(args[++i]); continue; }
+                if (a == "--has-money") { hasMoney = true; continue; }
+                if (a == "--has-cpf") { hasCpf = true; continue; }
                 if ((a == "--pages" || a == "-p") && i + 1 < args.Length) { pageRange = args[++i]; continue; }
                 if (a == "--min-words" && i + 1 < args.Length && int.TryParse(args[++i], out var mw)) { minWords = mw; continue; }
                 if (a == "--max-words" && i + 1 < args.Length && int.TryParse(args[++i], out var xw)) { maxWords = xw; continue; }
@@ -70,7 +74,8 @@ namespace FilterPDF
                     SearchInSqlite(dbPath,
                         terms, headerTerms, footerTerms,
                         docTerms, metaTerms, fontTerms, objectTerms,
-                        pageRange, minWords, maxWords, typeFilter, limit, format, wantBBox, regexPattern);
+                        pageRange, minWords, maxWords, typeFilter, limit, format, wantBBox, regexPattern,
+                        hasMoney, hasCpf);
                     return;
                 }
                 catch (Exception ex)
@@ -97,7 +102,8 @@ namespace FilterPDF
         private void SearchInSqlite(string dbPath,
             List<string> terms, List<string> headerTerms, List<string> footerTerms,
             List<string> docTerms, List<string> metaTerms, List<string> fontTerms, List<string> objectTerms,
-            string pageRange, int? minWords, int? maxWords, string typeFilter, int? limit, string format, bool wantBBox, string regexPattern)
+            string pageRange, int? minWords, int? maxWords, string typeFilter, int? limit, string format, bool wantBBox, string regexPattern,
+            bool? hasMoney, bool? hasCpf)
         {
             Utils.SqliteCacheStore.EnsureDatabase(dbPath);
             var hits = new List<Hit>();
@@ -141,7 +147,7 @@ namespace FilterPDF
 
                 if (!ftsTried || (limit.HasValue && hits.Count < limit.Value))
                 {
-                    var sql = "SELECT p.page_number, p.text FROM pages p JOIN caches c ON c.id = p.cache_id";
+                    var sql = "SELECT p.page_number, p.text, p.has_money, p.has_cpf, p.fonts FROM pages p JOIN caches c ON c.id = p.cache_id";
                     using var cmd = new System.Data.SQLite.SQLiteCommand(sql, conn);
                     using var reader = cmd.ExecuteReader();
                     while (reader.Read())
@@ -149,6 +155,13 @@ namespace FilterPDF
                         int pageNum = reader.GetInt32(0);
                         if (pageSet != null && !pageSet.Contains(pageNum)) continue;
                         string text = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                        int pageHasMoney = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
+                        int pageHasCpf = reader.IsDBNull(3) ? 0 : reader.GetInt32(3);
+                        string pageFonts = reader.IsDBNull(4) ? "" : reader.GetString(4);
+
+                        if (hasMoney == true && pageHasMoney == 0) continue;
+                        if (hasCpf == true && pageHasCpf == 0) continue;
+
                         int wordCount = text.Split(new[]{' ','\n','\t'}, StringSplitOptions.RemoveEmptyEntries).Length;
                         if (minWords.HasValue && wordCount < minWords.Value) continue;
                         if (maxWords.HasValue && wordCount > maxWords.Value) continue;
@@ -164,7 +177,21 @@ namespace FilterPDF
                             var footer = string.Join("\n", lines.Reverse().Take(5).Reverse());
                             CollectTextHits(pageNum, "footer", footer, footerTerms, regexPattern, hits, limit);
                         }
-                        if (terms.Count > 0 && headerTerms.Count == 0 && footerTerms.Count == 0)
+                        if (fontTerms.Count > 0)
+                        {
+                            bool fontOk = true;
+                            foreach (var fterm in fontTerms)
+                            {
+                                var ors = fterm.Split('|', StringSplitOptions.RemoveEmptyEntries);
+                                bool any = ors.Any(o => WordOption.Matches(pageFonts ?? "", o));
+                                if (!any) { fontOk = false; break; }
+                            }
+                            if (!fontOk) continue;
+                        }
+
+                        // Sempre verificar o texto, mesmo quando header/footer foram fornecidos,
+                        // para permitir AND entre cabeçalho/rodapé e corpo.
+                        if (terms.Count > 0 || regexPattern != null)
                         {
                             CollectTextHits(pageNum, "text", text, terms, regexPattern, hits, limit);
                         }

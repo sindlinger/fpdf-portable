@@ -198,9 +198,74 @@ namespace FilterPDF.Services
                     }
                     new FpdfDocTypesCommand(analysisResult, outputOptions, filterOptions, cacheIndex, this).Execute();
                     break;
+                case "doctype-set":
+                    HandleDoctypeSet(args);
+                    break;
                 default:
                     Console.WriteLine($"Error: Unknown command '{commandName}'");
                     break;
+            }
+        }
+
+        private void HandleDoctypeSet(string[] args)
+        {
+            if (args.Length < 2)
+            {
+                Console.WriteLine("Usage: fpdf doctype-set <cache_name> <doc_type> [confidence]");
+                return;
+            }
+
+            var cacheName = args[0];
+            var docType = args[1];
+            double confidence = 0.95;
+            if (args.Length >= 3 && double.TryParse(args[2], out var c))
+                confidence = c;
+
+            var dbPath = Utils.SqliteCacheStore.DefaultDbPath;
+            try
+            {
+                Utils.SqliteCacheStore.EnsureDatabase(dbPath);
+                using var conn = new System.Data.SQLite.SQLiteConnection($"Data Source={dbPath};Version=3;");
+                conn.Open();
+                using var cmd = new System.Data.SQLite.SQLiteCommand("SELECT id FROM caches WHERE name=@name LIMIT 1", conn);
+                cmd.Parameters.AddWithValue("@name", cacheName);
+                var found = cmd.ExecuteScalar();
+                if (found == null)
+                {
+                    Console.WriteLine($"Cache '{cacheName}' not found in database {dbPath}");
+                    return;
+                }
+                long cacheId = (long)(found);
+
+                using var ensure = new System.Data.SQLite.SQLiteCommand(@"
+                    CREATE TABLE IF NOT EXISTS doc_classified (
+                        cache_id INTEGER PRIMARY KEY,
+                        cache_name TEXT,
+                        doc_type TEXT,
+                        confidence REAL,
+                        reason TEXT
+                    );", conn);
+                ensure.ExecuteNonQuery();
+
+                using var upsert = new System.Data.SQLite.SQLiteCommand(@"
+                    INSERT INTO doc_classified (cache_id, cache_name, doc_type, confidence, reason)
+                    VALUES (@id, @name, @type, @conf, 'manual')
+                    ON CONFLICT(cache_id) DO UPDATE SET
+                        cache_name=excluded.cache_name,
+                        doc_type=excluded.doc_type,
+                        confidence=excluded.confidence,
+                        reason='manual';", conn);
+                upsert.Parameters.AddWithValue("@id", cacheId);
+                upsert.Parameters.AddWithValue("@name", cacheName);
+                upsert.Parameters.AddWithValue("@type", docType);
+                upsert.Parameters.AddWithValue("@conf", confidence);
+                upsert.ExecuteNonQuery();
+
+                Console.WriteLine($"✅ set doc_type='{docType}' for cache '{cacheName}' (id {cacheId}) with confidence {confidence}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error setting doc_type: {ex.Message}");
             }
         }
 
