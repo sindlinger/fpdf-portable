@@ -30,7 +30,8 @@ namespace FilterPDF.Utils
                     source TEXT,
                     created_at TEXT,
                     mode TEXT,
-                    size_bytes INTEGER
+                    size_bytes INTEGER,
+                    process_number TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS processes (
@@ -112,6 +113,7 @@ namespace FilterPDF.Utils
             TryAlter("ALTER TABLE pages ADD COLUMN has_money INTEGER DEFAULT 0;");
             TryAlter("ALTER TABLE pages ADD COLUMN has_cpf INTEGER DEFAULT 0;");
             TryAlter("ALTER TABLE pages ADD COLUMN fonts TEXT;");
+            TryAlter("ALTER TABLE caches ADD COLUMN process_number TEXT;");
         }
 
         public static bool CacheExists(string dbPath, string cacheName)
@@ -133,7 +135,8 @@ namespace FilterPDF.Utils
             conn.Open();
             using var tx = conn.BeginTransaction();
 
-            long cacheId = InsertOrUpdateCache(conn, cacheName, sourcePath, mode, 0);
+            var inferredProcess = InferProcessFromName(cacheName);
+            long cacheId = InsertOrUpdateCache(conn, cacheName, sourcePath, mode, 0, inferredProcess);
 
             // Clear old pages for idempotency
             using (var del = conn.CreateCommand())
@@ -192,16 +195,17 @@ namespace FilterPDF.Utils
             return list;
         }
 
-        private static long InsertOrUpdateCache(SQLiteConnection conn, string cacheName, string sourcePath, string mode, long sizeBytes)
+        private static long InsertOrUpdateCache(SQLiteConnection conn, string cacheName, string sourcePath, string mode, long sizeBytes, string? processNumber)
         {
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"INSERT INTO caches(name, source, created_at, mode, size_bytes, json)
-                                VALUES (@n,@s,@c,@m,@sz,NULL)
+            cmd.CommandText = @"INSERT INTO caches(name, source, created_at, mode, size_bytes, json, process_number)
+                                VALUES (@n,@s,@c,@m,@sz,NULL,@p)
                                 ON CONFLICT(name) DO UPDATE SET
                                   source=excluded.source,
                                   created_at=excluded.created_at,
                                   mode=excluded.mode,
-                                  size_bytes=excluded.size_bytes
+                                  size_bytes=excluded.size_bytes,
+                                  process_number=COALESCE(excluded.process_number, caches.process_number)
                                 ;
                                 SELECT id FROM caches WHERE name=@n LIMIT 1;";
             cmd.Parameters.AddWithValue("@n", cacheName);
@@ -209,6 +213,7 @@ namespace FilterPDF.Utils
             cmd.Parameters.AddWithValue("@c", DateTime.UtcNow.ToString("s"));
             cmd.Parameters.AddWithValue("@m", mode);
             cmd.Parameters.AddWithValue("@sz", sizeBytes);
+            cmd.Parameters.AddWithValue("@p", (object?)processNumber ?? DBNull.Value);
             var result = cmd.ExecuteScalar();
             return (result is long l) ? l : Convert.ToInt64(result);
         }
@@ -217,6 +222,15 @@ namespace FilterPDF.Utils
         {
             if (string.IsNullOrWhiteSpace(text)) return 0;
             return text.Split(new[] { ' ', '\n', '\t', '\r' }, StringSplitOptions.RemoveEmptyEntries).Length;
+        }
+
+        private static string? InferProcessFromName(string cacheName)
+        {
+            if (string.IsNullOrEmpty(cacheName)) return null;
+            // Padrão SEI: 000121-44.2024.8.15.
+            var m = System.Text.RegularExpressions.Regex.Match(cacheName, @"\d{6}-\d{2}\.\d{4}\.\d\.\d{2}");
+            if (m.Success) return m.Value;
+            return null;
         }
 
         private static IEnumerable<(int pageNumber, string text)> ExtractPages(string jsonString)
