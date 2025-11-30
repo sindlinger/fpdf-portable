@@ -258,31 +258,10 @@ namespace FilterPDF
             {
                 if (string.IsNullOrWhiteSpace(raw)) continue;
 
-                var term = raw.Trim();
-                bool exact = term.StartsWith("!") ||
-                             (term.Length >= 2 && ((term.StartsWith("\"") && term.EndsWith("\"")) ||
-                                                   (term.StartsWith("'") && term.EndsWith("'"))));
-
-                string clean = term;
-                if (clean.StartsWith("!")) clean = clean.Substring(1);
-                if (clean.Length >= 2 &&
-                    ((clean.StartsWith("\"") && clean.EndsWith("\"")) ||
-                     (clean.StartsWith("'") && clean.EndsWith("'"))))
-                {
-                    clean = clean.Substring(1, clean.Length - 2);
-                }
-
-                int idx;
-                if (exact)
-                {
-                    idx = text.IndexOf(clean);
-                }
-                else
-                {
-                    var normalizedText = WordOption.NormalizeText(text);
-                    var normalizedTerm = WordOption.NormalizeText(clean.Trim('~'));
-                    idx = normalizedText.IndexOf(normalizedTerm);
-                }
+                var (mode, clean) = WordOption.DetectMode(raw);
+                int idx = mode == WordOption.MatchMode.Exact
+                    ? text.IndexOf(clean)
+                    : WordOption.NormalizeText(text).IndexOf(WordOption.NormalizeText(clean.Trim('~')));
 
                 if (idx >= 0 && idx < best) best = idx;
             }

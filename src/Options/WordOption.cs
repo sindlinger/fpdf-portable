@@ -14,6 +14,7 @@ namespace FilterPDF.Options
     ///   ~word~   => force normalized (compat)
     ///   !word    => EXACT (case/accents) without normalization
     ///   "word" / 'word' => EXACT (case/accents) without normalization (aspas envolvem todo o termo)
+    ///   term com espaço (frase) => tratado como exato por padrão (como se estivesse entre aspas)
     /// </summary>
     public static class WordOption
     {
@@ -150,11 +151,14 @@ namespace FilterPDF.Options
             }
         }
 
-        private enum MatchMode { Normalized, Exact }
+        public enum MatchMode { Normalized, Exact }
 
-        private static (MatchMode mode, string term) DetectMode(string raw)
+        public static (MatchMode mode, string term) DetectMode(string raw)
         {
             var (normFlag, term) = CheckNormalizationSyntax(raw);
+            if (string.IsNullOrWhiteSpace(term))
+                return (MatchMode.Normalized, term);
+
             // Aspas simples ou duplas envolvendo todo o termo => modo exato
             if ((term.Length >= 2 && term.StartsWith("\"") && term.EndsWith("\"")) ||
                 (term.Length >= 2 && term.StartsWith("'") && term.EndsWith("'")))
@@ -163,6 +167,11 @@ namespace FilterPDF.Options
             }
             if (term.StartsWith("!"))
                 return (MatchMode.Exact, term.Substring(1));
+
+            // Se o termo contém espaço, consideramos frase exata (equivalente a ter aspas)
+            if (term.Any(char.IsWhiteSpace))
+                return (MatchMode.Exact, term);
+
             if (normFlag)
                 return (MatchMode.Normalized, term);
             return (MatchMode.Normalized, term);
