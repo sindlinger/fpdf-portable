@@ -10,7 +10,7 @@ namespace FilterPDF
     /// <summary>
     /// Ingesta caches/analysis em um SQLite local (ou MCP, futuro) preenchendo
     /// as tabelas definidas em scripts/init_db.sql: processes, documents, pages, field_hits.
-    /// Uso: fpdf ingest-db <cache|range|dir|pdf> --db-path data/sqlite/sqlite-mcp.db
+    /// Uso: fpdf ingest-db <cache|range|dir|pdf> (db padrão: data/sqlite/sqlite-mcp.db)
     /// </summary>
     public class FpdfIngestDbCommand : Command
     {
@@ -20,7 +20,7 @@ namespace FilterPDF
         public override void ShowHelp()
         {
             Console.WriteLine("Uso: fpdf ingest-db <cache|range|dir|pdf> [--db-path path]");
-            Console.WriteLine("Exemplo: fpdf ingest-db .cache --db-path data/sqlite/sqlite-mcp.db");
+            Console.WriteLine("Exemplo: fpdf ingest-db .cache (db padrão: data/sqlite/sqlite-mcp.db)");
         }
 
         public override void Execute(string[] args)

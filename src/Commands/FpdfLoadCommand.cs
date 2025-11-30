@@ -259,6 +259,11 @@ namespace FilterPDF
                 ApplySubcommandSettings("ultra", options);
             }
             
+            if (string.IsNullOrWhiteSpace(options.DbPath))
+            {
+                options.DbPath = FilterPDF.Utils.SqliteCacheStore.DefaultDbPath;
+            }
+            Console.WriteLine($"[INFO] Usando banco SQLite em: {options.DbPath}");
             Console.WriteLine($"Load: Pre-processing {inputFiles.Count} file(s)");
             Console.WriteLine($"   Options: {(options.ExtractRaw ? "RAW" : "")} {(options.ExtractText ? "TEXT" : "")} {(options.ExtractUltra ? "ULTRA" : "")}");
             Console.WriteLine($"   Workers: {options.NumWorkers}");

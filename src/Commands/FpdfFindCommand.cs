@@ -67,6 +67,10 @@ namespace FilterPDF
                 terms.Add(a);
             }
 
+            if (string.IsNullOrWhiteSpace(dbPath)) dbPath = Utils.SqliteCacheStore.DefaultDbPath;
+
+            Console.WriteLine($"[INFO] Usando banco SQLite em: {dbPath}");
+
             if (!string.IsNullOrEmpty(dbPath) && File.Exists(dbPath))
             {
                 try
