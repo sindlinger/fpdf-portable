@@ -52,7 +52,7 @@ namespace FilterPDF
                     break;
                     
                 case "rebuild":
-                    RebuildIndex(args.Skip(1).ToArray());
+                    Console.WriteLine("Rebuild não é necessário: cache é mantido em SQLite.");
                     break;
                     
                 default:
@@ -156,19 +156,11 @@ namespace FilterPDF
         {
             var stats = CacheManager.GetCacheStats();
             
-            Console.WriteLine("CACHE STATISTICS:");
+            Console.WriteLine("CACHE (SQLite):");
             Console.WriteLine();
-            Console.WriteLine($"Cache Directory: {stats.CacheDirectory}");
-            Console.WriteLine($"Total PDFs: {stats.TotalEntries}");
-            Console.WriteLine($"Cache Size: {stats.TotalCacheSize / (1024 * 1024):N1} MB");
-            Console.WriteLine($"Original Size: {stats.TotalOriginalSize / (1024 * 1024):N1} MB");
-            
-            if (stats.TotalOriginalSize > 0)
-            {
-                var compressionRatio = (double)stats.TotalCacheSize / stats.TotalOriginalSize;
-                Console.WriteLine($"Compression: {compressionRatio:P1}");
-            }
-            
+            Console.WriteLine($"DB Path: {stats.CacheDirectory}");
+            Console.WriteLine($"Total caches: {stats.TotalEntries}");
+            Console.WriteLine($"Bytes registrados: {stats.TotalCacheSize / (1024 * 1024):N1} MB");
             Console.WriteLine($"Last Updated: {stats.LastUpdated:yyyy-MM-dd HH:mm:ss}");
             Console.WriteLine();
             
@@ -273,79 +265,7 @@ namespace FilterPDF
             Console.WriteLine("CACHE INDEX REBUILD");
             Console.WriteLine("===================");
             Console.WriteLine();
-            Console.WriteLine("This command reconstructs the cache index (index.json) from all existing");
-            Console.WriteLine("cache files in the .cache directory. Useful when:");
-            Console.WriteLine("  - The index is corrupted or out of sync");
-            Console.WriteLine("  - Multiple workers caused race conditions during batch processing");
-            Console.WriteLine("  - Cache files exist but are not listed in 'cache list'");
-            Console.WriteLine();
-            
-            // Verificar se o diretório de cache existe
-            var cacheDir = Path.Combine(Environment.CurrentDirectory, ".cache");
-            if (!Directory.Exists(cacheDir))
-            {
-                Console.Error.WriteLine("Error: Cache directory does not exist at: " + cacheDir);
-                Console.Error.WriteLine("No cache files to rebuild from.");
-                Environment.Exit(1);
-            }
-            
-            // OTIMIZAÇÃO: Não listar todos os arquivos para evitar lentidão
-            var cacheFiles = new string[0];
-            
-            Console.WriteLine($"Found {cacheFiles.Length} cache files in directory");
-            
-            if (cacheFiles.Length == 0)
-            {
-                Console.WriteLine("No cache files found. Nothing to rebuild.");
-                return;
-            }
-            
-            // Backup do índice existente se houver
-            var indexFile = Path.Combine(cacheDir, "index.json");
-            if (File.Exists(indexFile))
-            {
-                var backupFile = Path.Combine(cacheDir, $"index.backup.{DateTime.Now:yyyyMMddHHmmss}.json");
-                File.Copy(indexFile, backupFile);
-                Console.WriteLine($"Backed up existing index to: {Path.GetFileName(backupFile)}");
-            }
-            
-            if (!force)
-            {
-                Console.WriteLine();
-                Console.Write("This will rebuild the entire index. Continue? (y/N): ");
-                var response = Console.ReadLine();
-                if (response?.ToLower() != "y" && response?.ToLower() != "yes")
-                {
-                    Console.WriteLine("Rebuild cancelled.");
-                    return;
-                }
-            }
-            
-            Console.WriteLine();
-            Console.WriteLine("Rebuilding index...");
-            
-            // Rebuild index
-            var startTime = DateTime.Now;
-            var rebuilt = CacheManager.RebuildIndexFromFiles();
-            var duration = DateTime.Now - startTime;
-            
-            Console.WriteLine();
-            Console.WriteLine($"REBUILD COMPLETE");
-            Console.WriteLine($"================");
-            Console.WriteLine($"Successfully rebuilt index with {rebuilt} entries");
-            Console.WriteLine($"Time taken: {duration.TotalSeconds:F2} seconds");
-            Console.WriteLine($"Missing entries recovered: {cacheFiles.Length - rebuilt}");
-            Console.WriteLine();
-            Console.WriteLine("Use 'fpdf cache list' to see all cached PDFs");
-            
-            if (verbose)
-            {
-                Console.WriteLine();
-                Console.WriteLine("Note: Rebuilt entries have:");
-                Console.WriteLine("  - Mode: 'unknown' (original extraction mode not recoverable)");
-                Console.WriteLine("  - Original size: 0 (original file size not stored)");
-                Console.WriteLine("  - Creation date from cache file timestamp");
-            }
+            Console.WriteLine("Rebuild não é necessário: cache está em SQLite.");
         }
         
         public override void ShowHelp()
@@ -371,10 +291,6 @@ namespace FilterPDF
             Console.WriteLine("CLEAR OPTIONS:");
             Console.WriteLine("    -f, --force           Force clear without confirmation");
             Console.WriteLine();
-            Console.WriteLine("REBUILD OPTIONS:");
-            Console.WriteLine("    -f, --force           Skip confirmation prompt");
-            Console.WriteLine("    -v, --verbose         Show detailed information about rebuild");
-            Console.WriteLine();
             Console.WriteLine("EXAMPLES:");
             Console.WriteLine($"    fpdf {Name} list");
             Console.WriteLine($"    fpdf {Name} list -v");
@@ -382,14 +298,6 @@ namespace FilterPDF
             Console.WriteLine($"    fpdf {Name} find documento");
             Console.WriteLine($"    fpdf {Name} remove documento");
             Console.WriteLine($"    fpdf {Name} clear --force");
-            Console.WriteLine($"    fpdf {Name} rebuild");
-            Console.WriteLine($"    fpdf {Name} rebuild --force --verbose");
-            Console.WriteLine();
-            Console.WriteLine("REBUILD USE CASES:");
-            Console.WriteLine("    1. After batch processing with multiple workers failed to index all files");
-            Console.WriteLine("    2. When 'cache list' shows fewer entries than actual cache files");
-            Console.WriteLine("    3. To recover from corrupted or missing index.json");
-            Console.WriteLine("    4. After manual deletion of index.json");
             Console.WriteLine();
             Console.WriteLine("WORKFLOW:");
             Console.WriteLine("    1. Load PDFs: fpdf load document.pdf");

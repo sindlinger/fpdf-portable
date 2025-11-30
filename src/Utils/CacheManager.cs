@@ -61,7 +61,7 @@ namespace FilterPDF
         /// </summary>
         public static void AddToCache(string originalPdfPath, string cacheFilePath, string extractionMode = "both")
         {
-            // A escrita real é feita pelo SqliteCacheStore.UpsertCache; aqui só garantimos schema
+            // Compat: escrita real é feita pelo SqliteCacheStore.UpsertCache; aqui só garantimos schema
             EnsureDb();
         }
         
@@ -96,18 +96,31 @@ namespace FilterPDF
         {
             EnsureDb();
             var list = new List<CacheEntry>();
-            var names = SqliteCacheStore.ListCacheNames(DbPath);
-            foreach (var name in names)
+            using var conn = new SQLiteConnection($"Data Source={DbPath};Version=3;");
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT name, source, created_at, size_bytes, mode FROM caches ORDER BY name";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
             {
+                var name = r.IsDBNull(0) ? "" : r.GetString(0);
+                var source = r.IsDBNull(1) ? "" : r.GetString(1);
+                var created = r.IsDBNull(2) ? "" : r.GetString(2);
+                var size = r.IsDBNull(3) ? 0 : r.GetInt64(3);
+                var mode = r.IsDBNull(4) ? "sqlite" : r.GetString(4);
+                if (!DateTime.TryParse(created, out var cachedAt))
+                    cachedAt = DateTime.UtcNow;
+
                 list.Add(new CacheEntry
                 {
-                    OriginalFileName = name + ".pdf",
-                    OriginalPath = name + ".pdf",
-                    CacheFileName = name + "._cache.json",
+                    OriginalFileName = string.IsNullOrEmpty(source) ? name + ".pdf" : Path.GetFileName(source),
+                    OriginalPath = source,
+                    CacheFileName = name + ".sqlite",
                     CachePath = $"db://{DbPath}#{name}",
-                    CachedDate = DateTime.Now,
-                    CacheSize = 0,
-                    ExtractionMode = "sqlite",
+                    CachedDate = cachedAt,
+                    OriginalSize = size,
+                    CacheSize = size,
+                    ExtractionMode = mode ?? "sqlite",
                     Version = "sqlite"
                 });
             }
@@ -189,15 +202,29 @@ namespace FilterPDF
         /// </summary>
         public static CacheStats GetCacheStats()
         {
-            var entries = ListCachedPDFs();
+            EnsureDb();
+            int total = 0;
+            long totalSize = 0;
+            using var conn = new SQLiteConnection($"Data Source={DbPath};Version=3;");
+            conn.Open();
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT COUNT(*), COALESCE(SUM(size_bytes),0) FROM caches";
+                using var r = cmd.ExecuteReader();
+                if (r.Read())
+                {
+                    total = r.IsDBNull(0) ? 0 : r.GetInt32(0);
+                    totalSize = r.IsDBNull(1) ? 0 : r.GetInt64(1);
+                }
+            }
 
             return new CacheStats
             {
-                TotalEntries = entries.Count,
-                TotalCacheSize = entries.Sum(e => e.CacheSize),
-                TotalOriginalSize = entries.Sum(e => e.OriginalSize),
+                TotalEntries = total,
+                TotalCacheSize = totalSize,
+                TotalOriginalSize = totalSize,
                 CacheDirectory = DbPath,
-                LastUpdated = DateTime.Now
+                LastUpdated = DateTime.UtcNow
             };
         }
         
@@ -230,82 +257,8 @@ namespace FilterPDF
         /// <returns>Número de entradas reconstruídas no índice</returns>
         public static int RebuildIndexFromFiles()
         {
-            lock (indexLock)
-            {
-                var newIndex = new CacheIndex();
-                // OTIMIZAÇÃO: Não listar todos os arquivos automaticamente para evitar lentidão
-                var cacheFiles = new string[0]; // Array vazio - rebuild só quando necessário
-                
-                int processed = 0;
-                int failed = 0;
-                
-                foreach (var cacheFile in cacheFiles)
-                {
-                    try
-                    {
-                        // Validar que é um arquivo de cache válido
-                        var cacheFileName = Path.GetFileName(cacheFile);
-                        if (!cacheFileName.EndsWith("_cache.json") || cacheFileName == "index.json")
-                        {
-                            continue;
-                        }
-                        
-                        // Extrair o nome do arquivo original do nome do cache
-                        var fileName = cacheFileName.Replace("_cache.json", "");
-                        
-                        // Validar que o arquivo existe e é legível
-                        var fileInfo = new FileInfo(cacheFile);
-                        if (!fileInfo.Exists || fileInfo.Length == 0)
-                        {
-                            Console.WriteLine($"  Warning: Skipping empty or missing file: {cacheFileName}");
-                            failed++;
-                            continue;
-                        }
-                        
-                        // Tentar detectar o modo de extração pelo tamanho do arquivo
-                        string extractionMode = "unknown";
-                        if (fileInfo.Length > 5 * 1024 * 1024) // > 5MB provavelmente é ultra
-                        {
-                            extractionMode = "ultra";
-                        }
-                        else if (fileInfo.Length < 100 * 1024) // < 100KB provavelmente é text
-                        {
-                            extractionMode = "text";
-                        }
-                        
-                        // Criar entrada baseada no arquivo de cache
-                        var entry = new CacheEntry
-                        {
-                            OriginalFileName = fileName + ".pdf",
-                            OriginalPath = fileName + ".pdf", // Não temos o caminho original
-                            CacheFileName = cacheFileName,
-                            CachePath = Path.GetFullPath(cacheFile),
-                            CachedDate = File.GetCreationTime(cacheFile),
-                            OriginalSize = 0, // Não temos o tamanho original
-                            CacheSize = fileInfo.Length,
-                            ExtractionMode = extractionMode,
-                            Version = "2.12.0"
-                        };
-                        
-                        // Adicionar ao novo índice
-                        newIndex.Entries[fileName] = entry;
-                        processed++;
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"  Error processing {Path.GetFileName(cacheFile)}: {ex.Message}");
-                        failed++;
-                    }
-                }
-                
-                if (failed > 0)
-                {
-                    Console.WriteLine($"  Processed: {processed} files, Failed: {failed} files");
-                }
-                
-                // Índice legacy removido na migração para SQLite; não salvar em arquivo
-                return newIndex.Entries.Count;
-            }
+            Console.WriteLine("Rebuild não é necessário: cache agora é armazenado em SQLite.");
+            return 0;
         }
         
         /// <summary>
