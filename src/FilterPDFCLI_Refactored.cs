@@ -114,20 +114,29 @@ namespace FilterPDF
                     break;
                     
                 case CommandType.AnalysisCommandWithoutContext:
-                    Console.WriteLine(LanguageManager.GetMessage("error_command_needs_cache", arguments.CommandName));
-                    Console.WriteLine();
-                    Console.WriteLine(LanguageManager.GetMessage("how_to_use"));
-                    Console.WriteLine(LanguageManager.GetMessage("step_1_load"));
-                    Console.WriteLine("   fpdf load arquivo.pdf ultra");
-                    Console.WriteLine();
-                    Console.WriteLine(LanguageManager.GetMessage("step_2_use_cache"));
-                    Console.WriteLine($"   fpdf 1 {arguments.CommandName} [opções]");
-                    Console.WriteLine();
-                    Console.WriteLine(LanguageManager.GetMessage("examples"));
-                    Console.WriteLine($"   fpdf 1 {arguments.CommandName}");
-                    Console.WriteLine($"   fpdf 1 {arguments.CommandName} --help");
-                    Console.WriteLine();
-                    Console.WriteLine(LanguageManager.GetMessage("view_loaded_pdfs"));
+                    if (arguments.CommandName.Equals("find", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Permitir find direto no SQLite com --db-path (sem cache index)
+                        var finder = new FpdfFindCommand();
+                        finder.Execute(string.Empty, null, arguments.Arguments ?? Array.Empty<string>());
+                    }
+                    else
+                    {
+                        Console.WriteLine(LanguageManager.GetMessage("error_command_needs_cache", arguments.CommandName));
+                        Console.WriteLine();
+                        Console.WriteLine(LanguageManager.GetMessage("how_to_use"));
+                        Console.WriteLine(LanguageManager.GetMessage("step_1_load"));
+                        Console.WriteLine("   fpdf load arquivo.pdf ultra");
+                        Console.WriteLine();
+                        Console.WriteLine(LanguageManager.GetMessage("step_2_use_cache"));
+                        Console.WriteLine($"   fpdf 1 {arguments.CommandName} [opções]");
+                        Console.WriteLine();
+                        Console.WriteLine(LanguageManager.GetMessage("examples"));
+                        Console.WriteLine($"   fpdf 1 {arguments.CommandName}");
+                        Console.WriteLine($"   fpdf 1 {arguments.CommandName} --help");
+                        Console.WriteLine();
+                        Console.WriteLine(LanguageManager.GetMessage("view_loaded_pdfs"));
+                    }
                     break;
                     
                 default:
@@ -297,23 +306,22 @@ namespace FilterPDF
         private void ShowHelp()
         {
             Console.WriteLine("FPDF Portable CLI\n");
-            Console.WriteLine("Uso geral (SQLite-only):");
-            Console.WriteLine("  fpdf load <pdf|dir|pattern> [opções]                 --db-path <db>");
-            Console.WriteLine("  fpdf find <cache|range|pdf|dir> [flags]              --db-path <db>");
-            Console.WriteLine("  fpdf cache list                                      --db-path <db>\n");
+            Console.WriteLine("Uso geral (SQLite-only, db-path padrão: data/sqlite/sqlite-mcp.db):");
+            Console.WriteLine("  fpdf load <pdf|dir|pattern> [opções]                 [--db-path <db>]");
+            Console.WriteLine("  fpdf find <termos> [flags]                           [--db-path <db>] [--cache <nome>]");
+            Console.WriteLine("  fpdf cache list                                      [--db-path <db>]\n");
 
             Console.WriteLine("Flags do find:");
             Console.WriteLine("  --text term (default) | --header term | --footer term | --docs term | --meta term | --fonts term | --objects term");
             Console.WriteLine("  --pages A-B | --min-words N | --max-words N | --type T | --limit N | -F txt|json|csv|count | --bbox | --regex PAT");
-            Console.WriteLine("  AND por espaço, OR com '|', sensível com '!'. Default busca no texto.\n");
-
-            Console.WriteLine("DB:");
-            Console.WriteLine("  --db-path data/sqlite/sqlite-mcp.db (padrão) — caches identificados por nome; JSON não é usado");
+            Console.WriteLine("  AND por espaço, OR com '|', sensível com '!'. Default busca no texto.");
+            Console.WriteLine("  --cache <nome> limita a um cache específico (opcional)");
+            Console.WriteLine("  --db-path <db> opcional (default: data/sqlite/sqlite-mcp.db)\n");
 
             Console.WriteLine("Exemplos:");
             Console.WriteLine("  fpdf load arquivos/*.pdf ultra");
-            Console.WriteLine("  fpdf 1 find --text autorizacao pagamento --header 'diretoria especial' --limit 200");
-            Console.WriteLine("  fpdf find diretorio/ --docs certidao --pages 1-5 -F json\n");
+            Console.WriteLine("  fpdf find assessoria magistratura certidao Robson --limit 20 -F txt");
+            Console.WriteLine("  fpdf find ""nota de empenho"" --pages 1-5 -F json\n");
         }
 
         private void ShowCommandHelp(string commandName)

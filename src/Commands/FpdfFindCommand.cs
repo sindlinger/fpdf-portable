@@ -19,6 +19,7 @@ namespace FilterPDF
         public void Execute(string inputFile, PDFAnalysisResult analysis, string[] args)
         {
             string dbPath = Utils.SqliteCacheStore.DefaultDbPath;
+            string cacheFilter = null;
 
             var terms = new List<string>();
             var headerTerms = new List<string>();
@@ -38,6 +39,13 @@ namespace FilterPDF
             {
                 var a = args[i];
                 if (a == "--db-path" && i + 1 < args.Length) { dbPath = args[++i]; continue; }
+                if (a == "--cache" && i + 1 < args.Length) { cacheFilter = args[++i]; continue; }
+                if (a == "--text" && i + 1 < args.Length)
+                {
+                    var t = args[++i];
+                    terms.AddRange(t.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+                    continue;
+                }
                 if (a == "--header" && i + 1 < args.Length) { headerTerms.Add(args[++i]); continue; }
                 if (a == "--footer" && i + 1 < args.Length) { footerTerms.Add(args[++i]); continue; }
                 if (a == "--docs" && i + 1 < args.Length) { docTerms.Add(args[++i]); continue; }
