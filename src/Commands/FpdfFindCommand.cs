@@ -34,7 +34,6 @@ namespace FilterPDF
             string format = "txt";
             bool wantBBox = false;
             string regexPattern = null;
-            string scope = "page"; // "page" (default) ou "doc"
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -61,7 +60,6 @@ namespace FilterPDF
                 if (a == "-F" && i + 1 < args.Length) { format = args[++i].ToLower(); continue; }
                 if (a == "--bbox") { wantBBox = true; continue; }
                 if (a == "--regex" && i + 1 < args.Length) { regexPattern = args[++i]; continue; }
-                if (a == "--scope" && i + 1 < args.Length) { scope = args[++i].ToLower(); continue; }
                 terms.Add(a);
             }
 
@@ -72,7 +70,7 @@ namespace FilterPDF
                     SearchInSqlite(dbPath,
                         terms, headerTerms, footerTerms,
                         docTerms, metaTerms, fontTerms, objectTerms,
-                        pageRange, minWords, maxWords, typeFilter, limit, format, wantBBox, regexPattern, scope);
+                        pageRange, minWords, maxWords, typeFilter, limit, format, wantBBox, regexPattern);
                     return;
                 }
                 catch (Exception ex)
@@ -90,7 +88,6 @@ namespace FilterPDF
 
         private record Hit
         {
-            public string Cache { get; set; }
             public int Page { get; set; }
             public string Scope { get; set; }
             public string Term { get; set; }
@@ -100,7 +97,7 @@ namespace FilterPDF
         private void SearchInSqlite(string dbPath,
             List<string> terms, List<string> headerTerms, List<string> footerTerms,
             List<string> docTerms, List<string> metaTerms, List<string> fontTerms, List<string> objectTerms,
-            string pageRange, int? minWords, int? maxWords, string typeFilter, int? limit, string format, bool wantBBox, string regexPattern, string scope)
+            string pageRange, int? minWords, int? maxWords, string typeFilter, int? limit, string format, bool wantBBox, string regexPattern)
         {
             Utils.SqliteCacheStore.EnsureDatabase(dbPath);
             var hits = new List<Hit>();
@@ -109,15 +106,7 @@ namespace FilterPDF
 
             var pageSet = BuildPageSet(pageRange, int.MaxValue); // sem total conhecido
 
-            // Documento inteiro (agrupa por cache)
-            if (scope == "doc")
-            {
-                SearchPerDocument(conn, terms, headerTerms, footerTerms, regexPattern, minWords, maxWords, typeFilter, limit, format, hits);
-                Emit(hits, format);
-                return;
-            }
-
-            // Texto/header/footer por página (default)
+            // Texto/header/footer
             if (terms.Count > 0 || regexPattern != null || headerTerms.Count > 0 || footerTerms.Count > 0)
             {
                 bool ftsTried = false;
@@ -279,87 +268,6 @@ namespace FilterPDF
             return best == text.Length ? 0 : best;
         }
 
-        private void SearchPerDocument(System.Data.SQLite.SQLiteConnection conn,
-            List<string> terms, List<string> headerTerms, List<string> footerTerms, string regexPattern,
-            int? minWords, int? maxWords, string typeFilter, int? limit, string format, List<Hit> hits)
-        {
-            var pageSql = "SELECT c.id, c.name, p.page_number, p.text FROM pages p JOIN caches c ON c.id = p.cache_id ORDER BY c.id, p.page_number";
-            using var cmd = new System.Data.SQLite.SQLiteCommand(pageSql, conn);
-            using var reader = cmd.ExecuteReader();
-
-            long? currentId = null;
-            string currentName = null;
-            var pages = new List<(int page, string text)>();
-
-            void FlushDoc()
-            {
-                if (currentId == null || pages.Count == 0) return;
-                EvaluateDocument(currentName, pages, terms, headerTerms, footerTerms, regexPattern, minWords, maxWords, typeFilter, limit, hits);
-            }
-
-            while (reader.Read())
-            {
-                var id = reader.GetInt64(0);
-                var name = reader.IsDBNull(1) ? "" : reader.GetString(1);
-                var page = reader.GetInt32(2);
-                var text = reader.IsDBNull(3) ? "" : reader.GetString(3);
-
-                if (currentId != null && id != currentId.Value)
-                {
-                    FlushDoc();
-                    pages.Clear();
-                }
-
-                currentId = id;
-                currentName = name;
-                pages.Add((page, text));
-
-                if (limit.HasValue && hits.Count >= limit.Value) break;
-            }
-            FlushDoc();
-        }
-
-        private void EvaluateDocument(string cacheName, List<(int page, string text)> pages,
-            List<string> terms, List<string> headerTerms, List<string> footerTerms, string regexPattern,
-            int? minWords, int? maxWords, string typeFilter, int? limit, List<Hit> hits)
-        {
-            if (limit.HasValue && hits.Count >= limit.Value) return;
-            if (terms.Count == 0 && headerTerms.Count == 0 && footerTerms.Count == 0 && regexPattern == null) return;
-
-            // Concatenate for regex/term search, but also keep per-page for header/footer
-            var fullText = string.Join("\n", pages.Select(p => p.text));
-
-            if (!TermsSatisfied(fullText, terms, regexPattern)) return;
-
-            bool headerOk = headerTerms.Count == 0 || headerTerms.All(t => WordOption.Matches(fullText, t));
-            bool footerOk = footerTerms.Count == 0 || footerTerms.All(t => WordOption.Matches(fullText, t));
-            if (!headerOk || !footerOk) return;
-
-            // Word count filter across doc
-            int totalWords = fullText.Split(new[] { ' ', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
-            if (minWords.HasValue && totalWords < minWords.Value) return;
-            if (maxWords.HasValue && totalWords > maxWords.Value) return;
-
-            // Build snippet from first term hit
-            int idx = FirstTermIndex(fullText, terms.Count > 0 ? terms : headerTerms.Concat(footerTerms).ToList());
-            var snip = ExtractContext(fullText, idx);
-            hits.Add(new Hit { Cache = cacheName, Page = 0, Scope = "doc", Term = string.Join(" & ", terms), Snippet = snip });
-        }
-
-        private static bool TermsSatisfied(string text, List<string> terms, string regexPattern)
-        {
-            if (!string.IsNullOrEmpty(regexPattern))
-            {
-                if (!Regex.IsMatch(text, regexPattern, RegexOptions.IgnoreCase)) return false;
-            }
-            foreach (var t in terms)
-            {
-                if (!WordOption.Matches(text, t)) return false;
-            }
-            return true;
-        }
-
-
         private static void Emit(List<Hit> hits, string format)
         {
             if (format == "json")
@@ -369,11 +277,11 @@ namespace FilterPDF
             }
             if (format == "csv")
             {
-                Console.WriteLine("cache,page,scope,term,snippet");
+                Console.WriteLine("page,scope,term,snippet");
                 foreach (var h in hits)
                 {
                     var snip = h.Snippet.Replace("\"", "\"\"");
-                    Console.WriteLine($"\"{(h.Cache ?? "").Replace("\"","\"")}\",{h.Page},{h.Scope},\"{h.Term.Replace('\"',' ')}\",\"{snip}\"");
+                    Console.WriteLine($"{h.Page},{h.Scope},\"{h.Term.Replace('\"',' ')}\",\"{snip}\"");
                 }
                 return;
             }
@@ -385,8 +293,7 @@ namespace FilterPDF
             Console.WriteLine($"Hits: {hits.Count}\n");
             foreach (var h in hits)
             {
-                var cacheInfo = string.IsNullOrEmpty(h.Cache) ? "" : $"{h.Cache} - ";
-                Console.WriteLine($"{cacheInfo}[{h.Scope}] page {h.Page} :: {h.Snippet}");
+                Console.WriteLine($"[{h.Scope}] page {h.Page} :: {h.Snippet}");
             }
         }
     }
