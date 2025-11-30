@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.SQLite;
 using System.IO;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace FilterPDF.Utils
@@ -113,7 +114,10 @@ namespace FilterPDF.Utils
             TryAlter("ALTER TABLE pages ADD COLUMN has_money INTEGER DEFAULT 0;");
             TryAlter("ALTER TABLE pages ADD COLUMN has_cpf INTEGER DEFAULT 0;");
             TryAlter("ALTER TABLE pages ADD COLUMN fonts TEXT;");
+            TryAlter("ALTER TABLE pages ADD COLUMN image_count INTEGER DEFAULT 0;");
+            TryAlter("ALTER TABLE pages ADD COLUMN annotation_count INTEGER DEFAULT 0;");
             TryAlter("ALTER TABLE caches ADD COLUMN process_number TEXT;");
+            TryAlter("ALTER TABLE caches ADD COLUMN json TEXT;");
         }
 
         public static bool CacheExists(string dbPath, string cacheName)
@@ -136,7 +140,8 @@ namespace FilterPDF.Utils
             using var tx = conn.BeginTransaction();
 
             var inferredProcess = InferProcessFromName(cacheName);
-            long cacheId = InsertOrUpdateCache(conn, cacheName, sourcePath, mode, 0, inferredProcess);
+            var metaJson = SerializeMetadata(analysis);
+            long cacheId = InsertOrUpdateCache(conn, cacheName, sourcePath, mode, analysis?.FileSize ?? 0, inferredProcess, metaJson);
 
             // Clear old pages for idempotency
             using (var del = conn.CreateCommand())
@@ -154,11 +159,13 @@ namespace FilterPDF.Utils
                     var header = string.Join("\n", text.Split('\n').Take(5));
                     var footer = string.Join("\n", text.Split('\n').Reverse().Take(5).Reverse());
                     var fonts = page?.TextInfo?.Fonts != null ? string.Join("|", page.TextInfo.Fonts.Select(f => f.Name)) : "";
+                    var imgCount = page?.Resources?.Images?.Count ?? 0;
+                    var annCount = page?.Annotations?.Count ?? 0;
                     var hasMoney = HasMoney(text) ? 1 : 0;
                     var hasCpf = HasCpf(text) ? 1 : 0;
                     using var ins = conn.CreateCommand();
-                    ins.CommandText = @"INSERT INTO pages(cache_id,page_number,text,header,footer,has_money,has_cpf,fonts)
-                                        VALUES (@c,@p,@t,@h,@f,@m,@cpf,@fonts)";
+                    ins.CommandText = @"INSERT INTO pages(cache_id,page_number,text,header,footer,has_money,has_cpf,fonts,image_count,annotation_count)
+                                        VALUES (@c,@p,@t,@h,@f,@m,@cpf,@fonts,@img,@ann)";
                     ins.Parameters.AddWithValue("@c", cacheId);
                     ins.Parameters.AddWithValue("@p", page?.PageNumber ?? 0);
                     ins.Parameters.AddWithValue("@t", text);
@@ -167,6 +174,8 @@ namespace FilterPDF.Utils
                     ins.Parameters.AddWithValue("@m", hasMoney);
                     ins.Parameters.AddWithValue("@cpf", hasCpf);
                     ins.Parameters.AddWithValue("@fonts", fonts);
+                    ins.Parameters.AddWithValue("@img", imgCount);
+                    ins.Parameters.AddWithValue("@ann", annCount);
                     ins.ExecuteNonQuery();
                 }
             }
@@ -195,16 +204,17 @@ namespace FilterPDF.Utils
             return list;
         }
 
-        private static long InsertOrUpdateCache(SQLiteConnection conn, string cacheName, string sourcePath, string mode, long sizeBytes, string? processNumber)
+        private static long InsertOrUpdateCache(SQLiteConnection conn, string cacheName, string sourcePath, string mode, long sizeBytes, string? processNumber, string? metaJson)
         {
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"INSERT INTO caches(name, source, created_at, mode, size_bytes, json, process_number)
-                                VALUES (@n,@s,@c,@m,@sz,NULL,@p)
+                                VALUES (@n,@s,@c,@m,@sz,@j,@p)
                                 ON CONFLICT(name) DO UPDATE SET
                                   source=excluded.source,
                                   created_at=excluded.created_at,
                                   mode=excluded.mode,
                                   size_bytes=excluded.size_bytes,
+                                  json=excluded.json,
                                   process_number=COALESCE(excluded.process_number, caches.process_number)
                                 ;
                                 SELECT id FROM caches WHERE name=@n LIMIT 1;";
@@ -213,9 +223,35 @@ namespace FilterPDF.Utils
             cmd.Parameters.AddWithValue("@c", DateTime.UtcNow.ToString("s"));
             cmd.Parameters.AddWithValue("@m", mode);
             cmd.Parameters.AddWithValue("@sz", sizeBytes);
+            cmd.Parameters.AddWithValue("@j", (object?)metaJson ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@p", (object?)processNumber ?? DBNull.Value);
             var result = cmd.ExecuteScalar();
             return (result is long l) ? l : Convert.ToInt64(result);
+        }
+
+        private static string? SerializeMetadata(PDFAnalysisResult analysis)
+        {
+            if (analysis == null) return null;
+            try
+            {
+                var meta = new
+                {
+                    analysis.Metadata,
+                    analysis.XMPMetadata,
+                    analysis.DocumentInfo,
+                    analysis.Resources,
+                    analysis.Statistics,
+                    analysis.Accessibility,
+                    analysis.Security,
+                    analysis.Bookmarks,
+                    analysis.PDFACompliance
+                };
+                return JsonConvert.SerializeObject(meta);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private static int ComputeWordCount(string text)
