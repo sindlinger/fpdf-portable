@@ -93,6 +93,7 @@ namespace FilterPDF
 
         private record Hit
         {
+            public string Cache { get; set; }
             public int Page { get; set; }
             public string Scope { get; set; }
             public string Term { get; set; }
@@ -124,7 +125,7 @@ namespace FilterPDF
                     {
                         ftsTried = true;
                         var ftsQuery = string.Join(" AND ", terms.Select(t => t.Replace('"', ' ').Replace("'", " ")));
-                        using var cmdFts = new System.Data.SQLite.SQLiteCommand("SELECT page_number, text FROM page_fts WHERE page_fts MATCH @q", conn);
+                        using var cmdFts = new System.Data.SQLite.SQLiteCommand("SELECT f.page_number, f.text, c.name FROM page_fts f JOIN caches c ON c.id = f.cache_id WHERE f MATCH @q", conn);
                         cmdFts.Parameters.AddWithValue("@q", ftsQuery);
                         using var reader = cmdFts.ExecuteReader();
                         while (reader.Read())
@@ -132,10 +133,13 @@ namespace FilterPDF
                             int pageNum = reader.GetInt32(0);
                             if (pageSet != null && !pageSet.Contains(pageNum)) continue;
                             string text = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                            string cacheName = reader.IsDBNull(2) ? "" : reader.GetString(2);
                             int wc = text.Split(new[]{' ','\n','\t'}, StringSplitOptions.RemoveEmptyEntries).Length;
                             if (minWords.HasValue && wc < minWords.Value) continue;
                             if (maxWords.HasValue && wc > maxWords.Value) continue;
-                            CollectTextHits(pageNum, "text", text, terms, regexPattern, hits, limit);
+                            bool textOk = MatchesTerms(text, terms, regexPattern);
+                            if (textOk)
+                                CollectTextHits(cacheName, pageNum, "text", text, terms, regexPattern, hits, limit);
                             if (limit.HasValue && hits.Count >= limit.Value) break;
                         }
                     }
@@ -147,7 +151,7 @@ namespace FilterPDF
 
                 if (!ftsTried || (limit.HasValue && hits.Count < limit.Value))
                 {
-                    var sql = "SELECT p.page_number, p.text, p.has_money, p.has_cpf, p.fonts FROM pages p JOIN caches c ON c.id = p.cache_id";
+                    var sql = "SELECT p.page_number, p.text, p.has_money, p.has_cpf, p.fonts, c.name FROM pages p JOIN caches c ON c.id = p.cache_id";
                     using var cmd = new System.Data.SQLite.SQLiteCommand(sql, conn);
                     using var reader = cmd.ExecuteReader();
                     while (reader.Read())
@@ -158,6 +162,7 @@ namespace FilterPDF
                         int pageHasMoney = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
                         int pageHasCpf = reader.IsDBNull(3) ? 0 : reader.GetInt32(3);
                         string pageFonts = reader.IsDBNull(4) ? "" : reader.GetString(4);
+                        string cacheName = reader.IsDBNull(5) ? "" : reader.GetString(5);
 
                         if (hasMoney == true && pageHasMoney == 0) continue;
                         if (hasCpf == true && pageHasCpf == 0) continue;
@@ -167,16 +172,13 @@ namespace FilterPDF
                         if (maxWords.HasValue && wordCount > maxWords.Value) continue;
 
                         var lines = text.Split('\n');
-                        if (headerTerms.Count > 0)
-                        {
-                            var header = string.Join("\n", lines.Take(5));
-                            CollectTextHits(pageNum, "header", header, headerTerms, regexPattern, hits, limit);
-                        }
-                        if (footerTerms.Count > 0)
-                        {
-                            var footer = string.Join("\n", lines.Reverse().Take(5).Reverse());
-                            CollectTextHits(pageNum, "footer", footer, footerTerms, regexPattern, hits, limit);
-                        }
+                        var header = string.Join("\n", lines.Take(5));
+                        var footer = string.Join("\n", lines.Reverse().Take(5).Reverse());
+
+                        bool headerOk = MatchesTerms(header, headerTerms, regexPattern);
+                        bool footerOk = MatchesTerms(footer, footerTerms, regexPattern);
+                        bool textOk = MatchesTerms(text, terms, regexPattern);
+
                         if (fontTerms.Count > 0)
                         {
                             bool fontOk = true;
@@ -189,11 +191,13 @@ namespace FilterPDF
                             if (!fontOk) continue;
                         }
 
-                        // Sempre verificar o texto, mesmo quando header/footer foram fornecidos,
-                        // para permitir AND entre cabeçalho/rodapé e corpo.
-                        if (terms.Count > 0 || regexPattern != null)
+                        // Aplica AND entre header/footer/text/fonts/money/cpf
+                        if (headerOk && footerOk && textOk)
                         {
-                            CollectTextHits(pageNum, "text", text, terms, regexPattern, hits, limit);
+                            if (headerTerms.Count > 0) CollectTextHits(cacheName, pageNum, "header", header, headerTerms, regexPattern, hits, limit);
+                            if (footerTerms.Count > 0) CollectTextHits(cacheName, pageNum, "footer", footer, footerTerms, regexPattern, hits, limit);
+                            if (terms.Count > 0 || regexPattern != null || (headerTerms.Count == 0 && footerTerms.Count == 0))
+                                CollectTextHits(cacheName, pageNum, "text", text, terms, regexPattern, hits, limit);
                         }
                         if (limit.HasValue && hits.Count >= limit.Value) break;
                     }
@@ -212,7 +216,7 @@ namespace FilterPDF
                     {
                         if (WordOption.Matches(name, t))
                         {
-                            hits.Add(new Hit { Page = 0, Scope = "docs", Term = t, Snippet = name });
+                            hits.Add(new Hit { Cache = name, Page = 0, Scope = "docs", Term = t, Snippet = name });
                             break;
                         }
                     }
@@ -223,6 +227,26 @@ namespace FilterPDF
             // Meta/Fonts/Objects não persistidos no schema atual -> ignorar
 
             Emit(hits, format);
+        }
+
+        private static bool MatchesTerms(string text, List<string> terms, string regexPattern)
+        {
+            if (terms == null || terms.Count == 0)
+            {
+                if (regexPattern == null) return true;
+                return Regex.IsMatch(text ?? string.Empty, regexPattern, RegexOptions.Multiline | RegexOptions.IgnoreCase);
+            }
+
+            foreach (var term in terms)
+            {
+                if (!WordOption.Matches(text ?? string.Empty, term))
+                    return false;
+            }
+
+            if (regexPattern != null && !Regex.IsMatch(text ?? string.Empty, regexPattern, RegexOptions.Multiline | RegexOptions.IgnoreCase))
+                return false;
+
+            return true;
         }
 
         private static HashSet<int> BuildPageSet(string range, int totalPages)
@@ -248,7 +272,7 @@ namespace FilterPDF
             return set;
         }
 
-        private static void CollectTextHits(int pageNumber, string scope, string text, List<string> terms, string regexPattern, List<Hit> hits, int? limit)
+        private static void CollectTextHits(string cache, int pageNumber, string scope, string text, List<string> terms, string regexPattern, List<Hit> hits, int? limit)
         {
             if (limit.HasValue && hits.Count >= limit.Value) return;
             if (string.IsNullOrEmpty(text)) return;
@@ -257,7 +281,7 @@ namespace FilterPDF
             {
                 foreach (Match m in Regex.Matches(text, regexPattern, RegexOptions.IgnoreCase))
                 {
-                    hits.Add(new Hit { Page = pageNumber, Scope = scope, Term = regexPattern, Snippet = ExtractContext(text, m.Index) });
+                    hits.Add(new Hit { Cache = cache, Page = pageNumber, Scope = scope, Term = regexPattern, Snippet = ExtractContext(text, m.Index) });
                     if (limit.HasValue && hits.Count >= limit.Value) return;
                 }
                 return;
@@ -267,7 +291,7 @@ namespace FilterPDF
             foreach (var term in terms)
                 if (!WordOption.Matches(text, term)) return;
 
-            hits.Add(new Hit { Page = pageNumber, Scope = scope, Term = string.Join(" & ", terms), Snippet = ExtractContext(text, FirstTermIndex(text, terms)) });
+            hits.Add(new Hit { Cache = cache, Page = pageNumber, Scope = scope, Term = string.Join(" & ", terms), Snippet = ExtractContext(text, FirstTermIndex(text, terms)) });
         }
 
         private static string ExtractContext(string text, int index)
