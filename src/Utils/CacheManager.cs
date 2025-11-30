@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
 using FilterPDF.Security;
+using FilterPDF.Utils;
+using System.Data.SQLite;
 
 namespace FilterPDF
 {
@@ -13,12 +15,9 @@ namespace FilterPDF
     /// </summary>
     public static class CacheManager
     {
-        private static readonly string CacheDirectory = Path.Combine(Environment.CurrentDirectory, ".cache");
-        private static readonly string IndexFile = Path.Combine(CacheDirectory, "index.json");
+        private static readonly string DbPath = SqliteCacheStore.DefaultDbPath;
         
-        // Lock para prevenir race conditions durante processamento paralelo
-        // Quando múltiplos workers tentam atualizar o index.json simultaneamente,
-        // apenas o último a escrever persistia suas mudanças, causando perda de entradas
+        // Lock para prevenir race conditions durante operações concorrentes
         private static readonly object indexLock = new object();
         
         /// <summary>
@@ -47,51 +46,14 @@ namespace FilterPDF
             public string Version { get; set; } = "2.12.0";
         }
         
-        static CacheManager()
-        {
-            // OTIMIZAÇÃO EXTREMA: NÃO FAZER NADA NA INICIALIZAÇÃO!
-        }
+        static CacheManager() { }
         
         /// <summary>
         /// Garante que o diretório de cache existe
         /// </summary>
-        private static void EnsureCacheDirectory()
+        private static void EnsureDb()
         {
-            if (!Directory.Exists(CacheDirectory))
-            {
-                Directory.CreateDirectory(CacheDirectory);
-            }
-        }
-        
-        /// <summary>
-        /// Carrega o índice de cache
-        /// </summary>
-        private static CacheIndex LoadIndex()
-        {
-            if (!File.Exists(IndexFile))
-            {
-                return new CacheIndex();
-            }
-            
-            try
-            {
-                var json = File.ReadAllText(IndexFile);
-                return JsonConvert.DeserializeObject<CacheIndex>(json) ?? new CacheIndex();
-            }
-            catch
-            {
-                return new CacheIndex();
-            }
-        }
-        
-        /// <summary>
-        /// Salva o índice de cache
-        /// </summary>
-        private static void SaveIndex(CacheIndex index)
-        {
-            index.LastUpdated = DateTime.Now;
-            var json = JsonConvert.SerializeObject(index, Formatting.Indented);
-            File.WriteAllText(IndexFile, json);
+            SqliteCacheStore.EnsureDatabase(DbPath);
         }
         
         /// <summary>
@@ -99,32 +61,8 @@ namespace FilterPDF
         /// </summary>
         public static void AddToCache(string originalPdfPath, string cacheFilePath, string extractionMode = "both")
         {
-            // REMOVIDO: Validação de segurança para máxima performance
-            string sanitizedOriginalPath = originalPdfPath;
-            string sanitizedCachePath = cacheFilePath;
-            
-            lock (indexLock)
-            {
-                var index = LoadIndex();
-                var fileName = Path.GetFileNameWithoutExtension(sanitizedOriginalPath);
-                
-                var entry = new CacheEntry
-                {
-                    OriginalFileName = Path.GetFileName(sanitizedOriginalPath),
-                    OriginalPath = NormalizePath(sanitizedOriginalPath),
-                    CacheFileName = Path.GetFileName(sanitizedCachePath),
-                    CachePath = NormalizePath(sanitizedCachePath),
-                    CachedDate = DateTime.Now,
-                    OriginalSize = File.Exists(originalPdfPath) ? new FileInfo(originalPdfPath).Length : 0,
-                    CacheSize = new FileInfo(cacheFilePath).Length,
-                    ExtractionMode = extractionMode,
-                    Version = "2.12.0"
-                };
-                
-                // Use o nome do arquivo sem extensão como chave
-                index.Entries[fileName] = entry;
-                SaveIndex(index);
-            }
+            // A escrita real é feita pelo SqliteCacheStore.UpsertCache; aqui só garantimos schema
+            EnsureDb();
         }
         
         /// <summary>
@@ -132,45 +70,22 @@ namespace FilterPDF
         /// </summary>
         public static string? FindCacheFile(string pdfNameOrIndex)
         {
-            // OTIMIZAÇÃO EXTREMA: Para índice numérico, mapear diretamente sem listar tudo!
+            EnsureDb();
+            string cacheName = Path.GetFileNameWithoutExtension(pdfNameOrIndex);
+
             if (int.TryParse(pdfNameOrIndex, out int cacheIndex) && cacheIndex > 0)
             {
-                // HACK DIRETO: Mapear índices conhecidos sem carregar nada
-                if (cacheIndex == 1)
+                var entries = ListCachedPDFs();
+                if (cacheIndex >= 1 && cacheIndex <= entries.Count)
                 {
-                    string path = ".cache/0001210._cache.json";
-                    if (File.Exists(path)) return path;
+                    cacheName = entries[cacheIndex - 1].CachePath.Replace("db://", "").Split('#')[1];
                 }
-                else if (cacheIndex == 2)
-                {
-                    string path = ".cache/000121442024815._cache.json";
-                    if (File.Exists(path)) return path;
-                }
-                // Para outros índices, usar o padrão antigo mas SEM VERIFICAR FILES
-                var idx = LoadIndex();
-                var entries = idx.Entries.Values.OrderBy(e => e.OriginalFileName).ToList();
-                if (cacheIndex <= entries.Count)
-                {
-                    var entry = entries[cacheIndex - 1];
-                    // NÃO VERIFICAR SE EXISTE - confiar no index
-                    return entry.CachePath;
-                }
-                return null;
             }
-            
-            var index = LoadIndex();
-            
-            // Se não é número, buscar por nome
-            // Remove extensão se presente
-            pdfNameOrIndex = Path.GetFileNameWithoutExtension(pdfNameOrIndex);
-            
-            if (index.Entries.ContainsKey(pdfNameOrIndex))
+
+            if (SqliteCacheStore.CacheExists(DbPath, cacheName))
             {
-                var entry = index.Entries[pdfNameOrIndex];
-                // OTIMIZAÇÃO: NÃO VERIFICAR SE EXISTE!
-                return entry.CachePath;
+                return $"db://{DbPath}#{cacheName}";
             }
-            
             return null;
         }
         
@@ -179,10 +94,24 @@ namespace FilterPDF
         /// </summary>
         public static List<CacheEntry> ListCachedPDFs()
         {
-            // OTIMIZAÇÃO EXTREMA: NÃO VERIFICAR SE ARQUIVOS EXISTEM!
-            // Confiar no index para máxima performance
-            var index = LoadIndex();
-            return index.Entries.Values.OrderBy(e => e.OriginalFileName).ToList();
+            EnsureDb();
+            var list = new List<CacheEntry>();
+            var names = SqliteCacheStore.ListCacheNames(DbPath);
+            foreach (var name in names)
+            {
+                list.Add(new CacheEntry
+                {
+                    OriginalFileName = name + ".pdf",
+                    OriginalPath = name + ".pdf",
+                    CacheFileName = name + "._cache.json",
+                    CachePath = $"db://{DbPath}#{name}",
+                    CachedDate = DateTime.Now,
+                    CacheSize = 0,
+                    ExtractionMode = "sqlite",
+                    Version = "sqlite"
+                });
+            }
+            return list;
         }
         
         /// <summary>
@@ -190,30 +119,16 @@ namespace FilterPDF
         /// </summary>
         public static bool RemoveFromCache(string pdfName)
         {
-            var index = LoadIndex();
+            EnsureDb();
             pdfName = Path.GetFileNameWithoutExtension(pdfName);
-            
-            if (index.Entries.ContainsKey(pdfName))
-            {
-                var entry = index.Entries[pdfName];
-                
-                // Remove arquivo de cache se existe
-                if (File.Exists(entry.CachePath))
-                {
-                    try
-                    {
-                        File.Delete(entry.CachePath);
-                    }
-                    catch { /* Ignore delete errors */ }
-                }
-                
-                // Remove do índice
-                index.Entries.Remove(pdfName);
-                SaveIndex(index);
-                return true;
-            }
-            
-            return false;
+            // Simple delete from caches table
+            using var conn = new SQLiteConnection($"Data Source={DbPath};Version=3;");
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM caches WHERE name=@n";
+            cmd.Parameters.AddWithValue("@n", pdfName);
+            var rows = cmd.ExecuteNonQuery();
+            return rows > 0;
         }
         
         /// <summary>
@@ -221,24 +136,12 @@ namespace FilterPDF
         /// </summary>
         public static void ClearCache()
         {
-            var index = LoadIndex();
-            
-            // Remove todos os arquivos de cache
-            foreach (var entry in index.Entries.Values)
-            {
-                if (File.Exists(entry.CachePath))
-                {
-                    try
-                    {
-                        File.Delete(entry.CachePath);
-                    }
-                    catch { /* Ignore delete errors */ }
-                }
-            }
-            
-            // Limpa o índice
-            index.Entries.Clear();
-            SaveIndex(index);
+            EnsureDb();
+            using var conn = new SQLiteConnection($"Data Source={DbPath};Version=3;");
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM caches";
+            cmd.ExecuteNonQuery();
         }
         
         /// <summary>
@@ -254,7 +157,6 @@ namespace FilterPDF
         /// </summary>
         public static CacheEntry? GetCacheEntry(string pdfNameOrIndex)
         {
-            // Primeiro, tentar como índice numérico
             if (int.TryParse(pdfNameOrIndex, out int cacheIndex) && cacheIndex > 0)
             {
                 var entries = ListCachedPDFs();
@@ -264,16 +166,21 @@ namespace FilterPDF
                 }
                 return null;
             }
-            
-            // Se não é número, buscar por nome
-            var index = LoadIndex();
+
             string pdfName = Path.GetFileNameWithoutExtension(pdfNameOrIndex);
-            
-            if (index.Entries.ContainsKey(pdfName))
+            if (SqliteCacheStore.CacheExists(DbPath, pdfName))
             {
-                return index.Entries[pdfName];
+                return new CacheEntry
+                {
+                    OriginalFileName = pdfName + ".pdf",
+                    OriginalPath = pdfName + ".pdf",
+                    CacheFileName = pdfName + "._cache.json",
+                    CachePath = $"db://{DbPath}#{pdfName}",
+                    CachedDate = DateTime.Now,
+                    ExtractionMode = "sqlite",
+                    Version = "sqlite"
+                };
             }
-            
             return null;
         }
         
@@ -283,14 +190,14 @@ namespace FilterPDF
         public static CacheStats GetCacheStats()
         {
             var entries = ListCachedPDFs();
-            
+
             return new CacheStats
             {
                 TotalEntries = entries.Count,
                 TotalCacheSize = entries.Sum(e => e.CacheSize),
                 TotalOriginalSize = entries.Sum(e => e.OriginalSize),
-                CacheDirectory = CacheDirectory,
-                LastUpdated = LoadIndex().LastUpdated
+                CacheDirectory = DbPath,
+                LastUpdated = DateTime.Now
             };
         }
         
@@ -396,8 +303,7 @@ namespace FilterPDF
                     Console.WriteLine($"  Processed: {processed} files, Failed: {failed} files");
                 }
                 
-                // Salvar o novo índice
-                SaveIndex(newIndex);
+                // Índice legacy removido na migração para SQLite; não salvar em arquivo
                 return newIndex.Entries.Count;
             }
         }

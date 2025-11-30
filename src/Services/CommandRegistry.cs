@@ -130,7 +130,6 @@ namespace FilterPDF.Services
             RegisterCommand("load", new FpdfLoadCommand());
             RegisterCommand("cache", new FpdfCacheCommand());
             RegisterCommand("stats", new FpdfStatsCommand());
-            RegisterCommand("find", new FpdfFindCommand());
             RegisterCommand("ingest-db", new FpdfIngestDbCommand());
             
             // Register language commands

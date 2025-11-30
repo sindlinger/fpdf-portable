@@ -17,6 +17,12 @@ namespace FilterPDF
         public override string Name => "ingest-db";
         public override string Description => "Ingere caches em SQLite";
 
+        public override void ShowHelp()
+        {
+            Console.WriteLine("Uso: fpdf ingest-db <cache|range|dir|pdf> [--db-path path]");
+            Console.WriteLine("Exemplo: fpdf ingest-db .cache --db-path data/sqlite/sqlite-mcp.db");
+        }
+
         public override void Execute(string[] args)
         {
             if (args.Length < 1)
@@ -26,7 +32,7 @@ namespace FilterPDF
             }
 
             string target = args[0];
-            string dbPath = "data/sqlite/sqlite-mcp.db";
+            string dbPath = SqliteCacheStore.DefaultDbPath;
             for (int i = 1; i < args.Length; i++)
             {
                 if (args[i] == "--db-path" && i + 1 < args.Length)
@@ -37,40 +43,7 @@ namespace FilterPDF
 
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(dbPath)) ?? ".");
 
-            var caches = ResolveCaches(target);
-            if (caches.Count == 0)
-            {
-                Console.WriteLine($"Nenhum cache encontrado para '{target}'.");
-                return;
-            }
-
-            try
-            {
-                using var conn = new System.Data.SQLite.SQLiteConnection($"Data Source={dbPath};Version=3;");
-                conn.Open();
-                using var tx = conn.BeginTransaction();
-
-                foreach (var cacheFile in caches)
-                {
-                    var analysis = LoadAnalysis(cacheFile);
-                    if (analysis == null)
-                    {
-                        Console.WriteLine($"Cache inválido: {cacheFile}");
-                        continue;
-                    }
-                    UpsertProcess(conn, analysis, cacheFile);
-                    UpsertDocuments(conn, analysis);
-                    UpsertPages(conn, analysis);
-                    // field_hits não implementado (não estava presente no cache); placeholder
-                }
-
-                tx.Commit();
-                Console.WriteLine($"Ingestão concluída: {caches.Count} cache(s) -> {dbPath}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Erro na ingestão: {ex.Message}");
-            }
+            Console.WriteLine("ingest-db desativado: pipeline agora é somente SQLite gerado via 'fpdf load'.");
         }
 
         private List<string> ResolveCaches(string target)
@@ -91,58 +64,5 @@ namespace FilterPDF
             return list;
         }
 
-        private PDFAnalysisResult LoadAnalysis(string cacheFile)
-        {
-            try
-            {
-                var json = File.ReadAllText(cacheFile);
-                return JsonConvert.DeserializeObject<PDFAnalysisResult>(json);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private void UpsertProcess(System.Data.SQLite.SQLiteConnection conn, PDFAnalysisResult analysis, string cacheFile)
-        {
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "INSERT OR IGNORE INTO processes(id, sei, origem, created_at) VALUES (@id,@sei,@origem,@created)";
-            cmd.Parameters.AddWithValue("@id", analysis.DocumentInfo?.OriginalFileName ?? Path.GetFileNameWithoutExtension(cacheFile));
-            cmd.Parameters.AddWithValue("@sei", analysis.DocumentInfo?.OriginalFileName ?? "");
-            cmd.Parameters.AddWithValue("@origem", cacheFile);
-            cmd.Parameters.AddWithValue("@created", DateTime.UtcNow.ToString("s"));
-            cmd.ExecuteNonQuery();
-        }
-
-        private void UpsertDocuments(System.Data.SQLite.SQLiteConnection conn, PDFAnalysisResult analysis)
-        {
-            if (analysis.Documents == null) return;
-            foreach (var d in analysis.Documents)
-            {
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = "INSERT INTO documents(process_id, name, doc_type, start_page, end_page) VALUES (@p,@n,@t,@s,@e)";
-                cmd.Parameters.AddWithValue("@p", analysis.DocumentInfo?.OriginalFileName ?? "");
-                cmd.Parameters.AddWithValue("@n", d.Name ?? "");
-                cmd.Parameters.AddWithValue("@t", d.Type ?? "");
-                cmd.Parameters.AddWithValue("@s", d.StartPage);
-                cmd.Parameters.AddWithValue("@e", d.EndPage);
-                cmd.ExecuteNonQuery();
-            }
-        }
-
-        private void UpsertPages(System.Data.SQLite.SQLiteConnection conn, PDFAnalysisResult analysis)
-        {
-            if (analysis.Pages == null) return;
-            foreach (var p in analysis.Pages)
-            {
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = "INSERT INTO pages(document_id, page_number, text) VALUES ((SELECT id FROM documents WHERE process_id=@p LIMIT 1), @num, @text)";
-                cmd.Parameters.AddWithValue("@p", analysis.DocumentInfo?.OriginalFileName ?? "");
-                cmd.Parameters.AddWithValue("@num", p.PageNumber);
-                cmd.Parameters.AddWithValue("@text", p.TextInfo?.PageText ?? "");
-                cmd.ExecuteNonQuery();
-            }
-        }
     }
 }

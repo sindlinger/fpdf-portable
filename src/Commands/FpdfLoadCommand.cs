@@ -33,6 +33,7 @@ namespace FilterPDF
             public int TextStrategy { get; set; } = 2; // Default: advanced
             public string OutputPath { get; set; } = "";
             public string OutputDir { get; set; } = "";
+            public string DbPath { get; set; } = FilterPDF.Utils.SqliteCacheStore.DefaultDbPath;
             public int NumWorkers { get; set; } = 1;
             public bool Overwrite { get; set; } = false;
             public bool Verbose { get; set; } = false;
@@ -580,6 +581,13 @@ namespace FilterPDF
                                 }
                             }
                             break;
+
+                        case "--db-path":
+                            if (i + 1 < args.Length)
+                            {
+                                options.DbPath = args[++i];
+                            }
+                            break;
                             
                         case "--input-dir":
                             if (i + 1 < args.Length)
@@ -756,31 +764,26 @@ namespace FilterPDF
             
             try
             {
-                // Verificar se é um arquivo PDF
                 if (!inputFile.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
                 {
                     return (false, false, "Not a PDF file", "");
                 }
-                
-                // Determine output path
-                string outputPath = GetOutputPath(inputFile, options);
-                
-                // Check if already exists
-                if (File.Exists(outputPath) && !options.Overwrite)
+
+                var cacheName = Path.GetFileNameWithoutExtension(inputFile);
+                var dbPath = options.DbPath;
+                FilterPDF.Utils.SqliteCacheStore.EnsureDatabase(dbPath);
+
+                if (!options.Overwrite && FilterPDF.Utils.SqliteCacheStore.CacheExists(dbPath, cacheName))
                 {
-                    return (true, true, "Cache already exists", outputPath);
+                    return (true, true, "Cache already exists", $"{dbPath}#{cacheName}");
                 }
-                
-                // Process the file directly (no Task.Run needed - already parallel)
-                // Use CancellationTokenSource for timeout control
+
                 using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(TIMEOUT_SECONDS));
-                
+
                 try
                 {
-                    // Process synchronously in current thread (which is already parallel)
-                    // FIXED: Pass the cancellation token to enable timeout enforcement
                     ProcessSingleFile(inputFile, options, timeoutCts.Token);
-                    return (true, false, "OK", outputPath);
+                    return (true, false, "OK", $"{dbPath}#{cacheName}");
                 }
                 catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
                 {
@@ -834,39 +837,16 @@ namespace FilterPDF
                 throw new ArgumentException($"O comando load só aceita arquivos PDF. Recebido: {inputFile}");
             }
             
-            // Determine output path
-            string outputPath;
-            if (!string.IsNullOrEmpty(options.OutputPath) && !string.IsNullOrEmpty(options.OutputDir))
-            {
-                // Both specified - error
-                throw new ArgumentException("Cannot specify both --output and --output-dir");
-            }
-            else if (!string.IsNullOrEmpty(options.OutputPath))
-            {
-                outputPath = options.OutputPath;
-            }
-            else if (!string.IsNullOrEmpty(options.OutputDir))
-            {
-                var filename = Path.GetFileNameWithoutExtension(inputFile) + "_cache.json";
-                outputPath = Path.Combine(options.OutputDir, filename);
-            }
-            else
-            {
-                // Usar o diretório .cache como padrão
-                if (!Directory.Exists(".cache"))
-                {
-                    Directory.CreateDirectory(".cache");
-                }
-                var filename = Path.GetFileNameWithoutExtension(inputFile) + "._cache.json";
-                outputPath = Path.Combine(".cache", filename);
-            }
-            
-            // Check if already exists
-            if (File.Exists(outputPath) && !options.Overwrite)
+            var cacheName = Path.GetFileNameWithoutExtension(inputFile);
+            var dbPath = options.DbPath;
+            FilterPDF.Utils.SqliteCacheStore.EnsureDatabase(dbPath);
+
+            // Check if already exists in SQLite
+            if (!options.Overwrite && FilterPDF.Utils.SqliteCacheStore.CacheExists(dbPath, cacheName))
             {
                 if (options.Verbose)
                 {
-                    Console.WriteLine($"Skipping {inputFile} - cache already exists");
+                    Console.WriteLine($"Skipping {inputFile} - cache already exists in {dbPath}");
                 }
                 return;
             }
@@ -882,6 +862,7 @@ namespace FilterPDF
             
             // Generate cache based on extraction mode
             object cacheData;
+            PDFAnalysisResult? analysisModel = null;
             
             if (options.ExtractUltra)
             {
@@ -914,6 +895,7 @@ namespace FilterPDF
                 // we check for cancellation before calling it
                 cancellationToken.ThrowIfCancellationRequested();
                 var analysis = analyzer.AnalyzeFull();
+                analysisModel = analysis;
                 
                 // Add metadata for cache management
                 var analysisDict = JsonConvert.DeserializeObject<Dictionary<string, object>>(JsonConvert.SerializeObject(analysis)) ?? new Dictionary<string, object>();
@@ -974,7 +956,7 @@ namespace FilterPDF
             // Check for cancellation before saving
             cancellationToken.ThrowIfCancellationRequested();
             
-            // Save to JSON
+            // Serialize to JSON (will be stored in SQLite, not on disk)
             var settings = new JsonSerializerSettings
             {
                 DateFormatHandling = DateFormatHandling.MicrosoftDateFormat,
@@ -983,20 +965,21 @@ namespace FilterPDF
             };
             
             var json = JsonConvert.SerializeObject(cacheData, settings);
-            File.WriteAllText(outputPath, json);
-            
-            // Add to cache manager
             string extractionMode = options.ExtractUltra ? "ultra" : 
                                    options.ExtractCustom ? "custom" :
                                    options.ExtractRaw && !options.ExtractText ? "raw" :
                                    options.ExtractText && !options.ExtractRaw ? "text" : "both";
-            CacheManager.AddToCache(inputFile, outputPath, extractionMode);
-            
+
+            // Persist in SQLite (single source of truth)
+            var analysisObj = analysisModel ?? cacheData as PDFAnalysisResult; // Prefer strong model when available
+            if (analysisObj != null)
+            {
+                FilterPDF.Utils.SqliteCacheStore.UpsertCache(dbPath, cacheName, inputFile, analysisObj, extractionMode);
+            }
+
             if (options.Verbose)
             {
-                var fileSize = new FileInfo(outputPath).Length;
-                Console.WriteLine($"  Saved cache: {outputPath} ({fileSize / 1024}KB)");
-                Console.WriteLine($"  Added to cache index as: {Path.GetFileNameWithoutExtension(inputFile)}");
+                Console.WriteLine($"  Saved cache to SQLite: {dbPath} (cache {cacheName})");
             }
         }
         

@@ -133,7 +133,6 @@ namespace FilterPDF.Services
             // Prepare arguments with file path
             var fullArgs = new List<string> { filePath };
             fullArgs.AddRange(args);
-            
             command.Execute(fullArgs.ToArray());
         }
 

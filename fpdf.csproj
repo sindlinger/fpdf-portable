@@ -25,6 +25,7 @@
   <ItemGroup>
     <PackageReference Include="BouncyCastle" Version="1.8.9" />
     <PackageReference Include="iTextSharp" Version="5.5.13.3" />
+    <PackageReference Include="System.Data.SQLite.Core" Version="1.0.118" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.1" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="6.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />

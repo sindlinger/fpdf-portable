@@ -18,7 +18,7 @@ namespace FilterPDF
     {
         public void Execute(string inputFile, PDFAnalysisResult analysis, string[] args)
         {
-            string dbPath = "data/sqlite/sqlite-mcp.db";
+            string dbPath = Utils.SqliteCacheStore.DefaultDbPath;
 
             var terms = new List<string>();
             var headerTerms = new List<string>();
@@ -90,6 +90,7 @@ namespace FilterPDF
             List<string> docTerms, List<string> metaTerms, List<string> fontTerms, List<string> objectTerms,
             string pageRange, int? minWords, int? maxWords, string typeFilter, int? limit, string format, bool wantBBox, string regexPattern)
         {
+            Utils.SqliteCacheStore.EnsureDatabase(dbPath);
             var hits = new List<Hit>();
             using var conn = new System.Data.SQLite.SQLiteConnection($"Data Source={dbPath};Version=3;");
             conn.Open();
@@ -99,55 +100,83 @@ namespace FilterPDF
             // Texto/header/footer
             if (terms.Count > 0 || regexPattern != null || headerTerms.Count > 0 || footerTerms.Count > 0)
             {
-                var sql = "SELECT p.page_number, p.text FROM pages p JOIN documents d ON d.id = p.document_id";
-                if (!string.IsNullOrEmpty(typeFilter)) sql += " WHERE d.doc_type LIKE @type";
-                using var cmd = new System.Data.SQLite.SQLiteCommand(sql, conn);
-                if (!string.IsNullOrEmpty(typeFilter)) cmd.Parameters.AddWithValue("@type", $"%{typeFilter}%");
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                {
-                    int pageNum = reader.GetInt32(0);
-                    if (pageSet != null && !pageSet.Contains(pageNum)) continue;
-                    string text = reader.IsDBNull(1) ? "" : reader.GetString(1);
-                    int wordCount = text.Split(new[]{' ','\n','\t'}, StringSplitOptions.RemoveEmptyEntries).Length;
-                    if (minWords.HasValue && wordCount < minWords.Value) continue;
-                    if (maxWords.HasValue && wordCount > maxWords.Value) continue;
+                bool ftsTried = false;
 
-                    var lines = text.Split('\n');
-                    if (headerTerms.Count > 0)
+                if (regexPattern == null && headerTerms.Count == 0 && footerTerms.Count == 0 && terms.Count > 0)
+                {
+                    // Prefer FTS5 for plain term search
+                    try
                     {
-                        var header = string.Join("\n", lines.Take(5));
-                        CollectTextHits(pageNum, "header", header, headerTerms, regexPattern, hits, limit);
+                        ftsTried = true;
+                        var ftsQuery = string.Join(" AND ", terms.Select(t => t.Replace('"', ' ').Replace("'", " ")));
+                        using var cmdFts = new System.Data.SQLite.SQLiteCommand("SELECT page_number, text FROM page_fts WHERE page_fts MATCH @q", conn);
+                        cmdFts.Parameters.AddWithValue("@q", ftsQuery);
+                        using var reader = cmdFts.ExecuteReader();
+                        while (reader.Read())
+                        {
+                            int pageNum = reader.GetInt32(0);
+                            if (pageSet != null && !pageSet.Contains(pageNum)) continue;
+                            string text = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                            int wc = text.Split(new[]{' ','\n','\t'}, StringSplitOptions.RemoveEmptyEntries).Length;
+                            if (minWords.HasValue && wc < minWords.Value) continue;
+                            if (maxWords.HasValue && wc > maxWords.Value) continue;
+                            CollectTextHits(pageNum, "text", text, terms, regexPattern, hits, limit);
+                            if (limit.HasValue && hits.Count >= limit.Value) break;
+                        }
                     }
-                    if (footerTerms.Count > 0)
+                    catch
                     {
-                        var footer = string.Join("\n", lines.Reverse().Take(5).Reverse());
-                        CollectTextHits(pageNum, "footer", footer, footerTerms, regexPattern, hits, limit);
+                        // fallback to scan
                     }
-                    if (terms.Count > 0 && headerTerms.Count == 0 && footerTerms.Count == 0)
+                }
+
+                if (!ftsTried || (limit.HasValue && hits.Count < limit.Value))
+                {
+                    var sql = "SELECT p.page_number, p.text FROM pages p JOIN caches c ON c.id = p.cache_id";
+                    using var cmd = new System.Data.SQLite.SQLiteCommand(sql, conn);
+                    using var reader = cmd.ExecuteReader();
+                    while (reader.Read())
                     {
-                        CollectTextHits(pageNum, "text", text, terms, regexPattern, hits, limit);
+                        int pageNum = reader.GetInt32(0);
+                        if (pageSet != null && !pageSet.Contains(pageNum)) continue;
+                        string text = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                        int wordCount = text.Split(new[]{' ','\n','\t'}, StringSplitOptions.RemoveEmptyEntries).Length;
+                        if (minWords.HasValue && wordCount < minWords.Value) continue;
+                        if (maxWords.HasValue && wordCount > maxWords.Value) continue;
+
+                        var lines = text.Split('\n');
+                        if (headerTerms.Count > 0)
+                        {
+                            var header = string.Join("\n", lines.Take(5));
+                            CollectTextHits(pageNum, "header", header, headerTerms, regexPattern, hits, limit);
+                        }
+                        if (footerTerms.Count > 0)
+                        {
+                            var footer = string.Join("\n", lines.Reverse().Take(5).Reverse());
+                            CollectTextHits(pageNum, "footer", footer, footerTerms, regexPattern, hits, limit);
+                        }
+                        if (terms.Count > 0 && headerTerms.Count == 0 && footerTerms.Count == 0)
+                        {
+                            CollectTextHits(pageNum, "text", text, terms, regexPattern, hits, limit);
+                        }
+                        if (limit.HasValue && hits.Count >= limit.Value) break;
                     }
-                    if (limit.HasValue && hits.Count >= limit.Value) break;
                 }
             }
 
             // Docs
             if (docTerms.Count > 0)
             {
-                using var cmd = new System.Data.SQLite.SQLiteCommand("SELECT name, doc_type, start_page FROM documents", conn);
+                using var cmd = new System.Data.SQLite.SQLiteCommand("SELECT name FROM caches", conn);
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
                     string name = reader.IsDBNull(0) ? "" : reader.GetString(0);
-                    string dtype = reader.IsDBNull(1) ? "" : reader.GetString(1);
-                    int spage = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
-                    if (!string.IsNullOrEmpty(typeFilter) && !dtype.ToLower().Contains(typeFilter.ToLower())) continue;
                     foreach (var t in docTerms)
                     {
                         if (WordOption.Matches(name, t))
                         {
-                            hits.Add(new Hit { Page = spage, Scope = "docs", Term = t, Snippet = name });
+                            hits.Add(new Hit { Page = 0, Scope = "docs", Term = t, Snippet = name });
                             break;
                         }
                     }
@@ -183,13 +212,6 @@ namespace FilterPDF
             return set;
         }
 
-        private static bool TypeMatches(string typeFilter, PageAnalysis page)
-        {
-            if (string.IsNullOrEmpty(typeFilter)) return true;
-            var t = (page.DocType ?? "").ToLower();
-            return t.Contains(typeFilter.ToLower());
-        }
-
         private static void CollectTextHits(int pageNumber, string scope, string text, List<string> terms, string regexPattern, List<Hit> hits, int? limit)
         {
             if (limit.HasValue && hits.Count >= limit.Value) return;
@@ -210,20 +232,6 @@ namespace FilterPDF
                 if (!WordOption.Matches(text, term)) return;
 
             hits.Add(new Hit { Page = pageNumber, Scope = scope, Term = string.Join(" & ", terms), Snippet = ExtractContext(text, FirstTermIndex(text, terms)) });
-        }
-
-        private static IEnumerable<Hit> SearchInDocNames(PDFAnalysisResult analysis, string term, HashSet<int> pageSet, string typeFilter, int? remaining)
-        {
-            var list = new List<Hit>();
-            var docs = analysis.Documents ?? new List<DocumentInfo>();
-            foreach (var d in docs)
-            {
-                if (!string.IsNullOrEmpty(typeFilter) && !(d.Type ?? "").ToLower().Contains(typeFilter.ToLower())) continue;
-                if (!WordOption.Matches(d.Name ?? "", term)) continue;
-                list.Add(new Hit { Page = d.PageNumber > 0 ? d.PageNumber : 0, Scope = "docs", Term = term, Snippet = d.Name });
-                if (remaining.HasValue && list.Count >= remaining.Value) break;
-            }
-            return list;
         }
 
         private static string ExtractContext(string text, int index)

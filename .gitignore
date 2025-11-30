@@ -1,6 +1,8 @@
 # Claude AI rules - DO NOT IGNORE
 !.claude-rules
 .cache/
+data/sqlite/*.db
+*.db
 .data/
 tests/
 scripts/

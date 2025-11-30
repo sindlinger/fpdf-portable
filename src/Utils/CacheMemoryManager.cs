@@ -26,8 +26,7 @@ namespace FilterPDF
         /// </summary>
         public static PDFAnalysisResult? LoadCacheFile(string cacheFilePath)
         {
-            var fileInfo = new FileInfo(cacheFilePath);
-            var cacheKey = fileInfo.FullName;
+            var cacheKey = cacheFilePath;
             
             // Verificar se já está em memória
             if (_memoryCache.TryGetValue(cacheKey, out var cached))
@@ -36,7 +35,7 @@ namespace FilterPDF
                 return cached.Analysis;
             }
             
-            // Carregar do disco
+            // Carregar do disco ou do SQLite
             lock (_lockObj)
             {
                 // Double-check após lock
@@ -44,34 +43,90 @@ namespace FilterPDF
                 {
                     return cached.Analysis;
                 }
-                
-                Console.Error.WriteLine($"[DEBUG] Loading from DISK: {Path.GetFileName(cacheFilePath)}");
-                var startTime = DateTime.Now;
-                
-                var json = File.ReadAllText(cacheFilePath);
-                var loadTime = DateTime.Now - startTime;
-                Console.Error.WriteLine($"[DEBUG] File.ReadAllText took {loadTime.TotalMilliseconds:F1}ms");
-                
-                startTime = DateTime.Now;
-                var analysis = JsonConvert.DeserializeObject<PDFAnalysisResult>(json);
-                var deserializeTime = DateTime.Now - startTime;
-                Console.Error.WriteLine($"[DEBUG] JSON deserialization took {deserializeTime.TotalMilliseconds:F1}ms");
-                
+
+                ResolveDbPath(cacheFilePath, out var dbPath, out var cacheName);
+                if (string.IsNullOrEmpty(cacheName)) return null;
+
+                var analysis = LoadFromSqlite(dbPath, cacheName);
                 if (analysis != null)
                 {
-                    // Adicionar ao cache em memória
                     _memoryCache[cacheKey] = new CachedAnalysis
                     {
                         Analysis = analysis,
                         LoadTime = DateTime.Now,
                         FilePath = cacheFilePath,
-                        FileSize = fileInfo.Length
+                        FileSize = 0
                     };
-                    
-                    Console.Error.WriteLine($"[DEBUG] Added to memory cache. Total cached files: {_memoryCache.Count}");
                 }
-                
                 return analysis;
+            }
+        }
+
+        private static PDFAnalysisResult? LoadFromSqlite(string dbPath, string cacheName)
+        {
+            if (string.IsNullOrEmpty(dbPath) || string.IsNullOrEmpty(cacheName)) return null;
+            try
+            {
+                using var conn = new System.Data.SQLite.SQLiteConnection($"Data Source={dbPath};Version=3;");
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT id FROM caches WHERE name=@n LIMIT 1";
+                cmd.Parameters.AddWithValue("@n", cacheName);
+                var idObj = cmd.ExecuteScalar();
+                if (idObj == null) return null;
+                long cacheId = (idObj is long l) ? l : Convert.ToInt64(idObj);
+
+                var pages = new List<PageAnalysis>();
+                using var pc = conn.CreateCommand();
+                pc.CommandText = "SELECT page_number, text FROM pages WHERE cache_id=@cid ORDER BY page_number";
+                pc.Parameters.AddWithValue("@cid", cacheId);
+                using var r = pc.ExecuteReader();
+                while (r.Read())
+                {
+                    int num = r.IsDBNull(0) ? 0 : r.GetInt32(0);
+                    string text = r.IsDBNull(1) ? "" : r.GetString(1);
+                    pages.Add(new PageAnalysis
+                    {
+                        PageNumber = num,
+                        TextInfo = new TextInfo { PageText = text }
+                    });
+                }
+
+                return new PDFAnalysisResult
+                {
+                    DocumentInfo = new DocumentInfo { TotalPages = pages.Count },
+                    Pages = pages
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void ResolveDbPath(string cacheFilePath, out string dbPath, out string cacheName)
+        {
+            dbPath = FilterPDF.Utils.SqliteCacheStore.DefaultDbPath;
+            cacheName = Path.GetFileNameWithoutExtension(cacheFilePath);
+
+            if (cacheFilePath.StartsWith("db://", StringComparison.OrdinalIgnoreCase))
+            {
+                var trimmed = cacheFilePath.Substring("db://".Length);
+                var parts = trimmed.Split('#');
+                if (parts.Length == 2)
+                {
+                    dbPath = parts[0];
+                    cacheName = parts[1];
+                }
+            }
+            else if (cacheFilePath.Contains("#"))
+            {
+                var parts = cacheFilePath.Split('#');
+                if (parts.Length == 2)
+                {
+                    dbPath = parts[0];
+                    cacheName = parts[1];
+                }
             }
         }
         

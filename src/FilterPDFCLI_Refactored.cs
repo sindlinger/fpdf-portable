@@ -297,25 +297,22 @@ namespace FilterPDF
         private void ShowHelp()
         {
             Console.WriteLine("FPDF Portable CLI\n");
-            Console.WriteLine("Uso geral:");
-            Console.WriteLine("  fpdf load <pdf|dir|pattern> [opções]       # carrega em cache");
-            Console.WriteLine("  fpdf find <cache|range|pdf|dir> [flags]    # busca (texto/header/footer/docs/...)");
-            Console.WriteLine("  fpdf ingest-db <cache|dir> --db-path <db>  # ingere caches em SQLite local");
-            Console.WriteLine("  fpdf cache list                            # lista caches\n");
+            Console.WriteLine("Uso geral (SQLite-only):");
+            Console.WriteLine("  fpdf load <pdf|dir|pattern> [opções]                 --db-path <db>");
+            Console.WriteLine("  fpdf find <cache|range|pdf|dir> [flags]              --db-path <db>");
+            Console.WriteLine("  fpdf cache list                                      --db-path <db>\n");
 
             Console.WriteLine("Flags do find:");
             Console.WriteLine("  --text term (default) | --header term | --footer term | --docs term | --meta term | --fonts term | --objects term");
             Console.WriteLine("  --pages A-B | --min-words N | --max-words N | --type T | --limit N | -F txt|json|csv|count | --bbox | --regex PAT");
             Console.WriteLine("  AND por espaço, OR com '|', sensível com '!'. Default busca no texto.\n");
 
-            Console.WriteLine("DB (opcional):");
-            Console.WriteLine("  --db-path data/sqlite/sqlite-mcp.db (padrão offline)");
-            Console.WriteLine("  --use-mcp para usar sqlite-mcp-server (opcional)\n");
+            Console.WriteLine("DB:");
+            Console.WriteLine("  --db-path data/sqlite/sqlite-mcp.db (padrão) — caches identificados por nome; JSON não é usado");
 
             Console.WriteLine("Exemplos:");
             Console.WriteLine("  fpdf load arquivos/*.pdf ultra");
             Console.WriteLine("  fpdf 1 find --text autorizacao pagamento --header 'diretoria especial' --limit 200");
-            Console.WriteLine("  fpdf ingest-db .cache --db-path data/sqlite/sqlite-mcp.db");
             Console.WriteLine("  fpdf find diretorio/ --docs certidao --pages 1-5 -F json\n");
         }
 
