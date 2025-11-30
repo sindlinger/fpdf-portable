@@ -321,7 +321,7 @@ namespace FilterPDF
             Console.WriteLine("Exemplos:");
             Console.WriteLine("  fpdf load arquivos/*.pdf ultra");
             Console.WriteLine("  fpdf find assessoria magistratura certidao Robson --limit 20 -F txt");
-            Console.WriteLine("  fpdf find ""nota de empenho"" --pages 1-5 -F json\n");
+            Console.WriteLine("  fpdf find \"nota de empenho\" --pages 1-5 -F json\n");
         }
 
         private void ShowCommandHelp(string commandName)

@@ -24,6 +24,9 @@ namespace FilterPDF
             var terms = new List<string>();
             var headerTerms = new List<string>();
             var footerTerms = new List<string>();
+            var exactTerms = new List<string>();
+            var exactHeaderTerms = new List<string>();
+            var exactFooterTerms = new List<string>();
             var docTerms = new List<string>();
             var metaTerms = new List<string>();
             var fontTerms = new List<string>();
@@ -46,8 +49,15 @@ namespace FilterPDF
                     terms.AddRange(t.Split(' ', StringSplitOptions.RemoveEmptyEntries));
                     continue;
                 }
+                if (a == "--exact-text" && i + 1 < args.Length)
+                {
+                    exactTerms.Add(args[++i]);
+                    continue;
+                }
                 if (a == "--header" && i + 1 < args.Length) { headerTerms.Add(args[++i]); continue; }
+                if (a == "--exact-header" && i + 1 < args.Length) { exactHeaderTerms.Add(args[++i]); continue; }
                 if (a == "--footer" && i + 1 < args.Length) { footerTerms.Add(args[++i]); continue; }
+                if (a == "--exact-footer" && i + 1 < args.Length) { exactFooterTerms.Add(args[++i]); continue; }
                 if (a == "--docs" && i + 1 < args.Length) { docTerms.Add(args[++i]); continue; }
                 if (a == "--meta" && i + 1 < args.Length) { metaTerms.Add(args[++i]); continue; }
                 if (a == "--fonts" && i + 1 < args.Length) { fontTerms.Add(args[++i]); continue; }
@@ -63,13 +73,15 @@ namespace FilterPDF
                 terms.Add(a);
             }
 
-            var hits = new List<Hit>();
-
             if (!string.IsNullOrEmpty(dbPath) && File.Exists(dbPath))
             {
                 try
                 {
-                    SearchInSqlite(dbPath, terms, headerTerms, footerTerms, docTerms, metaTerms, fontTerms, objectTerms, pageRange, minWords, maxWords, typeFilter, limit, format, wantBBox, regexPattern);
+                    SearchInSqlite(dbPath,
+                        terms, headerTerms, footerTerms,
+                        exactTerms, exactHeaderTerms, exactFooterTerms,
+                        docTerms, metaTerms, fontTerms, objectTerms,
+                        pageRange, minWords, maxWords, typeFilter, limit, format, wantBBox, regexPattern);
                     return;
                 }
                 catch (Exception ex)
@@ -95,6 +107,7 @@ namespace FilterPDF
 
         private void SearchInSqlite(string dbPath,
             List<string> terms, List<string> headerTerms, List<string> footerTerms,
+            List<string> exactTerms, List<string> exactHeaderTerms, List<string> exactFooterTerms,
             List<string> docTerms, List<string> metaTerms, List<string> fontTerms, List<string> objectTerms,
             string pageRange, int? minWords, int? maxWords, string typeFilter, int? limit, string format, bool wantBBox, string regexPattern)
         {
@@ -106,7 +119,7 @@ namespace FilterPDF
             var pageSet = BuildPageSet(pageRange, int.MaxValue); // sem total conhecido
 
             // Texto/header/footer
-            if (terms.Count > 0 || regexPattern != null || headerTerms.Count > 0 || footerTerms.Count > 0)
+            if (terms.Count > 0 || exactTerms.Count > 0 || regexPattern != null || headerTerms.Count > 0 || footerTerms.Count > 0 || exactHeaderTerms.Count > 0 || exactFooterTerms.Count > 0)
             {
                 bool ftsTried = false;
 
@@ -158,14 +171,28 @@ namespace FilterPDF
                             var header = string.Join("\n", lines.Take(5));
                             CollectTextHits(pageNum, "header", header, headerTerms, regexPattern, hits, limit);
                         }
+                        if (exactHeaderTerms.Count > 0)
+                        {
+                            var header = string.Join("\n", lines.Take(5));
+                            CollectExactHits(pageNum, "header", header, exactHeaderTerms, hits, limit);
+                        }
                         if (footerTerms.Count > 0)
                         {
                             var footer = string.Join("\n", lines.Reverse().Take(5).Reverse());
                             CollectTextHits(pageNum, "footer", footer, footerTerms, regexPattern, hits, limit);
                         }
+                        if (exactFooterTerms.Count > 0)
+                        {
+                            var footer = string.Join("\n", lines.Reverse().Take(5).Reverse());
+                            CollectExactHits(pageNum, "footer", footer, exactFooterTerms, hits, limit);
+                        }
                         if (terms.Count > 0 && headerTerms.Count == 0 && footerTerms.Count == 0)
                         {
                             CollectTextHits(pageNum, "text", text, terms, regexPattern, hits, limit);
+                        }
+                        if (exactTerms.Count > 0 && headerTerms.Count == 0 && footerTerms.Count == 0)
+                        {
+                            CollectExactHits(pageNum, "text", text, exactTerms, hits, limit);
                         }
                         if (limit.HasValue && hits.Count >= limit.Value) break;
                     }
@@ -242,6 +269,19 @@ namespace FilterPDF
             hits.Add(new Hit { Page = pageNumber, Scope = scope, Term = string.Join(" & ", terms), Snippet = ExtractContext(text, FirstTermIndex(text, terms)) });
         }
 
+        private static void CollectExactHits(int pageNumber, string scope, string text, List<string> terms, List<Hit> hits, int? limit)
+        {
+            if (limit.HasValue && hits.Count >= limit.Value) return;
+            if (string.IsNullOrEmpty(text)) return;
+
+            foreach (var term in terms)
+            {
+                if (!text.Contains(term)) return; // case-sensitive exact substring
+            }
+
+            hits.Add(new Hit { Page = pageNumber, Scope = scope, Term = string.Join(" & ", terms), Snippet = ExtractContext(text, FirstTermIndexExact(text, terms)) });
+        }
+
         private static string ExtractContext(string text, int index)
         {
             if (index < 0) index = 0;
@@ -258,6 +298,17 @@ namespace FilterPDF
                 var normalizedText = WordOption.NormalizeText(text);
                 var normalizedTerm = WordOption.NormalizeText(t.Trim('!', '"', '\''));
                 var idx = normalizedText.IndexOf(normalizedTerm);
+                if (idx >= 0 && idx < best) best = idx;
+            }
+            return best == text.Length ? 0 : best;
+        }
+
+        private static int FirstTermIndexExact(string text, List<string> terms)
+        {
+            int best = text.Length;
+            foreach (var t in terms)
+            {
+                var idx = text.IndexOf(t);
                 if (idx >= 0 && idx < best) best = idx;
             }
             return best == text.Length ? 0 : best;
