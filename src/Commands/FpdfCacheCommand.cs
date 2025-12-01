@@ -163,6 +163,30 @@ namespace FilterPDF
             Console.WriteLine($"Bytes registrados: {stats.TotalCacheSize / (1024 * 1024):N1} MB");
             Console.WriteLine($"Last Updated: {stats.LastUpdated:yyyy-MM-dd HH:mm:ss}");
             Console.WriteLine();
+
+            try
+            {
+                var meta = CacheManager.GetMetaStats();
+                Console.WriteLine("Preenchimento de metadados (caches preenchidas / total):");
+                Console.WriteLine($"  meta_title         : {meta.MetaTitle}/{stats.TotalEntries}");
+                Console.WriteLine($"  meta_author        : {meta.MetaAuthor}/{stats.TotalEntries}");
+                Console.WriteLine($"  meta_subject       : {meta.MetaSubject}/{stats.TotalEntries}");
+                Console.WriteLine($"  meta_keywords      : {meta.MetaKeywords}/{stats.TotalEntries}");
+                Console.WriteLine($"  meta_creation_date : {meta.MetaCreationDate}/{stats.TotalEntries}");
+                Console.WriteLine($"  stat_total_images  : {meta.StatTotalImages}/{stats.TotalEntries}");
+                Console.WriteLine($"  stat_total_fonts   : {meta.StatTotalFonts}/{stats.TotalEntries}");
+                Console.WriteLine($"  stat_bookmarks     : {meta.StatBookmarks}/{stats.TotalEntries}");
+                Console.WriteLine($"  res_attachments    : {meta.ResAttachments}/{stats.TotalEntries}");
+                Console.WriteLine($"  res_embedded_files : {meta.ResEmbeddedFiles}/{stats.TotalEntries}");
+                Console.WriteLine($"  res_javascript     : {meta.ResJavascript}/{stats.TotalEntries}");
+                Console.WriteLine($"  res_multimedia     : {meta.ResMultimedia}/{stats.TotalEntries}");
+                Console.WriteLine($"  sec_is_encrypted   : {meta.SecIsEncrypted}/{stats.TotalEntries}");
+                Console.WriteLine();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"(WARN) Não foi possível ler estatísticas de metadados: {ex.Message}");
+            }
             
             if (stats.TotalEntries > 0)
             {

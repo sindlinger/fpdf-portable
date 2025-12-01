@@ -55,6 +55,66 @@ namespace FilterPDF
         {
             SqliteCacheStore.EnsureDatabase(DbPath);
         }
+
+        public class MetaStats
+        {
+            public int MetaTitle { get; set; }
+            public int MetaAuthor { get; set; }
+            public int MetaSubject { get; set; }
+            public int MetaKeywords { get; set; }
+            public int MetaCreationDate { get; set; }
+            public int StatTotalImages { get; set; }
+            public int StatTotalFonts { get; set; }
+            public int StatBookmarks { get; set; }
+            public int ResAttachments { get; set; }
+            public int ResEmbeddedFiles { get; set; }
+            public int ResJavascript { get; set; }
+            public int ResMultimedia { get; set; }
+            public int SecIsEncrypted { get; set; }
+        }
+
+        public static MetaStats GetMetaStats()
+        {
+            EnsureDb();
+            var m = new MetaStats();
+            using var conn = new SQLiteConnection($"Data Source={DbPath};Version=3;");
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                SELECT
+                  SUM(meta_title IS NOT NULL AND meta_title <> '') as meta_title,
+                  SUM(meta_author IS NOT NULL AND meta_author <> '') as meta_author,
+                  SUM(meta_subject IS NOT NULL AND meta_subject <> '') as meta_subject,
+                  SUM(meta_keywords IS NOT NULL AND meta_keywords <> '') as meta_keywords,
+                  SUM(meta_creation_date IS NOT NULL AND meta_creation_date <> '') as meta_creation_date,
+                  SUM(stat_total_images IS NOT NULL) as stat_total_images,
+                  SUM(stat_total_fonts IS NOT NULL) as stat_total_fonts,
+                  SUM(stat_bookmarks IS NOT NULL) as stat_bookmarks,
+                  SUM(res_attachments IS NOT NULL) as res_attachments,
+                  SUM(res_embedded_files IS NOT NULL) as res_embedded_files,
+                  SUM(res_javascript IS NOT NULL) as res_javascript,
+                  SUM(res_multimedia IS NOT NULL) as res_multimedia,
+                  SUM(sec_is_encrypted IS NOT NULL) as sec_is_encrypted
+                FROM caches";
+            using var r = cmd.ExecuteReader();
+            if (r.Read())
+            {
+                m.MetaTitle = r.IsDBNull(0) ? 0 : r.GetInt32(0);
+                m.MetaAuthor = r.IsDBNull(1) ? 0 : r.GetInt32(1);
+                m.MetaSubject = r.IsDBNull(2) ? 0 : r.GetInt32(2);
+                m.MetaKeywords = r.IsDBNull(3) ? 0 : r.GetInt32(3);
+                m.MetaCreationDate = r.IsDBNull(4) ? 0 : r.GetInt32(4);
+                m.StatTotalImages = r.IsDBNull(5) ? 0 : r.GetInt32(5);
+                m.StatTotalFonts = r.IsDBNull(6) ? 0 : r.GetInt32(6);
+                m.StatBookmarks = r.IsDBNull(7) ? 0 : r.GetInt32(7);
+                m.ResAttachments = r.IsDBNull(8) ? 0 : r.GetInt32(8);
+                m.ResEmbeddedFiles = r.IsDBNull(9) ? 0 : r.GetInt32(9);
+                m.ResJavascript = r.IsDBNull(10) ? 0 : r.GetInt32(10);
+                m.ResMultimedia = r.IsDBNull(11) ? 0 : r.GetInt32(11);
+                m.SecIsEncrypted = r.IsDBNull(12) ? 0 : r.GetInt32(12);
+            }
+            return m;
+        }
         
         /// <summary>
         /// Adiciona um PDF ao cache com validação de segurança
