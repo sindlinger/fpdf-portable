@@ -71,6 +71,24 @@ namespace FilterPDF
             public int ResJavascript { get; set; }
             public int ResMultimedia { get; set; }
             public int SecIsEncrypted { get; set; }
+            public long SumImages { get; set; }
+            public long SumBookmarks { get; set; }
+            public long SumFonts { get; set; }
+            public long SumPages { get; set; }
+        }
+
+        public class BookmarkSummaryItem
+        {
+            public string Title { get; set; } = "";
+            public int Count { get; set; }
+            public List<string> Samples { get; set; } = new List<string>();
+        }
+
+        public class TopValueItem
+        {
+            public string Value { get; set; } = "";
+            public int Count { get; set; }
+            public List<string> Samples { get; set; } = new List<string>();
         }
 
         public static MetaStats GetMetaStats()
@@ -94,7 +112,11 @@ namespace FilterPDF
                   SUM(res_embedded_files IS NOT NULL) as res_embedded_files,
                   SUM(res_javascript IS NOT NULL) as res_javascript,
                   SUM(res_multimedia IS NOT NULL) as res_multimedia,
-                  SUM(sec_is_encrypted IS NOT NULL) as sec_is_encrypted
+                  SUM(sec_is_encrypted IS NOT NULL) as sec_is_encrypted,
+                  COALESCE(SUM(stat_total_images),0) as sum_images,
+                  COALESCE(SUM(stat_bookmarks),0) as sum_bookmarks,
+                  COALESCE(SUM(stat_total_fonts),0) as sum_fonts,
+                  COALESCE(SUM(doc_total_pages),0) as sum_pages
                 FROM caches";
             using var r = cmd.ExecuteReader();
             if (r.Read())
@@ -112,8 +134,174 @@ namespace FilterPDF
                 m.ResJavascript = r.IsDBNull(10) ? 0 : r.GetInt32(10);
                 m.ResMultimedia = r.IsDBNull(11) ? 0 : r.GetInt32(11);
                 m.SecIsEncrypted = r.IsDBNull(12) ? 0 : r.GetInt32(12);
+                m.SumImages = r.IsDBNull(13) ? 0 : r.GetInt64(13);
+                m.SumBookmarks = r.IsDBNull(14) ? 0 : r.GetInt64(14);
+                m.SumFonts = r.IsDBNull(15) ? 0 : r.GetInt64(15);
+                m.SumPages = r.IsDBNull(16) ? 0 : r.GetInt64(16);
             }
             return m;
+        }
+
+        public static List<BookmarkSummaryItem> GetBookmarkSummary(int top, int sampleSize)
+        {
+            var topItems = GetTopValues("bookmark", top, sampleSize);
+            var list = new List<BookmarkSummaryItem>();
+            foreach (var item in topItems)
+            {
+                list.Add(new BookmarkSummaryItem
+                {
+                    Title = item.Value,
+                    Count = item.Count,
+                    Samples = item.Samples
+                });
+            }
+            return list;
+        }
+
+        public static List<TopValueItem> GetTopValues(string field, int top, int sampleSize)
+        {
+            EnsureDb();
+            var freq = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var samples = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+            bool HasColumn(SQLiteConnection connection, string table, string column)
+            {
+                using var c = connection.CreateCommand();
+                c.CommandText = $"PRAGMA table_info({table})";
+                using var r = c.ExecuteReader();
+                while (r.Read())
+                {
+                    if (!r.IsDBNull(1) && string.Equals(r.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+                return false;
+            }
+
+            void AddValue(string? rawValue, string sampleName)
+            {
+                if (string.IsNullOrWhiteSpace(rawValue)) return;
+                var value = rawValue.Trim();
+                if (value.Length == 0) return;
+                if (!freq.TryGetValue(value, out var count))
+                {
+                    freq[value] = 1;
+                    samples[value] = new List<string> { sampleName };
+                }
+                else
+                {
+                    freq[value] = count + 1;
+                    if (samples[value].Count < sampleSize && !samples[value].Contains(sampleName))
+                        samples[value].Add(sampleName);
+                }
+            }
+
+            using var conn = new SQLiteConnection($"Data Source={DbPath};Version=3;");
+            conn.Open();
+
+            switch (field?.ToLowerInvariant())
+            {
+                case "bookmark":
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = "SELECT name, json FROM caches WHERE stat_bookmarks IS NOT NULL";
+                        using var r = cmd.ExecuteReader();
+                        while (r.Read())
+                        {
+                            var name = r.IsDBNull(0) ? "" : r.GetString(0);
+                            var jsonStr = r.IsDBNull(1) ? "" : r.GetString(1);
+                            if (string.IsNullOrEmpty(jsonStr)) continue;
+                            try
+                            {
+                                var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(jsonStr);
+                                var bookmarks = data?["Bookmarks"];
+                                if (bookmarks == null) continue;
+
+                                void Walk(System.Text.Json.Nodes.JsonNode node)
+                                {
+                                    if (node == null) return;
+                                    if (node is System.Text.Json.Nodes.JsonObject obj)
+                                    {
+                                        var title = obj["Title"]?.ToString();
+                                        AddValue(title, name);
+                                        var children = obj["Children"];
+                                        if (children is System.Text.Json.Nodes.JsonArray arr)
+                                        {
+                                            foreach (var child in arr) Walk(child);
+                                        }
+                                    }
+                                    else if (node is System.Text.Json.Nodes.JsonArray arr)
+                                    {
+                                        foreach (var child in arr) Walk(child);
+                                    }
+                                }
+
+                                Walk(bookmarks);
+                            }
+                            catch
+                            {
+                                // ignora json inválido
+                            }
+                        }
+                    }
+                    break;
+
+                case "meta_title":
+                case "meta_author":
+                case "meta_subject":
+                case "meta_creator":
+                case "meta_producer":
+                case "doc_type":
+                case "mode":
+                    if (field.Equals("doc_type", StringComparison.OrdinalIgnoreCase) && !HasColumn(conn, "caches", "doc_type"))
+                    {
+                        break; // coluna inexistente, retorna vazio
+                    }
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = $"SELECT name, {field} FROM caches WHERE {field} IS NOT NULL AND {field} <> ''";
+                        using var r = cmd.ExecuteReader();
+                        while (r.Read())
+                        {
+                            var name = r.IsDBNull(0) ? "" : r.GetString(0);
+                            var value = r.IsDBNull(1) ? null : r.GetString(1);
+                            AddValue(value, name);
+                        }
+                    }
+                    break;
+
+                case "meta_keywords":
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = "SELECT name, meta_keywords FROM caches WHERE meta_keywords IS NOT NULL AND meta_keywords <> ''";
+                        using var r = cmd.ExecuteReader();
+                        while (r.Read())
+                        {
+                            var name = r.IsDBNull(0) ? "" : r.GetString(0);
+                            var value = r.IsDBNull(1) ? "" : r.GetString(1);
+                            var parts = value.Split(new[] { ';', ',', '|' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (parts.Length == 0) AddValue(value, name);
+                            foreach (var part in parts) AddValue(part, name);
+                        }
+                    }
+                    break;
+
+                default:
+                    throw new ArgumentException($"Campo não suportado: {field}");
+            }
+
+            var result = freq
+                .Select(kv => new TopValueItem
+                {
+                    Value = kv.Key,
+                    Count = kv.Value,
+                    Samples = samples.TryGetValue(kv.Key, out var s) ? s : new List<string>()
+                })
+                .OrderByDescending(i => i.Count)
+                .ThenBy(i => i.Value, StringComparer.OrdinalIgnoreCase)
+                .Take(top)
+                .ToList();
+
+            return result;
         }
         
         /// <summary>

@@ -54,6 +54,17 @@ namespace FilterPDF
                 case "rebuild":
                     Console.WriteLine("Rebuild não é necessário: cache é mantido em SQLite.");
                     break;
+
+                case "top":
+                    ShowTopSummary(args.Skip(1).ToArray());
+                    break;
+
+                case "bookmarks": // compat: delega para top --field bookmark
+                    var list = args.Skip(1).ToList();
+                    list.Insert(0, "--field");
+                    list.Insert(1, "bookmark");
+                    ShowTopSummary(list.ToArray());
+                    break;
                     
                 default:
                     Console.Error.WriteLine($"Error: Unknown subcommand '{subcommand}'");
@@ -151,7 +162,7 @@ namespace FilterPDF
                     break;
             }
         }
-        
+
         private void ShowCacheStats()
         {
             var stats = CacheManager.GetCacheStats();
@@ -182,6 +193,12 @@ namespace FilterPDF
                 Console.WriteLine($"  res_multimedia     : {meta.ResMultimedia}/{stats.TotalEntries}");
                 Console.WriteLine($"  sec_is_encrypted   : {meta.SecIsEncrypted}/{stats.TotalEntries}");
                 Console.WriteLine();
+                Console.WriteLine("Totais (soma):");
+                Console.WriteLine($"  total pages        : {meta.SumPages}");
+                Console.WriteLine($"  total images       : {meta.SumImages}");
+                Console.WriteLine($"  total bookmarks    : {meta.SumBookmarks}");
+                Console.WriteLine($"  total fonts        : {meta.SumFonts}");
+                Console.WriteLine();
             }
             catch (Exception ex)
             {
@@ -193,6 +210,53 @@ namespace FilterPDF
                 Console.WriteLine("Usage:");
                 Console.WriteLine("   fpdf <pdf_name> pages");
                 Console.WriteLine("   fpdf <pdf_name> bookmarks");
+            }
+        }
+
+        private void ShowTopSummary(string[] args)
+        {
+            int top = 5;
+            int sample = 3;
+            string field = null;
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "--top" && i + 1 < args.Length && int.TryParse(args[++i], out var t)) top = Math.Max(1, t);
+                else if (args[i] == "--sample" && i + 1 < args.Length && int.TryParse(args[++i], out var s)) sample = Math.Max(1, s);
+                else if ((args[i] == "--field" || args[i] == "-f") && i + 1 < args.Length) field = args[++i];
+            }
+
+            if (string.IsNullOrWhiteSpace(field))
+            {
+                Console.WriteLine("Uso: fpdf cache top --field <bookmark|meta_title|meta_author|meta_subject|meta_keywords|meta_creator|meta_producer|doc_type|mode>");
+                return;
+            }
+
+            List<CacheManager.TopValueItem> summary;
+            try
+            {
+                summary = CacheManager.GetTopValues(field, top, sample);
+            }
+            catch (ArgumentException ex)
+            {
+                Console.WriteLine(ex.Message);
+                return;
+            }
+            if (summary.Count == 0)
+            {
+                Console.WriteLine($"Nenhum valor encontrado para o campo '{field}'.");
+                return;
+            }
+
+            Console.WriteLine($"TOP {top} valores em '{field}' (caches e exemplos):");
+            int rank = 1;
+            foreach (var item in summary)
+            {
+                Console.WriteLine($"{rank}. \"{item.Value}\" - {item.Count} caches");
+                if (item.Samples?.Count > 0)
+                {
+                    Console.WriteLine("   Exemplos: " + string.Join(", ", item.Samples));
+                }
+                rank++;
             }
         }
         
@@ -306,6 +370,8 @@ namespace FilterPDF
             Console.WriteLine("    clear                 Clear all cache (with confirmation)");
             Console.WriteLine("    remove <pdf>, rm      Remove specific PDF from cache");
             Console.WriteLine("    find <pdf>            Find PDF in cache");
+            Console.WriteLine("    top                   Top values (bookmarks, autores, produtor etc.)");
+            Console.WriteLine("    bookmarks             Alias para: top --field bookmark");
             Console.WriteLine("    rebuild               Rebuild index from existing cache files");
             Console.WriteLine();
             Console.WriteLine("LIST OPTIONS:");
@@ -315,6 +381,11 @@ namespace FilterPDF
             Console.WriteLine("CLEAR OPTIONS:");
             Console.WriteLine("    -f, --force           Force clear without confirmation");
             Console.WriteLine();
+            Console.WriteLine("TOP OPTIONS:");
+            Console.WriteLine("    --field <f>           Campo: bookmark|meta_title|meta_author|meta_subject|meta_keywords|meta_creator|meta_producer|doc_type|mode");
+            Console.WriteLine("    --top <n>             Quantos valores mostrar (default 5)");
+            Console.WriteLine("    --sample <n>          Quantos exemplos por valor (default 3)");
+            Console.WriteLine();
             Console.WriteLine("EXAMPLES:");
             Console.WriteLine($"    fpdf {Name} list");
             Console.WriteLine($"    fpdf {Name} list -v");
@@ -322,6 +393,7 @@ namespace FilterPDF
             Console.WriteLine($"    fpdf {Name} find documento");
             Console.WriteLine($"    fpdf {Name} remove documento");
             Console.WriteLine($"    fpdf {Name} clear --force");
+            Console.WriteLine($"    fpdf {Name} top --field bookmark --top 10");
             Console.WriteLine();
             Console.WriteLine("WORKFLOW:");
             Console.WriteLine("    1. Load PDFs: fpdf load document.pdf");

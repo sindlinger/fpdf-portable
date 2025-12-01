@@ -2,6 +2,8 @@
 !.claude-rules
 .cache/
 data/sqlite/*.db
+data/sqlite/*.db-wal
+data/sqlite/*.db-shm
 *.db
 .data/
 tests/

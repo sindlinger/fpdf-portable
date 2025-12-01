@@ -118,6 +118,34 @@ namespace FilterPDF.Utils
             TryAlter("ALTER TABLE pages ADD COLUMN annotation_count INTEGER DEFAULT 0;");
             TryAlter("ALTER TABLE caches ADD COLUMN process_number TEXT;");
             TryAlter("ALTER TABLE caches ADD COLUMN json TEXT;");
+            TryAlter("ALTER TABLE caches ADD COLUMN meta_title TEXT;");
+            TryAlter("ALTER TABLE caches ADD COLUMN meta_author TEXT;");
+            TryAlter("ALTER TABLE caches ADD COLUMN meta_subject TEXT;");
+            TryAlter("ALTER TABLE caches ADD COLUMN meta_keywords TEXT;");
+            TryAlter("ALTER TABLE caches ADD COLUMN meta_creator TEXT;");
+            TryAlter("ALTER TABLE caches ADD COLUMN meta_producer TEXT;");
+            TryAlter("ALTER TABLE caches ADD COLUMN meta_creation_date TEXT;");
+            TryAlter("ALTER TABLE caches ADD COLUMN meta_mod_date TEXT;");
+            TryAlter("ALTER TABLE caches ADD COLUMN meta_pdf_version TEXT;");
+            TryAlter("ALTER TABLE caches ADD COLUMN meta_is_tagged INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN doc_total_pages INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN stat_total_images INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN stat_total_fonts INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN stat_bookmarks INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN res_attachments INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN res_embedded_files INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN res_javascript INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN res_multimedia INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN sec_is_encrypted INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN sec_encryption_type INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN sec_can_print INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN sec_can_modify INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN sec_can_copy INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN sec_can_annotate INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN sec_can_fill_forms INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN sec_can_extract INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN sec_can_assemble INTEGER;");
+            TryAlter("ALTER TABLE caches ADD COLUMN sec_can_print_hq INTEGER;");
         }
 
         public static bool CacheExists(string dbPath, string cacheName)
@@ -141,7 +169,8 @@ namespace FilterPDF.Utils
 
             var inferredProcess = InferProcessFromName(cacheName);
             var metaJson = SerializeMetadata(analysis);
-            long cacheId = InsertOrUpdateCache(conn, cacheName, sourcePath, mode, analysis?.FileSize ?? 0, inferredProcess, metaJson);
+            var meta = FlattenMeta(analysis);
+            long cacheId = InsertOrUpdateCache(conn, cacheName, sourcePath, mode, analysis?.FileSize ?? 0, inferredProcess, metaJson, meta);
 
             // Clear old pages for idempotency
             using (var del = conn.CreateCommand())
@@ -204,18 +233,55 @@ namespace FilterPDF.Utils
             return list;
         }
 
-        private static long InsertOrUpdateCache(SQLiteConnection conn, string cacheName, string sourcePath, string mode, long sizeBytes, string? processNumber, string? metaJson)
+        private static long InsertOrUpdateCache(SQLiteConnection conn, string cacheName, string sourcePath, string mode, long sizeBytes, string? processNumber, string? metaJson, CacheMeta meta)
         {
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"INSERT INTO caches(name, source, created_at, mode, size_bytes, json, process_number)
-                                VALUES (@n,@s,@c,@m,@sz,@j,@p)
+            cmd.CommandText = @"INSERT INTO caches(name, source, created_at, mode, size_bytes, json, process_number,
+                                meta_title, meta_author, meta_subject, meta_keywords, meta_creator, meta_producer,
+                                meta_creation_date, meta_mod_date, meta_pdf_version, meta_is_tagged,
+                                doc_total_pages, stat_total_images, stat_total_fonts, stat_bookmarks,
+                                res_attachments, res_embedded_files, res_javascript, res_multimedia,
+                                sec_is_encrypted, sec_encryption_type, sec_can_print, sec_can_modify, sec_can_copy,
+                                sec_can_annotate, sec_can_fill_forms, sec_can_extract, sec_can_assemble, sec_can_print_hq)
+                                VALUES (@n,@s,@c,@m,@sz,@j,@p,
+                                @mtit,@maut,@msub,@mkey,@mcre,@mprod,@mcd,@mmd,@mpdf,@mtag,
+                                @dtp,@sti,@stf,@stb,@ra,@ref,@rjs,@rmm,
+                                @sei,@set,@scp,@scm,@scc,@sca,@scf,@sce,@sca2,@scphq)
                                 ON CONFLICT(name) DO UPDATE SET
                                   source=excluded.source,
                                   created_at=excluded.created_at,
                                   mode=excluded.mode,
                                   size_bytes=excluded.size_bytes,
                                   json=excluded.json,
-                                  process_number=COALESCE(excluded.process_number, caches.process_number)
+                                  process_number=COALESCE(excluded.process_number, caches.process_number),
+                                  meta_title=excluded.meta_title,
+                                  meta_author=excluded.meta_author,
+                                  meta_subject=excluded.meta_subject,
+                                  meta_keywords=excluded.meta_keywords,
+                                  meta_creator=excluded.meta_creator,
+                                  meta_producer=excluded.meta_producer,
+                                  meta_creation_date=excluded.meta_creation_date,
+                                  meta_mod_date=excluded.meta_mod_date,
+                                  meta_pdf_version=excluded.meta_pdf_version,
+                                  meta_is_tagged=excluded.meta_is_tagged,
+                                  doc_total_pages=excluded.doc_total_pages,
+                                  stat_total_images=excluded.stat_total_images,
+                                  stat_total_fonts=excluded.stat_total_fonts,
+                                  stat_bookmarks=excluded.stat_bookmarks,
+                                  res_attachments=excluded.res_attachments,
+                                  res_embedded_files=excluded.res_embedded_files,
+                                  res_javascript=excluded.res_javascript,
+                                  res_multimedia=excluded.res_multimedia,
+                                  sec_is_encrypted=excluded.sec_is_encrypted,
+                                  sec_encryption_type=excluded.sec_encryption_type,
+                                  sec_can_print=excluded.sec_can_print,
+                                  sec_can_modify=excluded.sec_can_modify,
+                                  sec_can_copy=excluded.sec_can_copy,
+                                  sec_can_annotate=excluded.sec_can_annotate,
+                                  sec_can_fill_forms=excluded.sec_can_fill_forms,
+                                  sec_can_extract=excluded.sec_can_extract,
+                                  sec_can_assemble=excluded.sec_can_assemble,
+                                  sec_can_print_hq=excluded.sec_can_print_hq
                                 ;
                                 SELECT id FROM caches WHERE name=@n LIMIT 1;";
             cmd.Parameters.AddWithValue("@n", cacheName);
@@ -225,6 +291,34 @@ namespace FilterPDF.Utils
             cmd.Parameters.AddWithValue("@sz", sizeBytes);
             cmd.Parameters.AddWithValue("@j", (object?)metaJson ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@p", (object?)processNumber ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@mtit", (object?)meta.MetaTitle ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@maut", (object?)meta.MetaAuthor ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@msub", (object?)meta.MetaSubject ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@mkey", (object?)meta.MetaKeywords ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@mcre", (object?)meta.MetaCreator ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@mprod", (object?)meta.MetaProducer ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@mcd", (object?)meta.MetaCreationDate ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@mmd", (object?)meta.MetaModDate ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@mpdf", (object?)meta.MetaPdfVersion ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@mtag", meta.MetaIsTagged.HasValue ? meta.MetaIsTagged.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@dtp", meta.DocTotalPages.HasValue ? meta.DocTotalPages.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@sti", meta.StatTotalImages.HasValue ? meta.StatTotalImages.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@stf", meta.StatTotalFonts.HasValue ? meta.StatTotalFonts.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@stb", meta.StatBookmarks.HasValue ? meta.StatBookmarks.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@ra", meta.ResAttachments.HasValue ? meta.ResAttachments.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@ref", meta.ResEmbeddedFiles.HasValue ? meta.ResEmbeddedFiles.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@rjs", meta.ResJavascript.HasValue ? meta.ResJavascript.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@rmm", meta.ResMultimedia.HasValue ? meta.ResMultimedia.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@sei", meta.SecIsEncrypted.HasValue ? meta.SecIsEncrypted.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@set", meta.SecEncryptionType.HasValue ? meta.SecEncryptionType.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@scp", meta.SecCanPrint.HasValue ? meta.SecCanPrint.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@scm", meta.SecCanModify.HasValue ? meta.SecCanModify.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@scc", meta.SecCanCopy.HasValue ? meta.SecCanCopy.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@sca", meta.SecCanAnnotate.HasValue ? meta.SecCanAnnotate.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@scf", meta.SecCanFillForms.HasValue ? meta.SecCanFillForms.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@sce", meta.SecCanExtract.HasValue ? meta.SecCanExtract.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@sca2", meta.SecCanAssemble.HasValue ? meta.SecCanAssemble.Value : (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@scphq", meta.SecCanPrintHq.HasValue ? meta.SecCanPrintHq.Value : (object)DBNull.Value);
             var result = cmd.ExecuteScalar();
             return (result is long l) ? l : Convert.ToInt64(result);
         }
@@ -252,6 +346,88 @@ namespace FilterPDF.Utils
             {
                 return null;
             }
+        }
+
+        private static CacheMeta FlattenMeta(PDFAnalysisResult analysis)
+        {
+            var m = new CacheMeta();
+            var meta = analysis?.Metadata;
+            var stats = analysis?.Statistics;
+            var res = analysis?.Resources;
+            var doc = analysis?.DocumentInfo;
+            var sec = analysis?.SecurityInfo ?? analysis?.Security;
+            var bookmarks = analysis?.Bookmarks;
+
+            m.MetaTitle = meta?.Title;
+            m.MetaAuthor = meta?.Author;
+            m.MetaSubject = meta?.Subject;
+            m.MetaKeywords = meta?.Keywords;
+            m.MetaCreator = meta?.Creator;
+            m.MetaProducer = meta?.Producer;
+            m.MetaCreationDate = meta?.CreationDate?.ToString("o");
+            m.MetaModDate = meta?.ModificationDate?.ToString("o");
+            m.MetaPdfVersion = meta?.PDFVersion;
+            m.MetaIsTagged = meta?.IsTagged == true ? 1 : 0;
+
+            m.DocTotalPages = doc?.TotalPages;
+
+            m.StatTotalImages = stats?.TotalImages;
+            m.StatTotalFonts = stats?.UniqueFonts;
+            m.StatBookmarks = bookmarks?.TotalCount;
+
+            m.ResAttachments = res?.AttachmentCount;
+            m.ResEmbeddedFiles = res?.EmbeddedFiles?.Count;
+            m.ResJavascript = res?.JavaScriptCount;
+            m.ResMultimedia = res?.HasMultimedia == true ? 1 : 0;
+
+            m.SecIsEncrypted = sec?.IsEncrypted == true ? 1 : 0;
+            m.SecEncryptionType = sec?.EncryptionType;
+            m.SecCanPrint = sec?.CanPrint == true ? 1 : 0;
+            m.SecCanModify = sec?.CanModify == true ? 1 : 0;
+            m.SecCanCopy = sec?.CanCopy == true ? 1 : 0;
+            m.SecCanAnnotate = sec?.CanAnnotate == true ? 1 : 0;
+            m.SecCanFillForms = sec?.CanFillForms == true ? 1 : 0;
+            m.SecCanExtract = sec?.CanExtractContent == true ? 1 : 0;
+            m.SecCanAssemble = sec?.CanAssemble == true ? 1 : 0;
+            m.SecCanPrintHq = sec?.CanPrintHighQuality == true ? 1 : 0;
+
+            return m;
+        }
+
+        private class CacheMeta
+        {
+            public string? MetaTitle { get; set; }
+            public string? MetaAuthor { get; set; }
+            public string? MetaSubject { get; set; }
+            public string? MetaKeywords { get; set; }
+            public string? MetaCreator { get; set; }
+            public string? MetaProducer { get; set; }
+            public string? MetaCreationDate { get; set; }
+            public string? MetaModDate { get; set; }
+            public string? MetaPdfVersion { get; set; }
+            public int? MetaIsTagged { get; set; }
+
+            public int? DocTotalPages { get; set; }
+
+            public int? StatTotalImages { get; set; }
+            public int? StatTotalFonts { get; set; }
+            public int? StatBookmarks { get; set; }
+
+            public int? ResAttachments { get; set; }
+            public int? ResEmbeddedFiles { get; set; }
+            public int? ResJavascript { get; set; }
+            public int? ResMultimedia { get; set; }
+
+            public int? SecIsEncrypted { get; set; }
+            public int? SecEncryptionType { get; set; }
+            public int? SecCanPrint { get; set; }
+            public int? SecCanModify { get; set; }
+            public int? SecCanCopy { get; set; }
+            public int? SecCanAnnotate { get; set; }
+            public int? SecCanFillForms { get; set; }
+            public int? SecCanExtract { get; set; }
+            public int? SecCanAssemble { get; set; }
+            public int? SecCanPrintHq { get; set; }
         }
 
         private static int ComputeWordCount(string text)

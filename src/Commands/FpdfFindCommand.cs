@@ -28,6 +28,7 @@ namespace FilterPDF
             var metaTerms = new List<string>();
             var fontTerms = new List<string>();
             var objectTerms = new List<string>();
+            var bookmarkTerms = new List<string>();
             string pageRange = null;
             int? minWords = null, maxWords = null, limit = 200;
             string typeFilter = null;
@@ -36,6 +37,18 @@ namespace FilterPDF
             string regexPattern = null;
             bool? hasMoney = null;
             bool? hasCpf = null;
+            int? bookmarksMin = null, bookmarksMax = null;
+            int? imagesMin = null, imagesMax = null;
+            var metaTitle = new List<string>();
+            var metaAuthor = new List<string>();
+            var metaSubject = new List<string>();
+            var metaKeywords = new List<string>();
+            var metaCreator = new List<string>();
+            var metaProducer = new List<string>();
+            DateTime? createdAfter = null, createdBefore = null;
+            int? pagesMin = null, pagesMax = null, fontsMin = null, fontsMax = null;
+            bool? attachments = null, embedded = null, javascript = null, multimedia = null;
+            bool? encrypted = null, canCopy = null, canPrint = null, canAnnotate = null, canFillForms = null, canExtract = null, canAssemble = null, canPrintHq = null;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -54,8 +67,38 @@ namespace FilterPDF
                 if (a == "--meta" && i + 1 < args.Length) { metaTerms.Add(args[++i]); continue; }
                 if (a == "--fonts" && i + 1 < args.Length) { fontTerms.Add(args[++i]); continue; }
                 if (a == "--objects" && i + 1 < args.Length) { objectTerms.Add(args[++i]); continue; }
+                if (a == "--bookmark" && i + 1 < args.Length) { bookmarkTerms.Add(args[++i]); continue; }
+                if (a == "--bookmarks-min" && i + 1 < args.Length && int.TryParse(args[++i], out var bmin)) { bookmarksMin = bmin; continue; }
+                if (a == "--bookmarks-max" && i + 1 < args.Length && int.TryParse(args[++i], out var bmax)) { bookmarksMax = bmax; continue; }
+                if (a == "--images-min" && i + 1 < args.Length && int.TryParse(args[++i], out var imin)) { imagesMin = imin; continue; }
+                if (a == "--images-max" && i + 1 < args.Length && int.TryParse(args[++i], out var imax)) { imagesMax = imax; continue; }
                 if (a == "--has-money") { hasMoney = true; continue; }
                 if (a == "--has-cpf") { hasCpf = true; continue; }
+                if (a == "--meta-title" && i + 1 < args.Length) { metaTitle.Add(args[++i]); continue; }
+                if (a == "--meta-author" && i + 1 < args.Length) { metaAuthor.Add(args[++i]); continue; }
+                if (a == "--meta-subject" && i + 1 < args.Length) { metaSubject.Add(args[++i]); continue; }
+                if (a == "--meta-keywords" && i + 1 < args.Length) { metaKeywords.Add(args[++i]); continue; }
+                if (a == "--meta-creator" && i + 1 < args.Length) { metaCreator.Add(args[++i]); continue; }
+                if (a == "--meta-producer" && i + 1 < args.Length) { metaProducer.Add(args[++i]); continue; }
+                if (a == "--created-after" && i + 1 < args.Length && DateTime.TryParse(args[++i], out var ca)) { createdAfter = ca; continue; }
+                if (a == "--created-before" && i + 1 < args.Length && DateTime.TryParse(args[++i], out var cb)) { createdBefore = cb; continue; }
+                if (a == "--pages-min" && i + 1 < args.Length && int.TryParse(args[++i], out var pgmin)) { pagesMin = pgmin; continue; }
+                if (a == "--pages-max" && i + 1 < args.Length && int.TryParse(args[++i], out var pgmax)) { pagesMax = pgmax; continue; }
+                if (a == "--fonts-min" && i + 1 < args.Length && int.TryParse(args[++i], out var fmin)) { fontsMin = fmin; continue; }
+                if (a == "--fonts-max" && i + 1 < args.Length && int.TryParse(args[++i], out var fmax)) { fontsMax = fmax; continue; }
+                if (a == "--attachments") { attachments = true; continue; }
+                if (a == "--embedded") { embedded = true; continue; }
+                if (a == "--javascript") { javascript = true; continue; }
+                if (a == "--multimedia") { multimedia = true; continue; }
+                if (a == "--encrypted") { encrypted = true; continue; }
+                if (a == "--not-encrypted") { encrypted = false; continue; }
+                if (a == "--can-copy") { canCopy = true; continue; }
+                if (a == "--can-print") { canPrint = true; continue; }
+                if (a == "--can-annotate") { canAnnotate = true; continue; }
+                if (a == "--can-fill-forms") { canFillForms = true; continue; }
+                if (a == "--can-extract") { canExtract = true; continue; }
+                if (a == "--can-assemble") { canAssemble = true; continue; }
+                if (a == "--can-print-hq") { canPrintHq = true; continue; }
                 if ((a == "--pages" || a == "-p") && i + 1 < args.Length) { pageRange = args[++i]; continue; }
                 if (a == "--min-words" && i + 1 < args.Length && int.TryParse(args[++i], out var mw)) { minWords = mw; continue; }
                 if (a == "--max-words" && i + 1 < args.Length && int.TryParse(args[++i], out var xw)) { maxWords = xw; continue; }
@@ -79,7 +122,12 @@ namespace FilterPDF
                         terms, headerTerms, footerTerms,
                         docTerms, metaTerms, fontTerms, objectTerms,
                         pageRange, minWords, maxWords, typeFilter, limit, format, wantBBox, regexPattern,
-                        hasMoney, hasCpf);
+                        hasMoney, hasCpf, bookmarkTerms, bookmarksMin, bookmarksMax, imagesMin, imagesMax,
+                        metaTitle, metaAuthor, metaSubject, metaKeywords, metaCreator, metaProducer,
+                        createdAfter, createdBefore,
+                        pagesMin, pagesMax, fontsMin, fontsMax,
+                        attachments, embedded, javascript, multimedia,
+                        encrypted, canCopy, canPrint, canAnnotate, canFillForms, canExtract, canAssemble, canPrintHq);
                     return;
                 }
                 catch (Exception ex)
@@ -102,16 +150,179 @@ namespace FilterPDF
             public string Scope { get; set; }
             public string Term { get; set; }
             public string Snippet { get; set; }
+            public CacheMetaSummary Meta { get; set; }
+        }
+
+        private record CacheMetaSummary
+        {
+            public string Title { get; set; }
+            public string Author { get; set; }
+            public string Subject { get; set; }
+            public string Keywords { get; set; }
+            public string Creator { get; set; }
+            public string Producer { get; set; }
+            public int? Pages { get; set; }
+            public int? Images { get; set; }
+            public int? Bookmarks { get; set; }
+            public bool? Encrypted { get; set; }
+        }
+
+        private static HashSet<string>? BuildCacheFilter(string dbPath,
+            List<string> bookmarkTerms, int? bookmarksMin, int? bookmarksMax, int? imagesMin, int? imagesMax,
+            List<string> metaTitle, List<string> metaAuthor, List<string> metaSubject, List<string> metaKeywords, List<string> metaCreator, List<string> metaProducer,
+            DateTime? createdAfter, DateTime? createdBefore,
+            int? pagesMin, int? pagesMax, int? fontsMin, int? fontsMax,
+            bool? attachments, bool? embedded, bool? javascript, bool? multimedia,
+            bool? encrypted, bool? canCopy, bool? canPrint, bool? canAnnotate, bool? canFillForms, bool? canExtract, bool? canAssemble, bool? canPrintHq,
+            out Dictionary<string, CacheMetaSummary> metaLookup)
+        {
+            metaLookup = new Dictionary<string, CacheMetaSummary>(StringComparer.OrdinalIgnoreCase);
+            bool needFilter = (bookmarkTerms?.Count > 0) || bookmarksMin.HasValue || bookmarksMax.HasValue || imagesMin.HasValue || imagesMax.HasValue
+                || metaTitle.Any() || metaAuthor.Any() || metaSubject.Any() || metaKeywords.Any() || metaCreator.Any() || metaProducer.Any()
+                || createdAfter.HasValue || createdBefore.HasValue
+                || pagesMin.HasValue || pagesMax.HasValue || fontsMin.HasValue || fontsMax.HasValue
+                || attachments.HasValue || embedded.HasValue || javascript.HasValue || multimedia.HasValue
+                || encrypted.HasValue || canCopy.HasValue || canPrint.HasValue || canAnnotate.HasValue || canFillForms.HasValue || canExtract.HasValue || canAssemble.HasValue || canPrintHq.HasValue;
+            if (!needFilter) return null;
+
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using var conn = new System.Data.SQLite.SQLiteConnection($"Data Source={dbPath};Version=3;");
+            conn.Open();
+            using var cmd = new System.Data.SQLite.SQLiteCommand("SELECT name, json, stat_bookmarks, stat_total_images, meta_title, meta_author, meta_subject, meta_keywords, meta_creator, meta_producer, meta_creation_date, doc_total_pages, stat_total_fonts, res_attachments, res_embedded_files, res_javascript, res_multimedia, sec_is_encrypted, sec_can_copy, sec_can_print, sec_can_annotate, sec_can_fill_forms, sec_can_extract, sec_can_assemble, sec_can_print_hq FROM caches", conn);
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                string name = r.IsDBNull(0) ? "" : r.GetString(0);
+                string json = r.IsDBNull(1) ? "" : r.GetString(1);
+                int? bcount = r.IsDBNull(2) ? null : r.GetInt32(2);
+                int? icount = r.IsDBNull(3) ? null : r.GetInt32(3);
+                string mtit = r.IsDBNull(4) ? "" : r.GetString(4);
+                string maut = r.IsDBNull(5) ? "" : r.GetString(5);
+                string msub = r.IsDBNull(6) ? "" : r.GetString(6);
+                string mkey = r.IsDBNull(7) ? "" : r.GetString(7);
+                string mcre = r.IsDBNull(8) ? "" : r.GetString(8);
+                string mprod = r.IsDBNull(9) ? "" : r.GetString(9);
+                string mcd = r.IsDBNull(10) ? "" : r.GetString(10);
+                int? docPages = r.IsDBNull(11) ? null : (int?)r.GetInt32(11);
+                int? stFonts = r.IsDBNull(12) ? null : (int?)r.GetInt32(12);
+                int? resAtt = r.IsDBNull(13) ? null : (int?)r.GetInt32(13);
+                int? resEmb = r.IsDBNull(14) ? null : (int?)r.GetInt32(14);
+                int? resJs = r.IsDBNull(15) ? null : (int?)r.GetInt32(15);
+                int? resMm = r.IsDBNull(16) ? null : (int?)r.GetInt32(16);
+                int? secEnc = r.IsDBNull(17) ? null : (int?)r.GetInt32(17);
+                int? secCopy = r.IsDBNull(18) ? null : (int?)r.GetInt32(18);
+                int? secPrint = r.IsDBNull(19) ? null : (int?)r.GetInt32(19);
+                int? secAnnot = r.IsDBNull(20) ? null : (int?)r.GetInt32(20);
+                int? secFill = r.IsDBNull(21) ? null : (int?)r.GetInt32(21);
+                int? secExtract = r.IsDBNull(22) ? null : (int?)r.GetInt32(22);
+                int? secAssemble = r.IsDBNull(23) ? null : (int?)r.GetInt32(23);
+                int? secPrintHq = r.IsDBNull(24) ? null : (int?)r.GetInt32(24);
+
+                if (bookmarksMin.HasValue && (!bcount.HasValue || bcount.Value < bookmarksMin.Value)) continue;
+                if (bookmarksMax.HasValue && (!bcount.HasValue || bcount.Value > bookmarksMax.Value)) continue;
+                if (imagesMin.HasValue && (!icount.HasValue || icount.Value < imagesMin.Value)) continue;
+                if (imagesMax.HasValue && (!icount.HasValue || icount.Value > imagesMax.Value)) continue;
+                if (pagesMin.HasValue && (!docPages.HasValue || docPages.Value < pagesMin.Value)) continue;
+                if (pagesMax.HasValue && (!docPages.HasValue || docPages.Value > pagesMax.Value)) continue;
+                if (fontsMin.HasValue && (!stFonts.HasValue || stFonts.Value < fontsMin.Value)) continue;
+                if (fontsMax.HasValue && (!stFonts.HasValue || stFonts.Value > fontsMax.Value)) continue;
+                if (attachments == true && (!resAtt.HasValue || resAtt.Value <= 0)) continue;
+                if (embedded == true && (!resEmb.HasValue || resEmb.Value <= 0)) continue;
+                if (javascript == true && (!resJs.HasValue || resJs.Value <= 0)) continue;
+                if (multimedia == true && (!resMm.HasValue || resMm.Value <= 0)) continue;
+                if (encrypted == true && secEnc != 1) continue;
+                if (encrypted == false && secEnc == 1) continue;
+                if (canCopy == true && secCopy != 1) continue;
+                if (canPrint == true && secPrint != 1) continue;
+                if (canAnnotate == true && secAnnot != 1) continue;
+                if (canFillForms == true && secFill != 1) continue;
+                if (canExtract == true && secExtract != 1) continue;
+                if (canAssemble == true && secAssemble != 1) continue;
+                if (canPrintHq == true && secPrintHq != 1) continue;
+
+                if (createdAfter.HasValue || createdBefore.HasValue)
+                {
+                    if (DateTime.TryParse(mcd, out var dt))
+                    {
+                        if (createdAfter.HasValue && dt < createdAfter.Value) continue;
+                        if (createdBefore.HasValue && dt > createdBefore.Value) continue;
+                    }
+                    else
+                    {
+                        continue;
+                    }
+                }
+
+                bool metaOk(string text, List<string> patterns)
+                {
+                    if (patterns == null || patterns.Count == 0) return true;
+                    foreach (var t in patterns)
+                        if (!WordOption.Matches(text ?? "", t)) return false;
+                    return true;
+                }
+
+                if (!metaOk(mtit, metaTitle)) continue;
+                if (!metaOk(maut, metaAuthor)) continue;
+                if (!metaOk(msub, metaSubject)) continue;
+                if (!metaOk(mkey, metaKeywords)) continue;
+                if (!metaOk(mcre, metaCreator)) continue;
+                if (!metaOk(mprod, metaProducer)) continue;
+
+                if (bookmarkTerms != null && bookmarkTerms.Count > 0)
+                {
+                    var jsonLower = json?.ToLowerInvariant() ?? "";
+                    bool allMatch = true;
+                    foreach (var t in bookmarkTerms)
+                    {
+                        if (string.IsNullOrWhiteSpace(t)) continue;
+                        if (!jsonLower.Contains(t.ToLowerInvariant()))
+                        {
+                            allMatch = false;
+                            break;
+                        }
+                    }
+                    if (!allMatch) continue;
+                }
+
+                metaLookup[name] = new CacheMetaSummary
+                {
+                    Title = mtit,
+                    Author = maut,
+                    Subject = msub,
+                    Keywords = mkey,
+                    Creator = mcre,
+                    Producer = mprod,
+                    Pages = docPages,
+                    Images = icount,
+                    Bookmarks = bcount,
+                    Encrypted = secEnc == 1 ? true : secEnc == 0 ? false : (bool?)null
+                };
+                set.Add(name);
+            }
+            return set;
         }
 
         private void SearchInSqlite(string dbPath,
             List<string> terms, List<string> headerTerms, List<string> footerTerms,
             List<string> docTerms, List<string> metaTerms, List<string> fontTerms, List<string> objectTerms,
             string pageRange, int? minWords, int? maxWords, string typeFilter, int? limit, string format, bool wantBBox, string regexPattern,
-            bool? hasMoney, bool? hasCpf)
+            bool? hasMoney, bool? hasCpf,
+            List<string> bookmarkTerms, int? bookmarksMin, int? bookmarksMax, int? imagesMin, int? imagesMax,
+            List<string> metaTitle, List<string> metaAuthor, List<string> metaSubject, List<string> metaKeywords, List<string> metaCreator, List<string> metaProducer,
+            DateTime? createdAfter, DateTime? createdBefore,
+            int? pagesMin, int? pagesMax, int? fontsMin, int? fontsMax,
+            bool? attachments, bool? embedded, bool? javascript, bool? multimedia,
+            bool? encrypted, bool? canCopy, bool? canPrint, bool? canAnnotate, bool? canFillForms, bool? canExtract, bool? canAssemble, bool? canPrintHq)
         {
             Utils.SqliteCacheStore.EnsureDatabase(dbPath);
             var hits = new List<Hit>();
+            var allowedCaches = BuildCacheFilter(dbPath, bookmarkTerms, bookmarksMin, bookmarksMax, imagesMin, imagesMax,
+                metaTitle, metaAuthor, metaSubject, metaKeywords, metaCreator, metaProducer,
+                createdAfter, createdBefore,
+                pagesMin, pagesMax, fontsMin, fontsMax,
+                attachments, embedded, javascript, multimedia,
+                encrypted, canCopy, canPrint, canAnnotate, canFillForms, canExtract, canAssemble, canPrintHq,
+                out var metaLookup);
             using var conn = new System.Data.SQLite.SQLiteConnection($"Data Source={dbPath};Version=3;");
             conn.Open();
 
@@ -167,6 +378,7 @@ namespace FilterPDF
                         int pageHasCpf = reader.IsDBNull(3) ? 0 : reader.GetInt32(3);
                         string pageFonts = reader.IsDBNull(4) ? "" : reader.GetString(4);
                         string cacheName = reader.IsDBNull(5) ? "" : reader.GetString(5);
+                        if (allowedCaches != null && !allowedCaches.Contains(cacheName)) continue;
 
                         if (hasMoney == true && pageHasMoney == 0) continue;
                         if (hasCpf == true && pageHasCpf == 0) continue;
