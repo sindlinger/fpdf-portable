@@ -219,14 +219,22 @@ namespace FilterPDF
                                 void Walk(System.Text.Json.Nodes.JsonNode node)
                                 {
                                     if (node == null) return;
+
                                     if (node is System.Text.Json.Nodes.JsonObject obj)
                                     {
-                                        var title = obj["Title"]?.ToString();
-                                        AddValue(title, name);
-                                        var children = obj["Children"];
-                                        if (children is System.Text.Json.Nodes.JsonArray arr)
+                                        // registra título se existir
+                                        if (obj.TryGetPropertyValue("Title", out var titleNode))
                                         {
-                                            foreach (var child in arr) Walk(child);
+                                            var title = titleNode?.ToString();
+                                            AddValue(title, name);
+                                        }
+
+                                        // percorre todas as propriedades recursivamente, incluindo RootItems/Children/etc.
+                                        foreach (var prop in obj)
+                                        {
+                                            var child = prop.Value;
+                                            if (child is System.Text.Json.Nodes.JsonArray || child is System.Text.Json.Nodes.JsonObject)
+                                                Walk(child);
                                         }
                                     }
                                     else if (node is System.Text.Json.Nodes.JsonArray arr)
