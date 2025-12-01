@@ -313,7 +313,7 @@ namespace FilterPDF
 
             Console.WriteLine("Flags do find:");
             Console.WriteLine("  --text term (default) | --header term | --footer term | --docs term | --meta term | --fonts term | --objects term");
-            Console.WriteLine("  --pages A-B | --min-words N | --max-words N | --type T | --limit N | -F txt|json|csv|count | --bbox | --regex PAT");
+            Console.WriteLine("  --pages A-B | --min-words N | --max-words N | --type T | --limit N | -F txt|json|csv|count | --bbox");
             Console.WriteLine("  AND por espaço, OR com '|', sensível com '!'. Default busca no texto.");
             Console.WriteLine("  --cache <nome> limita a um cache específico (opcional)");
             Console.WriteLine("  --db-path <db> opcional (default: data/sqlite/sqlite-mcp.db)\n");

@@ -34,7 +34,6 @@ namespace FilterPDF
             string typeFilter = null;
             string format = "txt";
             bool wantBBox = false;
-            string regexPattern = null;
             bool? hasMoney = null;
             bool? hasCpf = null;
             int? bookmarksMin = null, bookmarksMax = null;
@@ -106,7 +105,6 @@ namespace FilterPDF
                 if (a == "--limit" && i + 1 < args.Length && int.TryParse(args[++i], out var lm)) { limit = lm; continue; }
                 if (a == "-F" && i + 1 < args.Length) { format = args[++i].ToLower(); continue; }
                 if (a == "--bbox") { wantBBox = true; continue; }
-                if (a == "--regex" && i + 1 < args.Length) { regexPattern = args[++i]; continue; }
                 terms.Add(a);
             }
 
@@ -121,7 +119,7 @@ namespace FilterPDF
                     SearchInSqlite(dbPath,
                         terms, headerTerms, footerTerms,
                         docTerms, metaTerms, fontTerms, objectTerms,
-                        pageRange, minWords, maxWords, typeFilter, limit, format, wantBBox, regexPattern,
+                        pageRange, minWords, maxWords, typeFilter, limit, format, wantBBox,
                         hasMoney, hasCpf, bookmarkTerms, bookmarksMin, bookmarksMax, imagesMin, imagesMax,
                         metaTitle, metaAuthor, metaSubject, metaKeywords, metaCreator, metaProducer,
                         createdAfter, createdBefore,
@@ -305,7 +303,7 @@ namespace FilterPDF
         private void SearchInSqlite(string dbPath,
             List<string> terms, List<string> headerTerms, List<string> footerTerms,
             List<string> docTerms, List<string> metaTerms, List<string> fontTerms, List<string> objectTerms,
-            string pageRange, int? minWords, int? maxWords, string typeFilter, int? limit, string format, bool wantBBox, string regexPattern,
+            string pageRange, int? minWords, int? maxWords, string typeFilter, int? limit, string format, bool wantBBox,
             bool? hasMoney, bool? hasCpf,
             List<string> bookmarkTerms, int? bookmarksMin, int? bookmarksMax, int? imagesMin, int? imagesMax,
             List<string> metaTitle, List<string> metaAuthor, List<string> metaSubject, List<string> metaKeywords, List<string> metaCreator, List<string> metaProducer,
@@ -329,11 +327,11 @@ namespace FilterPDF
             var pageSet = BuildPageSet(pageRange, int.MaxValue); // sem total conhecido
 
             // Texto/header/footer
-            if (terms.Count > 0 || regexPattern != null || headerTerms.Count > 0 || footerTerms.Count > 0)
+            if (terms.Count > 0 || headerTerms.Count > 0 || footerTerms.Count > 0)
             {
                 bool ftsTried = false;
 
-                if (regexPattern == null && headerTerms.Count == 0 && footerTerms.Count == 0 && terms.Count > 0)
+                if (headerTerms.Count == 0 && footerTerms.Count == 0 && terms.Count > 0)
                 {
                     // Prefer FTS5 for plain term search
                     try
@@ -352,9 +350,9 @@ namespace FilterPDF
                             int wc = text.Split(new[]{' ','\n','\t'}, StringSplitOptions.RemoveEmptyEntries).Length;
                             if (minWords.HasValue && wc < minWords.Value) continue;
                             if (maxWords.HasValue && wc > maxWords.Value) continue;
-                            bool textOk = MatchesTerms(text, terms, regexPattern);
+                            bool textOk = MatchesTerms(text, terms);
                             if (textOk)
-                                CollectTextHits(cacheName, pageNum, "text", text, terms, regexPattern, hits, limit);
+                                CollectTextHits(cacheName, pageNum, "text", text, terms, hits, limit);
                             if (limit.HasValue && hits.Count >= limit.Value) break;
                         }
                     }
@@ -391,9 +389,9 @@ namespace FilterPDF
                         var header = string.Join("\n", lines.Take(5));
                         var footer = string.Join("\n", lines.Reverse().Take(5).Reverse());
 
-                        bool headerOk = MatchesTerms(header, headerTerms, regexPattern);
-                        bool footerOk = MatchesTerms(footer, footerTerms, regexPattern);
-                        bool textOk = MatchesTerms(text, terms, regexPattern);
+                        bool headerOk = MatchesTerms(header, headerTerms);
+                        bool footerOk = MatchesTerms(footer, footerTerms);
+                        bool textOk = MatchesTerms(text, terms);
 
                         if (fontTerms.Count > 0)
                         {
@@ -410,10 +408,10 @@ namespace FilterPDF
                         // Aplica AND entre header/footer/text/fonts/money/cpf
                         if (headerOk && footerOk && textOk)
                         {
-                            if (headerTerms.Count > 0) CollectTextHits(cacheName, pageNum, "header", header, headerTerms, regexPattern, hits, limit);
-                            if (footerTerms.Count > 0) CollectTextHits(cacheName, pageNum, "footer", footer, footerTerms, regexPattern, hits, limit);
-                            if (terms.Count > 0 || regexPattern != null || (headerTerms.Count == 0 && footerTerms.Count == 0))
-                                CollectTextHits(cacheName, pageNum, "text", text, terms, regexPattern, hits, limit);
+                            if (headerTerms.Count > 0) CollectTextHits(cacheName, pageNum, "header", header, headerTerms, hits, limit);
+                            if (footerTerms.Count > 0) CollectTextHits(cacheName, pageNum, "footer", footer, footerTerms, hits, limit);
+                            if (terms.Count > 0 || (headerTerms.Count == 0 && footerTerms.Count == 0))
+                                CollectTextHits(cacheName, pageNum, "text", text, terms, hits, limit);
                         }
                         if (limit.HasValue && hits.Count >= limit.Value) break;
                     }
@@ -445,22 +443,15 @@ namespace FilterPDF
             Emit(hits, format);
         }
 
-        private static bool MatchesTerms(string text, List<string> terms, string regexPattern)
+        private static bool MatchesTerms(string text, List<string> terms)
         {
-            if (terms == null || terms.Count == 0)
-            {
-                if (regexPattern == null) return true;
-                return Regex.IsMatch(text ?? string.Empty, regexPattern, RegexOptions.Multiline | RegexOptions.IgnoreCase);
-            }
+            if (terms == null || terms.Count == 0) return true;
 
             foreach (var term in terms)
             {
                 if (!WordOption.Matches(text ?? string.Empty, term))
                     return false;
             }
-
-            if (regexPattern != null && !Regex.IsMatch(text ?? string.Empty, regexPattern, RegexOptions.Multiline | RegexOptions.IgnoreCase))
-                return false;
 
             return true;
         }
@@ -488,20 +479,10 @@ namespace FilterPDF
             return set;
         }
 
-        private static void CollectTextHits(string cache, int pageNumber, string scope, string text, List<string> terms, string regexPattern, List<Hit> hits, int? limit)
+        private static void CollectTextHits(string cache, int pageNumber, string scope, string text, List<string> terms, List<Hit> hits, int? limit)
         {
             if (limit.HasValue && hits.Count >= limit.Value) return;
             if (string.IsNullOrEmpty(text)) return;
-
-            if (!string.IsNullOrEmpty(regexPattern))
-            {
-                foreach (Match m in Regex.Matches(text, regexPattern, RegexOptions.IgnoreCase))
-                {
-                    hits.Add(new Hit { Cache = cache, Page = pageNumber, Scope = scope, Term = regexPattern, Snippet = ExtractContext(text, m.Index) });
-                    if (limit.HasValue && hits.Count >= limit.Value) return;
-                }
-                return;
-            }
 
             // AND implícito
             foreach (var term in terms)

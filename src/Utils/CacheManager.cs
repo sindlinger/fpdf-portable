@@ -144,7 +144,7 @@ namespace FilterPDF
 
         public static List<BookmarkSummaryItem> GetBookmarkSummary(int top, int sampleSize)
         {
-            var topItems = GetTopValues("bookmark", top, sampleSize);
+            var topItems = GetTopValues("bookmark", top, sampleSize, null, null);
             var list = new List<BookmarkSummaryItem>();
             foreach (var item in topItems)
             {
@@ -158,7 +158,7 @@ namespace FilterPDF
             return list;
         }
 
-        public static List<TopValueItem> GetTopValues(string field, int top, int sampleSize)
+        public static List<TopValueItem> GetTopValues(string field, int top, int sampleSize, int? lastCaches = null, DateTime? since = null)
         {
             EnsureDb();
             var freq = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -198,12 +198,25 @@ namespace FilterPDF
             using var conn = new SQLiteConnection($"Data Source={DbPath};Version=3;");
             conn.Open();
 
+            string limitClause = "";
+            if (lastCaches.HasValue)
+            {
+                limitClause = $" ORDER BY created_at DESC LIMIT {lastCaches.Value}";
+            }
+
+            string dateWhere = "";
+            if (since.HasValue)
+            {
+                // created_at armazenado em ISO; comparação lexicográfica funciona
+                dateWhere = $" AND created_at > '{since.Value:yyyy-MM-ddTHH:mm:ss}'";
+            }
+
             switch (field?.ToLowerInvariant())
             {
                 case "bookmark":
                     using (var cmd = conn.CreateCommand())
                     {
-                        cmd.CommandText = "SELECT name, json FROM caches WHERE stat_bookmarks IS NOT NULL";
+                        cmd.CommandText = $"SELECT name, json FROM caches WHERE stat_bookmarks IS NOT NULL{dateWhere}{limitClause}";
                         using var r = cmd.ExecuteReader();
                         while (r.Read())
                         {
@@ -266,7 +279,7 @@ namespace FilterPDF
                     }
                     using (var cmd = conn.CreateCommand())
                     {
-                        cmd.CommandText = $"SELECT name, {field} FROM caches WHERE {field} IS NOT NULL AND {field} <> ''";
+                        cmd.CommandText = $"SELECT name, {field} FROM caches WHERE {field} IS NOT NULL AND {field} <> ''{dateWhere}{limitClause}";
                         using var r = cmd.ExecuteReader();
                         while (r.Read())
                         {
@@ -280,7 +293,7 @@ namespace FilterPDF
                 case "meta_keywords":
                     using (var cmd = conn.CreateCommand())
                     {
-                        cmd.CommandText = "SELECT name, meta_keywords FROM caches WHERE meta_keywords IS NOT NULL AND meta_keywords <> ''";
+                        cmd.CommandText = $"SELECT name, meta_keywords FROM caches WHERE meta_keywords IS NOT NULL AND meta_keywords <> ''{dateWhere}{limitClause}";
                         using var r = cmd.ExecuteReader();
                         while (r.Read())
                         {

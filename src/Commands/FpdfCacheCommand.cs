@@ -217,11 +217,15 @@ namespace FilterPDF
         {
             int top = 5;
             int sample = 3;
+            int? last = null;
+            DateTime? since = null;
             string field = null;
             for (int i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--top" && i + 1 < args.Length && int.TryParse(args[++i], out var t)) top = Math.Max(1, t);
                 else if (args[i] == "--sample" && i + 1 < args.Length && int.TryParse(args[++i], out var s)) sample = Math.Max(1, s);
+                else if (args[i] == "--last" && i + 1 < args.Length && int.TryParse(args[++i], out var l)) last = Math.Max(1, l);
+                else if (args[i] == "--since" && i + 1 < args.Length && DateTime.TryParse(args[++i], out var d)) since = d;
                 else if ((args[i] == "--field" || args[i] == "-f") && i + 1 < args.Length) field = args[++i];
             }
 
@@ -234,7 +238,7 @@ namespace FilterPDF
             List<CacheManager.TopValueItem> summary;
             try
             {
-                summary = CacheManager.GetTopValues(field, top, sample);
+                summary = CacheManager.GetTopValues(field, top, sample, last, since);
             }
             catch (ArgumentException ex)
             {
@@ -385,6 +389,8 @@ namespace FilterPDF
             Console.WriteLine("    --field <f>           Campo: bookmark|meta_title|meta_author|meta_subject|meta_keywords|meta_creator|meta_producer|doc_type|mode");
             Console.WriteLine("    --top <n>             Quantos valores mostrar (default 5)");
             Console.WriteLine("    --sample <n>          Quantos exemplos por valor (default 3)");
+            Console.WriteLine("    --last <n>            Considerar apenas os <n> caches mais recentes (created_at)");
+            Console.WriteLine("    --since <data>        Considerar apenas caches criados após a data (yyyy-MM-dd)");
             Console.WriteLine();
             Console.WriteLine("EXAMPLES:");
             Console.WriteLine($"    fpdf {Name} list");
