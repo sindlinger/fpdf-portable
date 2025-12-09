@@ -41,6 +41,114 @@ namespace FilterPDF
             
             ExecutePagesSearch();
         }
+
+        public void ExecuteFromPg(int processId, Dictionary<string, string> filters, Dictionary<string, string> outputs)
+        {
+            filterOptions = filters;
+            outputOptions = outputs;
+
+            var processes = PgAnalysisLoader.ListProcesses();
+            var row = processes.FirstOrDefault(r => r.Id == processId);
+            if (row == null)
+            {
+                Console.WriteLine($"Processo {processId} não encontrado no Postgres.");
+                return;
+            }
+
+            var pages = PgAnalysisLoader.ListPages(processId);
+            Console.WriteLine($"Finding PAGES in: {row.ProcessNumber} (Postgres)");
+            ShowActiveFilters();
+            Console.WriteLine();
+
+            var matches = new List<PgAnalysisLoader.PageRow>();
+            foreach (var p in pages)
+            {
+                if (PgPageMatchesFilters(p))
+                    matches.Add(p);
+            }
+
+            if (matches.Count == 0)
+            {
+                Console.WriteLine("Nenhuma página encontrada com os filtros informados.");
+                return;
+            }
+
+            foreach (var m in matches)
+            {
+                Console.WriteLine($"Página {m.PageNumber}");
+                if (!string.IsNullOrWhiteSpace(m.Header)) Console.WriteLine($"  Header: {m.Header}");
+                if (!string.IsNullOrWhiteSpace(m.Footer)) Console.WriteLine($"  Footer: {m.Footer}");
+                var snippet = m.Text;
+                if (!string.IsNullOrWhiteSpace(snippet))
+                {
+                    if (snippet.Length > 400) snippet = snippet.Substring(0, 400) + "...";
+                    Console.WriteLine($"  Texto: {snippet}");
+                }
+                Console.WriteLine($"  Palavras: {m.Words}  Imagens: {m.ImageCount}  Fontes: {m.FontCount}  Anotações: {m.AnnotationCount}");
+                Console.WriteLine();
+            }
+        }
+
+        private bool PgPageMatchesFilters(PgAnalysisLoader.PageRow page)
+        {
+            foreach (var filter in filterOptions)
+            {
+                switch (filter.Key)
+                {
+                    case "--word":
+                    case "-w":
+                        if (!WordOption.Matches(page.Text ?? "", filter.Value))
+                            return false;
+                        break;
+                    case "--not-words":
+                        if (WordOption.Matches(page.Text ?? "", filter.Value))
+                            return false;
+                        break;
+                    case "--regex":
+                    case "-r":
+                        if (!Regex.IsMatch(page.Text ?? "", filter.Value, RegexOptions.IgnoreCase))
+                            return false;
+                        break;
+                    case "--page":
+                    case "-p":
+                        if (int.TryParse(filter.Value, out var pnum) && page.PageNumber != pnum)
+                            return false;
+                        break;
+                    case "--page-range":
+                        var parts = filter.Value.Split('-');
+                        if (parts.Length == 2 && int.TryParse(parts[0], out var a) && int.TryParse(parts[1], out var b))
+                        {
+                            if (page.PageNumber < a || page.PageNumber > b) return false;
+                        }
+                        break;
+                    case "--min-words":
+                        if (page.Words < int.Parse(filter.Value)) return false;
+                        break;
+                    case "--max-words":
+                        if (page.Words > int.Parse(filter.Value)) return false;
+                        break;
+                    case "--image":
+                    case "-i":
+                        {
+                            var expected = bool.Parse(filter.Value);
+                            if ((page.ImageCount > 0) != expected) return false;
+                            break;
+                        }
+                    case "--annotations":
+                    case "-a":
+                        {
+                            var expected = bool.Parse(filter.Value);
+                            if ((page.AnnotationCount > 0) != expected) return false;
+                            break;
+                        }
+                    case "--signature":
+                    case "-s":
+                        if (!PageContainsSignature(page.Text ?? "", filter.Value)) return false;
+                        break;
+                }
+            }
+            return true;
+        }
         
         private void ExecutePagesSearch()
         {

@@ -22,6 +22,7 @@ namespace FilterPDF
         private PDFAnalysisResult analysisResult = new PDFAnalysisResult();
         private string inputFilePath = "";
         private bool isUsingCache = false;
+        private Dictionary<int, PgAnalysisLoader.PageRow> pgPages = new Dictionary<int, PgAnalysisLoader.PageRow>();
         
         public void Execute(string inputFile, PDFAnalysisResult analysis, Dictionary<string, string> filters, Dictionary<string, string> outputs)
         {
@@ -30,11 +31,39 @@ namespace FilterPDF
             filterOptions = filters;
             outputOptions = outputs;
             isUsingCache = inputFile.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
-            
-            ExecuteBookmarksSearch();
+            ExecuteBookmarksSearchFromAnalysis();
+        }
+
+        public void ExecuteFromPg(int processIndex, Dictionary<string,string> filters, Dictionary<string,string> outputs)
+        {
+            filterOptions = filters;
+            outputOptions = outputs;
+            var rows = PgAnalysisLoader.ListProcesses();
+            if (processIndex < 1 || processIndex > rows.Count)
+            {
+                Console.WriteLine($"Processo {processIndex} não encontrado no Postgres.");
+                return;
+            }
+            var row = rows[processIndex-1];
+            var bookmarks = PgAnalysisLoader.ListBookmarks(row.Id);
+            pgPages = PgAnalysisLoader.ListPages(row.Id).ToDictionary(p => p.PageNumber, p => p);
+            Console.WriteLine($"Finding BOOKMARKS in: {row.ProcessNumber}");
+            ShowActiveFilters();
+            Console.WriteLine();
+
+            var matches = new List<BookmarkMatch>();
+            foreach (var bk in bookmarks)
+            {
+                var bi = new BookmarkItem { Title = bk.Title, Destination = new BookmarkDestination { PageNumber = bk.PageNumber }, Level = bk.Level };
+                if (BookmarkMatchesAllFilters(bi))
+                {
+                    matches.Add(new BookmarkMatch { Bookmark = bi, MatchReasons = GetBookmarkMatchReasons(bi) });
+                }
+            }
+            OutputBookmarkResults(matches);
         }
         
-        private void ExecuteBookmarksSearch()
+        private void ExecuteBookmarksSearchFromAnalysis()
         {
             Console.WriteLine($"Finding BOOKMARKS in: {Path.GetFileName(inputFilePath)}");
             ShowActiveFilters();
@@ -174,6 +203,10 @@ namespace FilterPDF
                             if (!pageOrientation.Equals(filter.Value, StringComparison.OrdinalIgnoreCase))
                                 return false;
                         }
+                        else if (pgPages.TryGetValue(pageNum, out _))
+                        {
+                            // Sem largura/altura no PG; não conseguimos validar, então não filtramos
+                        }
                         else
                         {
                             return false; // Se não tem página válida, não pode filtrar por orientação
@@ -183,16 +216,17 @@ namespace FilterPDF
                     case "--signature":
                     case "-s":
                         int bookmarkPageNum = bookmark.Destination?.PageNumber ?? 0;
+                        string? pageText = null;
                         if (bookmarkPageNum > 0 && bookmarkPageNum <= analysisResult.Pages.Count)
                         {
-                            var page = analysisResult.Pages[bookmarkPageNum - 1];
-                            if (page.TextInfo?.PageText == null || !PageContainsSignature(page.TextInfo.PageText, filter.Value))
-                                return false;
+                            pageText = analysisResult.Pages[bookmarkPageNum - 1].TextInfo?.PageText;
                         }
-                        else
+                        else if (pgPages.TryGetValue(bookmarkPageNum, out var pgPage))
                         {
-                            return false; // Se não tem página válida, não pode filtrar por assinatura
+                            pageText = pgPage.Text;
                         }
+                        if (string.IsNullOrEmpty(pageText) || !PageContainsSignature(pageText, filter.Value))
+                            return false;
                         break;
                         
                 }

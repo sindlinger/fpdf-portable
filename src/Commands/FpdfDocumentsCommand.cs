@@ -38,6 +38,28 @@ namespace FilterPDF
                 throw;
             }
         }
+
+        public void ExecuteFromPg(int processId, Dictionary<string,string> filterOptions, Dictionary<string,string> outputOptions)
+        {
+            var processes = PgAnalysisLoader.ListProcesses();
+            var row = processes.FirstOrDefault(r => r.Id == processId);
+            if (row == null)
+            {
+                Console.WriteLine($"Processo {processId} não encontrado no Postgres.");
+                return;
+            }
+            var docs = PgAnalysisLoader.ListDocuments(processId);
+            if (docs.Count == 0)
+            {
+                Console.WriteLine($"Nenhum documento segmentado para {row.ProcessNumber}.");
+                return;
+            }
+            Console.WriteLine($"Documentos em {row.ProcessNumber}: {docs.Count}");
+            foreach (var d in docs)
+            {
+                Console.WriteLine($"- {d.DocLabel} ({d.DocKey})  páginas {d.StartPage}-{d.EndPage} ({d.TotalPages})  tipo: {d.DocType}/{d.Subtype}  palavras: {d.TotalWords}  imagens: {d.TotalImages}");
+            }
+        }
         
         private void ExecuteSingleFile(string inputFile, PDFAnalysisResult analysis, 
                                       Dictionary<string, string> filterOptions, 

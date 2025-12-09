@@ -26,6 +26,8 @@ namespace FilterPDF
         
         private class LoadOptions
         {
+            public bool UsePostgres { get; set; } = true;
+            public string DbPath { get; set; } = FilterPDF.Utils.SqliteCacheStore.DefaultDbPath;
             public bool ExtractRaw { get; set; } = false;
             public bool ExtractText { get; set; } = false;
             public bool ExtractUltra { get; set; } = false;
@@ -33,7 +35,8 @@ namespace FilterPDF
             public int TextStrategy { get; set; } = 2; // Default: advanced
             public string OutputPath { get; set; } = "";
             public string OutputDir { get; set; } = "";
-            public string DbPath { get; set; } = FilterPDF.Utils.SqliteCacheStore.DefaultDbPath;
+            public int MaxFiles { get; set; } = int.MaxValue; // Limita quantos PDFs processar
+            public string PgUri { get; set; } = FilterPDF.Utils.PgDocStore.DefaultPgUri;
             public int NumWorkers { get; set; } = 1;
             public bool Overwrite { get; set; } = false;
             public bool Verbose { get; set; } = false;
@@ -214,6 +217,11 @@ namespace FilterPDF
                     var pdfsInDir = Directory.GetFiles(inputDirPath, "*.pdf", searchOption);
                     inputFiles.AddRange(pdfsInDir);
                     Console.WriteLine($"Found {pdfsInDir.Length} PDF files in directory");
+                    if (options.MaxFiles != int.MaxValue && inputFiles.Count > options.MaxFiles)
+                    {
+                        inputFiles = inputFiles.Take(options.MaxFiles).ToList();
+                        Console.WriteLine($"Limiting to first {inputFiles.Count} files (--max-files).");
+                    }
                     if (searchOption == SearchOption.AllDirectories)
                     {
                         Console.WriteLine("   (recursive search enabled)");
@@ -234,6 +242,11 @@ namespace FilterPDF
                     var pdfsInDir = Directory.GetFiles(inputFile, "*.pdf", searchOption);
                     inputFiles.AddRange(pdfsInDir);
                     Console.WriteLine($"Found {pdfsInDir.Length} PDF files in directory");
+                    if (options.MaxFiles != int.MaxValue && inputFiles.Count > options.MaxFiles)
+                    {
+                        inputFiles = inputFiles.Take(options.MaxFiles).ToList();
+                        Console.WriteLine($"Limiting to first {inputFiles.Count} files (--max-files).");
+                    }
                     if (searchOption == SearchOption.AllDirectories)
                     {
                         Console.WriteLine("   (recursive search enabled)");
@@ -259,11 +272,15 @@ namespace FilterPDF
                 ApplySubcommandSettings("ultra", options);
             }
             
-            if (string.IsNullOrWhiteSpace(options.DbPath))
+            if (!options.UsePostgres && string.IsNullOrWhiteSpace(options.DbPath))
             {
                 options.DbPath = FilterPDF.Utils.SqliteCacheStore.DefaultDbPath;
             }
-            Console.WriteLine($"[INFO] Usando banco SQLite em: {options.DbPath}");
+            if (options.UsePostgres)
+                Console.WriteLine($"[INFO] Usando Postgres em: {options.PgUri}");
+            else
+                Console.WriteLine($"[INFO] Usando banco SQLite em: {options.DbPath}");
+
             Console.WriteLine($"Load: Pre-processing {inputFiles.Count} file(s)");
             Console.WriteLine($"   Options: {(options.ExtractRaw ? "RAW" : "")} {(options.ExtractText ? "TEXT" : "")} {(options.ExtractUltra ? "ULTRA" : "")}");
             Console.WriteLine($"   Workers: {options.NumWorkers}");
@@ -587,6 +604,26 @@ namespace FilterPDF
                             }
                             break;
 
+                        case "--max-files":
+                            if (i + 1 < args.Length && int.TryParse(args[i + 1], out var mf))
+                            {
+                                options.MaxFiles = Math.Max(1, mf);
+                                i++;
+                            }
+                            break;
+
+                        case "--pg-uri":
+                            if (i + 1 < args.Length)
+                            {
+                                options.PgUri = args[++i];
+                                options.UsePostgres = true;
+                            }
+                            break;
+
+                        case "--no-pg":
+                            options.UsePostgres = false;
+                            break;
+
                         case "--db-path":
                             if (i + 1 < args.Length)
                             {
@@ -775,12 +812,16 @@ namespace FilterPDF
                 }
 
                 var cacheName = Path.GetFileNameWithoutExtension(inputFile);
-                var dbPath = options.DbPath;
-                FilterPDF.Utils.SqliteCacheStore.EnsureDatabase(dbPath);
-
-                if (!options.Overwrite && FilterPDF.Utils.SqliteCacheStore.CacheExists(dbPath, cacheName))
+                string cacheLocator = options.UsePostgres ? $"{options.PgUri}#{cacheName}" : $"{options.DbPath}#{cacheName}";
+                if (!options.UsePostgres)
                 {
-                    return (true, true, "Cache already exists", $"{dbPath}#{cacheName}");
+                    var dbPath = options.DbPath;
+                    FilterPDF.Utils.SqliteCacheStore.EnsureDatabase(dbPath);
+
+                    if (!options.Overwrite && FilterPDF.Utils.SqliteCacheStore.CacheExists(dbPath, cacheName))
+                    {
+                        return (true, true, "Cache already exists", $"{dbPath}#{cacheName}");
+                    }
                 }
 
                 using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(TIMEOUT_SECONDS));
@@ -788,7 +829,7 @@ namespace FilterPDF
                 try
                 {
                     ProcessSingleFile(inputFile, options, timeoutCts.Token);
-                    return (true, false, "OK", $"{dbPath}#{cacheName}");
+                    return (true, false, "OK", cacheLocator);
                 }
                 catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
                 {
@@ -843,17 +884,20 @@ namespace FilterPDF
             }
             
             var cacheName = Path.GetFileNameWithoutExtension(inputFile);
-            var dbPath = options.DbPath;
-            FilterPDF.Utils.SqliteCacheStore.EnsureDatabase(dbPath);
-
-            // Check if already exists in SQLite
-            if (!options.Overwrite && FilterPDF.Utils.SqliteCacheStore.CacheExists(dbPath, cacheName))
+            if (!options.UsePostgres)
             {
-                if (options.Verbose)
+                var dbPath = options.DbPath;
+                FilterPDF.Utils.SqliteCacheStore.EnsureDatabase(dbPath);
+
+                // Check if already exists in SQLite
+                if (!options.Overwrite && FilterPDF.Utils.SqliteCacheStore.CacheExists(dbPath, cacheName))
                 {
-                    Console.WriteLine($"Skipping {inputFile} - cache already exists in {dbPath}");
+                    if (options.Verbose)
+                    {
+                        Console.WriteLine($"Skipping {inputFile} - cache already exists in {dbPath}");
+                    }
+                    return;
                 }
-                return;
             }
             
             if (options.Verbose)
@@ -975,16 +1019,27 @@ namespace FilterPDF
                                    options.ExtractRaw && !options.ExtractText ? "raw" :
                                    options.ExtractText && !options.ExtractRaw ? "text" : "both";
 
-            // Persist in SQLite (single source of truth)
+            // Persistência
             var analysisObj = analysisModel ?? cacheData as PDFAnalysisResult; // Prefer strong model when available
             if (analysisObj != null)
             {
-                FilterPDF.Utils.SqliteCacheStore.UpsertCache(dbPath, cacheName, inputFile, analysisObj, extractionMode);
-            }
-
-            if (options.Verbose)
-            {
-                Console.WriteLine($"  Saved cache to SQLite: {dbPath} (cache {cacheName})");
+                if (options.UsePostgres)
+                {
+                    var classifier = new FilterPDF.Utils.BookmarkClassifier();
+                    FilterPDF.Utils.PgDocStore.UpsertProcess(options.PgUri, inputFile, analysisObj, classifier, storeJson:false);
+                    if (options.Verbose)
+                        Console.WriteLine($"  Gravado no Postgres: {options.PgUri}");
+                }
+                else
+                {
+                    var dbPath = options.DbPath;
+                    if (!options.UsePostgres)
+                    {
+                        FilterPDF.Utils.SqliteCacheStore.UpsertCache(dbPath, cacheName, inputFile, analysisObj, extractionMode);
+                        if (options.Verbose)
+                            Console.WriteLine($"  Saved cache to SQLite: {dbPath} (cache {cacheName})");
+                    }
+                }
             }
         }
         

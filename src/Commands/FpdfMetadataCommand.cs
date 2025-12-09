@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 using FilterPDF.Options;
+using FilterPDF.Utils;
 
 
 namespace FilterPDF
@@ -29,6 +30,36 @@ namespace FilterPDF
             isUsingCache = inputFile.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
             
             ExecuteMetadataSearch();
+        }
+
+        public void ExecuteFromPg(int processId, Dictionary<string,string> filters, Dictionary<string,string> outputs)
+        {
+            filterOptions = filters;
+            outputOptions = outputs;
+
+            var processes = PgAnalysisLoader.ListProcesses();
+            var row = processes.FirstOrDefault(r => r.Id == processId);
+            if (row == null)
+            {
+                Console.WriteLine($"Processo {processId} não encontrado no Postgres.");
+                return;
+            }
+
+            var summary = PgAnalysisLoader.GetProcessSummaryById(processId);
+            if (summary == null)
+            {
+                Console.WriteLine("Metadados não encontrados.");
+                return;
+            }
+
+            Console.WriteLine($"METADATA (PG) - {row.ProcessNumber}");
+            Console.WriteLine($"  Title     : {summary.MetaTitle}");
+            Console.WriteLine($"  Author    : {summary.MetaAuthor}");
+            Console.WriteLine($"  Subject   : {summary.MetaSubject}");
+            Console.WriteLine($"  Keywords  : {summary.MetaKeywords}");
+            Console.WriteLine($"  Encrypted : {summary.IsEncrypted}");
+            Console.WriteLine($"  Perms     : copy={summary.PermCopy} print={summary.PermPrint} annotate={summary.PermAnnotate} forms={summary.PermFillForms} extract={summary.PermExtract} assemble={summary.PermAssemble} print_hq={summary.PermPrintHq}");
+            Console.WriteLine($"  Resources : js={summary.HasJs} embedded={summary.HasEmbedded} attachments={summary.HasAttachments} multimedia={summary.HasMultimedia} forms={summary.HasForms}");
         }
         
         private void ExecuteMetadataSearch()
