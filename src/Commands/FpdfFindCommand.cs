@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using FilterPDF.Options;
 using FilterPDF.Utils;
+using Npgsql;
 
 namespace FilterPDF
 {
@@ -19,6 +20,8 @@ namespace FilterPDF
         public void Execute(string inputFile, PDFAnalysisResult analysis, string[] args)
         {
             string dbPath = Utils.SqliteCacheStore.DefaultDbPath;
+            string pgUri = Environment.GetEnvironmentVariable("FPDF_PG_URI");
+            bool usePostgres = false;
             string cacheFilter = null;
 
             var terms = new List<string>();
@@ -105,7 +108,26 @@ namespace FilterPDF
                 if (a == "--limit" && i + 1 < args.Length && int.TryParse(args[++i], out var lm)) { limit = lm; continue; }
                 if (a == "-F" && i + 1 < args.Length) { format = args[++i].ToLower(); continue; }
                 if (a == "--bbox") { wantBBox = true; continue; }
+                if (a == "--pg-uri" && i + 1 < args.Length) { pgUri = args[++i]; usePostgres = true; continue; }
+                if (a == "--pg") { usePostgres = true; continue; }
                 terms.Add(a);
+            }
+
+            if (usePostgres && string.IsNullOrWhiteSpace(pgUri))
+                pgUri = Utils.PgDocStore.DefaultPgUri;
+
+            if (usePostgres)
+            {
+                Console.WriteLine($"[INFO] Buscando no Postgres: {pgUri}");
+                try
+                {
+                    SearchInPostgres(pgUri, terms, limit);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"(ERRO) Busca PG falhou: {ex.Message}");
+                }
+                return;
             }
 
             if (string.IsNullOrWhiteSpace(dbPath)) dbPath = Utils.SqliteCacheStore.DefaultDbPath;
@@ -184,9 +206,9 @@ namespace FilterPDF
             if (!needFilter) return null;
 
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            using var conn = new System.Data.SQLite.SQLiteConnection($"Data Source={dbPath};Version=3;");
+            using var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={dbPath};");
             conn.Open();
-            using var cmd = new System.Data.SQLite.SQLiteCommand("SELECT name, json, stat_bookmarks, stat_total_images, meta_title, meta_author, meta_subject, meta_keywords, meta_creator, meta_producer, meta_creation_date, doc_total_pages, stat_total_fonts, res_attachments, res_embedded_files, res_javascript, res_multimedia, sec_is_encrypted, sec_can_copy, sec_can_print, sec_can_annotate, sec_can_fill_forms, sec_can_extract, sec_can_assemble, sec_can_print_hq FROM caches", conn);
+            using var cmd = new Microsoft.Data.Sqlite.SqliteCommand("SELECT name, json, stat_bookmarks, stat_total_images, meta_title, meta_author, meta_subject, meta_keywords, meta_creator, meta_producer, meta_creation_date, doc_total_pages, stat_total_fonts, res_attachments, res_embedded_files, res_javascript, res_multimedia, sec_is_encrypted, sec_can_copy, sec_can_print, sec_can_annotate, sec_can_fill_forms, sec_can_extract, sec_can_assemble, sec_can_print_hq FROM caches", conn);
             using var r = cmd.ExecuteReader();
             while (r.Read())
             {
@@ -321,7 +343,7 @@ namespace FilterPDF
                 attachments, embedded, javascript, multimedia,
                 encrypted, canCopy, canPrint, canAnnotate, canFillForms, canExtract, canAssemble, canPrintHq,
                 out var metaLookup);
-            using var conn = new System.Data.SQLite.SQLiteConnection($"Data Source={dbPath};Version=3;");
+            using var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={dbPath};");
             conn.Open();
 
             var pageSet = BuildPageSet(pageRange, int.MaxValue); // sem total conhecido
@@ -338,7 +360,7 @@ namespace FilterPDF
                     {
                         ftsTried = true;
                         var ftsQuery = string.Join(" AND ", terms.Select(t => t.Replace('"', ' ').Replace("'", " ")));
-                        using var cmdFts = new System.Data.SQLite.SQLiteCommand("SELECT f.page_number, f.text, c.name FROM page_fts f JOIN caches c ON c.id = f.cache_id WHERE f MATCH @q", conn);
+                        using var cmdFts = new Microsoft.Data.Sqlite.SqliteCommand("SELECT f.page_number, f.text, c.name FROM page_fts f JOIN caches c ON c.id = f.cache_id WHERE f MATCH @q", conn);
                         cmdFts.Parameters.AddWithValue("@q", ftsQuery);
                         using var reader = cmdFts.ExecuteReader();
                         while (reader.Read())
@@ -365,7 +387,7 @@ namespace FilterPDF
                 if (!ftsTried || (limit.HasValue && hits.Count < limit.Value))
                 {
                     var sql = "SELECT p.page_number, p.text, p.has_money, p.has_cpf, p.fonts, c.name FROM pages p JOIN caches c ON c.id = p.cache_id";
-                    using var cmd = new System.Data.SQLite.SQLiteCommand(sql, conn);
+                    using var cmd = new Microsoft.Data.Sqlite.SqliteCommand(sql, conn);
                     using var reader = cmd.ExecuteReader();
                     while (reader.Read())
                     {
@@ -421,7 +443,7 @@ namespace FilterPDF
             // Docs
             if (docTerms.Count > 0)
             {
-                using var cmd = new System.Data.SQLite.SQLiteCommand("SELECT name FROM caches", conn);
+                using var cmd = new Microsoft.Data.Sqlite.SqliteCommand("SELECT name FROM caches", conn);
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
@@ -543,6 +565,105 @@ namespace FilterPDF
             {
                 Console.WriteLine($"[{h.Scope}] page {h.Page} :: {h.Snippet}");
             }
+        }
+
+        // Busca simplificada direto no Postgres (pages table) usando to_tsvector
+        private void SearchInPostgres(string pgUri, List<string> terms, int? limit)
+        {
+            if (terms == null || terms.Count == 0)
+            {
+                Console.WriteLine("Forneça termos para busca (--pg)");
+                return;
+            }
+            var q = BuildTsQuery(terms);
+            var lim = limit ?? 200;
+            using var conn = new NpgsqlConnection(pgUri);
+            conn.Open();
+            using var cmd = new NpgsqlCommand(@"
+            SELECT p.process_number, d.doc_key, d.doc_label_raw, pg.page_number,
+                   left(pg.text, 300) AS snippet
+            FROM pages pg
+            JOIN documents d ON d.id = pg.document_id
+            JOIN processes p ON p.id = d.process_id
+            WHERE to_tsvector('portuguese', coalesce(pg.text,'')) @@ to_tsquery('portuguese', @q)
+            ORDER BY pg.document_id, pg.page_number
+            LIMIT @lim;
+        ", conn);
+        cmd.Parameters.AddWithValue("@q", q);
+        cmd.Parameters.AddWithValue("@lim", lim);
+        using var r = cmd.ExecuteReader();
+        int count = 0;
+        while (r.Read())
+        {
+            count++;
+            var proc = r.IsDBNull(0) ? "" : r.GetString(0);
+            var doc = r.IsDBNull(1) ? "" : r.GetString(1);
+            var label = r.IsDBNull(2) ? "" : r.GetString(2);
+            var page = r.IsDBNull(3) ? 0 : r.GetInt32(3);
+            var snip = r.IsDBNull(4) ? "" : r.GetString(4).Replace('\n', ' ');
+            Console.WriteLine($"{proc} | {doc} | {label} | p.{page}: {snip}");
+        }
+        if (count == 0)
+        {
+            Console.WriteLine("Nenhum resultado no Postgres.");
+        }
+    }
+
+        private string BuildTsQuery(List<string> terms)
+        {
+            // Converte a gramática simples do FPDF (AND por espaço, OR com '|', ! para exato, * para prefixo) em to_tsquery
+            var pieces = new List<string>();
+            foreach (var raw in terms)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                var s = raw.Trim();
+                // remove aspas simples/duplas de borda
+                if ((s.StartsWith("\"") && s.EndsWith("\"")) || (s.StartsWith("'") && s.EndsWith("'")) && s.Length >= 2)
+                    s = s.Substring(1, s.Length - 2);
+                bool exact = false;
+                if (s.StartsWith("!")) { exact = true; s = s.Substring(1); }
+                // tratamos OR/AND explícito dentro do termo
+                if (s.Contains("|"))
+                {
+                    var parts = s.Split('|', StringSplitOptions.RemoveEmptyEntries)
+                                 .Select(p => ToLexeme(p, exact))
+                                 .ToArray();
+                    pieces.Add("(" + string.Join(" | ", parts) + ")");
+                }
+                else if (s.Contains("&"))
+                {
+                    var parts = s.Split('&', StringSplitOptions.RemoveEmptyEntries)
+                                 .Select(p => ToLexeme(p, exact))
+                                 .ToArray();
+                    pieces.Add("(" + string.Join(" & ", parts) + ")");
+                }
+                else
+                {
+                    pieces.Add(ToLexeme(s, exact));
+                }
+            }
+            if (!pieces.Any()) return "";
+            return string.Join(" & ", pieces);
+        }
+
+        private string ToLexeme(string term, bool exact)
+        {
+            term = term.Trim();
+            if (string.IsNullOrEmpty(term)) return "";
+            term = term.Replace("~", "");
+            // wildcard -> prefixo
+            if (term.Contains("*"))
+                term = term.Replace("*", "") + ":*";
+            // tsquery exige escape de caracteres especiais
+            term = term.Replace("'", " ").Replace("\\", " ");
+            if (!exact && term.Contains(" "))
+            {
+                // frase -> & entre palavras
+                var words = term.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                                .Select(w => w + ":*");
+                return "(" + string.Join(" & ", words) + ")";
+            }
+            return term;
         }
     }
 }

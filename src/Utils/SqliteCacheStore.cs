@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Data.SQLite;
+using Microsoft.Data.Sqlite;
 using System.IO;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -18,7 +18,7 @@ namespace FilterPDF.Utils
         public static void EnsureDatabase(string dbPath)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(dbPath)) ?? ".");
-            using var conn = new SQLiteConnection($"Data Source={dbPath};Version=3;");
+            using var conn = new SqliteConnection($"Data Source={dbPath};");
             conn.Open();
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
@@ -151,7 +151,7 @@ namespace FilterPDF.Utils
         public static bool CacheExists(string dbPath, string cacheName)
         {
             EnsureDatabase(dbPath);
-            using var conn = new SQLiteConnection($"Data Source={dbPath};Version=3;");
+            using var conn = new SqliteConnection($"Data Source={dbPath};");
             conn.Open();
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "SELECT 1 FROM caches WHERE name=@n LIMIT 1";
@@ -163,7 +163,7 @@ namespace FilterPDF.Utils
         public static void UpsertCache(string dbPath, string cacheName, string sourcePath, PDFAnalysisResult analysis, string mode)
         {
             EnsureDatabase(dbPath);
-            using var conn = new SQLiteConnection($"Data Source={dbPath};Version=3;");
+            using var conn = new SqliteConnection($"Data Source={dbPath};");
             conn.Open();
             using var tx = conn.BeginTransaction();
 
@@ -221,7 +221,7 @@ namespace FilterPDF.Utils
         {
             var list = new List<string>();
             if (!File.Exists(dbPath)) return list;
-            using var conn = new SQLiteConnection($"Data Source={dbPath};Version=3;");
+            using var conn = new SqliteConnection($"Data Source={dbPath};");
             conn.Open();
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "SELECT name FROM caches ORDER BY name";
@@ -233,7 +233,7 @@ namespace FilterPDF.Utils
             return list;
         }
 
-        private static long InsertOrUpdateCache(SQLiteConnection conn, string cacheName, string sourcePath, string mode, long sizeBytes, string? processNumber, string? metaJson, CacheMeta meta)
+        private static long InsertOrUpdateCache(SqliteConnection conn, string cacheName, string sourcePath, string mode, long sizeBytes, string? processNumber, string? metaJson, CacheMeta meta)
         {
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"INSERT INTO caches(name, source, created_at, mode, size_bytes, json, process_number,

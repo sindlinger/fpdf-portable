@@ -67,7 +67,7 @@ namespace FilterPDF
             if (string.IsNullOrEmpty(dbPath) || string.IsNullOrEmpty(cacheName)) return null;
             try
             {
-                using var conn = new System.Data.SQLite.SQLiteConnection($"Data Source={dbPath};Version=3;");
+                using var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={dbPath};");
                 conn.Open();
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = "SELECT id FROM caches WHERE name=@n LIMIT 1";

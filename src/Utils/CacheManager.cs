@@ -5,7 +5,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using FilterPDF.Security;
 using FilterPDF.Utils;
-using System.Data.SQLite;
+using Npgsql;
 
 namespace FilterPDF
 {
@@ -15,7 +15,7 @@ namespace FilterPDF
     /// </summary>
     public static class CacheManager
     {
-        private static readonly string DbPath = SqliteCacheStore.DefaultDbPath;
+        private static readonly string PgUri = PgDocStore.DefaultPgUri;
         
         // Lock para prevenir race conditions durante operações concorrentes
         private static readonly object indexLock = new object();
@@ -53,7 +53,8 @@ namespace FilterPDF
         /// </summary>
         private static void EnsureDb()
         {
-            SqliteCacheStore.EnsureDatabase(DbPath);
+            using var conn = new NpgsqlConnection(PgAnalysisLoader.GetPgUri(PgUri));
+            conn.Open();
         }
 
         public class MetaStats
@@ -95,49 +96,48 @@ namespace FilterPDF
         {
             EnsureDb();
             var m = new MetaStats();
-            using var conn = new SQLiteConnection($"Data Source={DbPath};Version=3;");
-            conn.Open();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"
-                SELECT
-                  SUM(meta_title IS NOT NULL AND meta_title <> '') as meta_title,
-                  SUM(meta_author IS NOT NULL AND meta_author <> '') as meta_author,
-                  SUM(meta_subject IS NOT NULL AND meta_subject <> '') as meta_subject,
-                  SUM(meta_keywords IS NOT NULL AND meta_keywords <> '') as meta_keywords,
-                  SUM(meta_creation_date IS NOT NULL AND meta_creation_date <> '') as meta_creation_date,
-                  SUM(stat_total_images IS NOT NULL) as stat_total_images,
-                  SUM(stat_total_fonts IS NOT NULL) as stat_total_fonts,
-                  SUM(stat_bookmarks IS NOT NULL) as stat_bookmarks,
-                  SUM(res_attachments IS NOT NULL) as res_attachments,
-                  SUM(res_embedded_files IS NOT NULL) as res_embedded_files,
-                  SUM(res_javascript IS NOT NULL) as res_javascript,
-                  SUM(res_multimedia IS NOT NULL) as res_multimedia,
-                  SUM(sec_is_encrypted IS NOT NULL) as sec_is_encrypted,
-                  COALESCE(SUM(stat_total_images),0) as sum_images,
-                  COALESCE(SUM(stat_bookmarks),0) as sum_bookmarks,
-                  COALESCE(SUM(stat_total_fonts),0) as sum_fonts,
-                  COALESCE(SUM(doc_total_pages),0) as sum_pages
-                FROM caches";
-            using var r = cmd.ExecuteReader();
-            if (r.Read())
+            var rows = PgAnalysisLoader.ListProcesses(PgUri);
+
+            // Pré-carrega contagem de bookmarks
+            var bookmarkCounts = new Dictionary<long, int>();
+            using (var conn = new NpgsqlConnection(PgAnalysisLoader.GetPgUri(PgUri)))
             {
-                m.MetaTitle = r.IsDBNull(0) ? 0 : r.GetInt32(0);
-                m.MetaAuthor = r.IsDBNull(1) ? 0 : r.GetInt32(1);
-                m.MetaSubject = r.IsDBNull(2) ? 0 : r.GetInt32(2);
-                m.MetaKeywords = r.IsDBNull(3) ? 0 : r.GetInt32(3);
-                m.MetaCreationDate = r.IsDBNull(4) ? 0 : r.GetInt32(4);
-                m.StatTotalImages = r.IsDBNull(5) ? 0 : r.GetInt32(5);
-                m.StatTotalFonts = r.IsDBNull(6) ? 0 : r.GetInt32(6);
-                m.StatBookmarks = r.IsDBNull(7) ? 0 : r.GetInt32(7);
-                m.ResAttachments = r.IsDBNull(8) ? 0 : r.GetInt32(8);
-                m.ResEmbeddedFiles = r.IsDBNull(9) ? 0 : r.GetInt32(9);
-                m.ResJavascript = r.IsDBNull(10) ? 0 : r.GetInt32(10);
-                m.ResMultimedia = r.IsDBNull(11) ? 0 : r.GetInt32(11);
-                m.SecIsEncrypted = r.IsDBNull(12) ? 0 : r.GetInt32(12);
-                m.SumImages = r.IsDBNull(13) ? 0 : r.GetInt64(13);
-                m.SumBookmarks = r.IsDBNull(14) ? 0 : r.GetInt64(14);
-                m.SumFonts = r.IsDBNull(15) ? 0 : r.GetInt64(15);
-                m.SumPages = r.IsDBNull(16) ? 0 : r.GetInt64(16);
+                conn.Open();
+                using var cmd = new NpgsqlCommand("SELECT process_id, COUNT(*) FROM bookmarks GROUP BY process_id", conn);
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    var pid = r.IsDBNull(0) ? 0 : r.GetInt64(0);
+                    var cnt = r.IsDBNull(1) ? 0 : r.GetInt32(1);
+                    bookmarkCounts[pid] = cnt;
+                }
+            }
+
+            foreach (var row in rows)
+            {
+                if (!string.IsNullOrWhiteSpace(row.MetaTitle)) m.MetaTitle++;
+                if (!string.IsNullOrWhiteSpace(row.MetaAuthor)) m.MetaAuthor++;
+                if (!string.IsNullOrWhiteSpace(row.MetaSubject)) m.MetaSubject++;
+                if (!string.IsNullOrWhiteSpace(row.MetaKeywords)) m.MetaKeywords++;
+                // CreationDate não está em ProcessRow; ignoramos
+
+                var imgs = row.TotalImages;
+                var fonts = row.TotalFonts;
+                var bkm = bookmarkCounts.TryGetValue(row.Id, out var b) ? b : 0;
+
+                m.StatTotalImages += imgs > 0 ? 1 : 0;
+                m.StatTotalFonts += fonts > 0 ? 1 : 0;
+                m.StatBookmarks += bkm > 0 ? 1 : 0;
+                m.SumImages += imgs;
+                m.SumFonts += fonts;
+                m.SumBookmarks += bkm;
+                m.SumPages += row.TotalPages;
+
+                if (row.HasAttachments) m.ResAttachments++;
+                if (row.HasEmbedded) m.ResEmbeddedFiles++;
+                if (row.HasJs) m.ResJavascript++;
+                if (row.HasMultimedia) m.ResMultimedia++;
+                if (row.IsEncrypted) m.SecIsEncrypted++;
             }
             return m;
         }
@@ -164,19 +164,6 @@ namespace FilterPDF
             var freq = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var samples = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
-            bool HasColumn(SQLiteConnection connection, string table, string column)
-            {
-                using var c = connection.CreateCommand();
-                c.CommandText = $"PRAGMA table_info({table})";
-                using var r = c.ExecuteReader();
-                while (r.Read())
-                {
-                    if (!r.IsDBNull(1) && string.Equals(r.GetString(1), column, StringComparison.OrdinalIgnoreCase))
-                        return true;
-                }
-                return false;
-            }
-
             void AddValue(string? rawValue, string sampleName)
             {
                 if (string.IsNullOrWhiteSpace(rawValue)) return;
@@ -195,119 +182,38 @@ namespace FilterPDF
                 }
             }
 
-            using var conn = new SQLiteConnection($"Data Source={DbPath};Version=3;");
-            conn.Open();
+            var rows = PgAnalysisLoader.ListProcesses(PgUri);
+            if (since.HasValue) rows = rows.Where(r => r.CreatedAt > since.Value).ToList();
+            if (lastCaches.HasValue) rows = rows.Take(lastCaches.Value).ToList();
 
-            string limitClause = "";
-            if (lastCaches.HasValue)
+            foreach (var row in rows)
             {
-                limitClause = $" ORDER BY created_at DESC LIMIT {lastCaches.Value}";
-            }
-
-            string dateWhere = "";
-            if (since.HasValue)
-            {
-                // created_at armazenado em ISO; comparação lexicográfica funciona
-                dateWhere = $" AND created_at > '{since.Value:yyyy-MM-ddTHH:mm:ss}'";
-            }
-
-            switch (field?.ToLowerInvariant())
-            {
-                case "bookmark":
-                    using (var cmd = conn.CreateCommand())
-                    {
-                        cmd.CommandText = $"SELECT name, json FROM caches WHERE stat_bookmarks IS NOT NULL{dateWhere}{limitClause}";
-                        using var r = cmd.ExecuteReader();
-                        while (r.Read())
-                        {
-                            var name = r.IsDBNull(0) ? "" : r.GetString(0);
-                            var jsonStr = r.IsDBNull(1) ? "" : r.GetString(1);
-                            if (string.IsNullOrEmpty(jsonStr)) continue;
-                            try
-                            {
-                                var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(jsonStr);
-                                var bookmarks = data?["Bookmarks"];
-                                if (bookmarks == null) continue;
-
-                                void Walk(System.Text.Json.Nodes.JsonNode node)
-                                {
-                                    if (node == null) return;
-
-                                    if (node is System.Text.Json.Nodes.JsonObject obj)
-                                    {
-                                        // registra título se existir
-                                        if (obj.TryGetPropertyValue("Title", out var titleNode))
-                                        {
-                                            var title = titleNode?.ToString();
-                                            AddValue(title, name);
-                                        }
-
-                                        // percorre todas as propriedades recursivamente, incluindo RootItems/Children/etc.
-                                        foreach (var prop in obj)
-                                        {
-                                            var child = prop.Value;
-                                            if (child is System.Text.Json.Nodes.JsonArray || child is System.Text.Json.Nodes.JsonObject)
-                                                Walk(child);
-                                        }
-                                    }
-                                    else if (node is System.Text.Json.Nodes.JsonArray arr)
-                                    {
-                                        foreach (var child in arr) Walk(child);
-                                    }
-                                }
-
-                                Walk(bookmarks);
-                            }
-                            catch
-                            {
-                                // ignora json inválido
-                            }
-                        }
-                    }
-                    break;
-
-                case "meta_title":
-                case "meta_author":
-                case "meta_subject":
-                case "meta_creator":
-                case "meta_producer":
-                case "doc_type":
-                case "mode":
-                    if (field.Equals("doc_type", StringComparison.OrdinalIgnoreCase) && !HasColumn(conn, "caches", "doc_type"))
-                    {
-                        break; // coluna inexistente, retorna vazio
-                    }
-                    using (var cmd = conn.CreateCommand())
-                    {
-                        cmd.CommandText = $"SELECT name, {field} FROM caches WHERE {field} IS NOT NULL AND {field} <> ''{dateWhere}{limitClause}";
-                        using var r = cmd.ExecuteReader();
-                        while (r.Read())
-                        {
-                            var name = r.IsDBNull(0) ? "" : r.GetString(0);
-                            var value = r.IsDBNull(1) ? null : r.GetString(1);
-                            AddValue(value, name);
-                        }
-                    }
-                    break;
-
-                case "meta_keywords":
-                    using (var cmd = conn.CreateCommand())
-                    {
-                        cmd.CommandText = $"SELECT name, meta_keywords FROM caches WHERE meta_keywords IS NOT NULL AND meta_keywords <> ''{dateWhere}{limitClause}";
-                        using var r = cmd.ExecuteReader();
-                        while (r.Read())
-                        {
-                            var name = r.IsDBNull(0) ? "" : r.GetString(0);
-                            var value = r.IsDBNull(1) ? "" : r.GetString(1);
-                            var parts = value.Split(new[] { ';', ',', '|' }, StringSplitOptions.RemoveEmptyEntries);
-                            if (parts.Length == 0) AddValue(value, name);
-                            foreach (var part in parts) AddValue(part, name);
-                        }
-                    }
-                    break;
-
-                default:
-                    throw new ArgumentException($"Campo não suportado: {field}");
+                switch (field?.ToLowerInvariant())
+                {
+                    case "bookmark":
+                        // Sem árvore normalizada, depende do JSON; ignoramos bookmarks para manter PG-only
+                        break;
+                    case "meta_title":
+                        AddValue(row.MetaTitle, row.ProcessNumber);
+                        break;
+                    case "meta_author":
+                        AddValue(row.MetaAuthor, row.ProcessNumber);
+                        break;
+                    case "meta_subject":
+                        AddValue(row.MetaSubject, row.ProcessNumber);
+                        break;
+                    case "meta_keywords":
+                        AddValue(row.MetaKeywords, row.ProcessNumber);
+                        break;
+                    case "doc_type":
+                        // Sem doc_type agregado; ignorar
+                        break;
+                    case "mode":
+                        AddValue("pg", row.ProcessNumber);
+                        break;
+                    default:
+                        throw new ArgumentException($"Campo inválido para top: {field}");
+                }
             }
 
             var result = freq
@@ -340,22 +246,13 @@ namespace FilterPDF
         public static string? FindCacheFile(string pdfNameOrIndex)
         {
             EnsureDb();
-            string cacheName = Path.GetFileNameWithoutExtension(pdfNameOrIndex);
-
-            if (int.TryParse(pdfNameOrIndex, out int cacheIndex) && cacheIndex > 0)
+            var rows = PgAnalysisLoader.ListProcesses(PgUri);
+            if (int.TryParse(pdfNameOrIndex, out int idx) && idx > 0 && idx <= rows.Count)
             {
-                var entries = ListCachedPDFs();
-                if (cacheIndex >= 1 && cacheIndex <= entries.Count)
-                {
-                    cacheName = entries[cacheIndex - 1].CachePath.Replace("db://", "").Split('#')[1];
-                }
+                return $"pg://{PgUri}#{rows[idx - 1].ProcessNumber}";
             }
-
-            if (SqliteCacheStore.CacheExists(DbPath, cacheName))
-            {
-                return $"db://{DbPath}#{cacheName}";
-            }
-            return null;
+            var match = rows.FirstOrDefault(r => string.Equals(r.ProcessNumber, pdfNameOrIndex, StringComparison.OrdinalIgnoreCase));
+            return match != null ? $"pg://{PgUri}#{match.ProcessNumber}" : null;
         }
         
         /// <summary>
@@ -365,33 +262,23 @@ namespace FilterPDF
         {
             EnsureDb();
             var list = new List<CacheEntry>();
-            using var conn = new SQLiteConnection($"Data Source={DbPath};Version=3;");
-            conn.Open();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT name, source, created_at, size_bytes, mode FROM caches ORDER BY name";
-            using var r = cmd.ExecuteReader();
-            while (r.Read())
+            var rows = PgAnalysisLoader.ListProcesses(PgUri);
+            int idx = 1;
+            foreach (var row in rows)
             {
-                var name = r.IsDBNull(0) ? "" : r.GetString(0);
-                var source = r.IsDBNull(1) ? "" : r.GetString(1);
-                var created = r.IsDBNull(2) ? "" : r.GetString(2);
-                var size = r.IsDBNull(3) ? 0 : r.GetInt64(3);
-                var mode = r.IsDBNull(4) ? "sqlite" : r.GetString(4);
-                if (!DateTime.TryParse(created, out var cachedAt))
-                    cachedAt = DateTime.UtcNow;
-
                 list.Add(new CacheEntry
                 {
-                    OriginalFileName = string.IsNullOrEmpty(source) ? name + ".pdf" : Path.GetFileName(source),
-                    OriginalPath = source,
-                    CacheFileName = name + ".sqlite",
-                    CachePath = $"db://{DbPath}#{name}",
-                    CachedDate = cachedAt,
-                    OriginalSize = size,
-                    CacheSize = size,
-                    ExtractionMode = mode ?? "sqlite",
-                    Version = "sqlite"
+                    OriginalFileName = string.IsNullOrWhiteSpace(row.Source) ? $"process_{row.ProcessNumber}.pdf" : Path.GetFileName(row.Source),
+                    OriginalPath = row.Source,
+                    CacheFileName = row.ProcessNumber,
+                    CachePath = $"pg://{PgUri}#{row.ProcessNumber}",
+                    CachedDate = row.CreatedAt,
+                    OriginalSize = 0,
+                    CacheSize = 0,
+                    ExtractionMode = "pg",
+                    Version = "pg"
                 });
+                idx++;
             }
             return list;
         }
@@ -403,11 +290,9 @@ namespace FilterPDF
         {
             EnsureDb();
             pdfName = Path.GetFileNameWithoutExtension(pdfName);
-            // Simple delete from caches table
-            using var conn = new SQLiteConnection($"Data Source={DbPath};Version=3;");
+            using var conn = new NpgsqlConnection(PgAnalysisLoader.GetPgUri(PgUri));
             conn.Open();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "DELETE FROM caches WHERE name=@n";
+            using var cmd = new NpgsqlCommand("DELETE FROM processes WHERE process_number=@n", conn);
             cmd.Parameters.AddWithValue("@n", pdfName);
             var rows = cmd.ExecuteNonQuery();
             return rows > 0;
@@ -419,10 +304,9 @@ namespace FilterPDF
         public static void ClearCache()
         {
             EnsureDb();
-            using var conn = new SQLiteConnection($"Data Source={DbPath};Version=3;");
+            using var conn = new NpgsqlConnection(PgAnalysisLoader.GetPgUri(PgUri));
             conn.Open();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "DELETE FROM caches";
+            using var cmd = new NpgsqlCommand("DELETE FROM processes", conn);
             cmd.ExecuteNonQuery();
         }
         
@@ -439,31 +323,17 @@ namespace FilterPDF
         /// </summary>
         public static CacheEntry? GetCacheEntry(string pdfNameOrIndex)
         {
+            var entries = ListCachedPDFs();
             if (int.TryParse(pdfNameOrIndex, out int cacheIndex) && cacheIndex > 0)
             {
-                var entries = ListCachedPDFs();
                 if (cacheIndex <= entries.Count)
-                {
                     return entries[cacheIndex - 1];
-                }
                 return null;
             }
 
-            string pdfName = Path.GetFileNameWithoutExtension(pdfNameOrIndex);
-            if (SqliteCacheStore.CacheExists(DbPath, pdfName))
-            {
-                return new CacheEntry
-                {
-                    OriginalFileName = pdfName + ".pdf",
-                    OriginalPath = pdfName + ".pdf",
-                    CacheFileName = pdfName + "._cache.json",
-                    CachePath = $"db://{DbPath}#{pdfName}",
-                    CachedDate = DateTime.Now,
-                    ExtractionMode = "sqlite",
-                    Version = "sqlite"
-                };
-            }
-            return null;
+            var pdfName = Path.GetFileNameWithoutExtension(pdfNameOrIndex);
+            return entries.FirstOrDefault(e => Path.GetFileNameWithoutExtension(e.OriginalFileName)
+                                                .Equals(pdfName, StringComparison.OrdinalIgnoreCase));
         }
         
         /// <summary>
@@ -472,28 +342,16 @@ namespace FilterPDF
         public static CacheStats GetCacheStats()
         {
             EnsureDb();
-            int total = 0;
-            long totalSize = 0;
-            using var conn = new SQLiteConnection($"Data Source={DbPath};Version=3;");
-            conn.Open();
-            using (var cmd = conn.CreateCommand())
-            {
-                cmd.CommandText = "SELECT COUNT(*), COALESCE(SUM(size_bytes),0) FROM caches";
-                using var r = cmd.ExecuteReader();
-                if (r.Read())
-                {
-                    total = r.IsDBNull(0) ? 0 : r.GetInt32(0);
-                    totalSize = r.IsDBNull(1) ? 0 : r.GetInt64(1);
-                }
-            }
-
+            var rows = PgAnalysisLoader.ListProcesses(PgUri);
+            long totalPages = rows.Sum(r => (long)r.TotalPages);
             return new CacheStats
             {
-                TotalEntries = total,
-                TotalCacheSize = totalSize,
-                TotalOriginalSize = totalSize,
-                CacheDirectory = DbPath,
-                LastUpdated = DateTime.UtcNow
+                TotalEntries = rows.Count,
+                TotalCacheSize = 0,
+                TotalOriginalSize = 0,
+                CacheDirectory = PgUri,
+                LastUpdated = DateTime.UtcNow,
+                TotalPages = totalPages
             };
         }
         
@@ -507,6 +365,7 @@ namespace FilterPDF
             public long TotalOriginalSize { get; set; }
             public string CacheDirectory { get; set; } = "";
             public DateTime LastUpdated { get; set; }
+            public long TotalPages { get; set; }
         }
         
         /// <summary>

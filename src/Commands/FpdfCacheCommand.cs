@@ -52,7 +52,7 @@ namespace FilterPDF
                     break;
                     
                 case "rebuild":
-                    Console.WriteLine("Rebuild não é necessário: cache é mantido em SQLite.");
+                    Console.WriteLine("Rebuild não é necessário: cache é mantido em Postgres.");
                     break;
 
                 case "top":
@@ -167,7 +167,7 @@ namespace FilterPDF
         {
             var stats = CacheManager.GetCacheStats();
             
-            Console.WriteLine("CACHE (SQLite):");
+            Console.WriteLine("CACHE (Postgres):");
             Console.WriteLine();
             Console.WriteLine($"DB Path: {stats.CacheDirectory}");
             Console.WriteLine($"Total caches: {stats.TotalEntries}");
@@ -357,7 +357,7 @@ namespace FilterPDF
             Console.WriteLine("CACHE INDEX REBUILD");
             Console.WriteLine("===================");
             Console.WriteLine();
-            Console.WriteLine("Rebuild não é necessário: cache está em SQLite.");
+            Console.WriteLine("Rebuild não é necessário: cache está em Postgres.");
         }
         
         public override void ShowHelp()

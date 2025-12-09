@@ -93,145 +93,106 @@ namespace FilterPDF.Commands
 
         private void ExecuteSinglePdfStats(int index, Dictionary<string, string> options)
         {
-            var cacheFile = CacheManager.FindCacheFile(index.ToString());
-            if (cacheFile == null)
+            var rows = PgAnalysisLoader.ListProcesses();
+            if (index < 1 || index > rows.Count)
             {
-                Console.WriteLine($"Error: Cache file for index {index} not found");
+                Console.WriteLine($"Error: cache {index} not found in Postgres");
+                return;
+            }
+            var row = rows[index - 1];
+            var summary = PgAnalysisLoader.GetProcessSummaryById(row.Id);
+            if (summary == null)
+            {
+                Console.WriteLine($"Error: cache {index} not found in Postgres");
                 return;
             }
 
-            try
+            if (options.ContainsKey("format") && options["format"] == "json")
             {
-                var json = File.ReadAllText(cacheFile);
-                var cache = JsonConvert.DeserializeObject<dynamic>(json);
-
-                if (options.ContainsKey("format") && options["format"] == "json")
+                var obj = new
                 {
-                    OutputSinglePdfJson(index, cache, cacheFile, options);
-                }
-                else
-                {
-                    OutputSinglePdfText(index, cache, cacheFile, options);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error analyzing PDF {index}: {ex.Message}");
-            }
-        }
-
-        private void OutputSinglePdfText(int index, dynamic cache, string cacheFile, Dictionary<string, string> options)
-        {
-            var output = new StringBuilder();
-            var fileName = Path.GetFileNameWithoutExtension(cache.OriginalFileName?.ToString() ?? "unknown");
-            var fileInfo = new FileInfo(cacheFile);
-            
-            output.AppendLine($"ANÁLISE ESTATÍSTICA - PDF #{index}");
-            output.AppendLine("================================");
-            output.AppendLine($"📄 Arquivo: {fileName}");
-            output.AppendLine($"📦 Tamanho cache: {fileInfo.Length / 1024} KB");
-            output.AppendLine();
-
-            // Composition analysis
-            var pages = cache.Pages as JArray;
-            if (pages != null)
-            {
-                var totalPages = pages.Count;
-                var scannedPages = CountScannedPages(pages);
-                var textPages = totalPages - scannedPages;
-                var scannedPercent = totalPages > 0 ? (scannedPages * 100.0 / totalPages) : 0;
-
-                output.AppendLine("COMPOSIÇÃO:");
-                output.AppendLine($"├─ Total de páginas: {totalPages}");
-                output.AppendLine($"├─ Páginas escaneadas: {scannedPages} ({scannedPercent:F1}%)");
-                output.AppendLine($"├─ Páginas texto: {textPages} ({100 - scannedPercent:F1}%)");
-                output.AppendLine($"└─ Páginas em branco: 0");
-                output.AppendLine();
-
-                // Content analysis
-                var totalWords = 0;
-                var totalImages = 0;
-                var languages = new HashSet<string>();
-
-                foreach (var page in pages)
-                {
-                    var textInfo = page["TextInfo"];
-                    if (textInfo != null)
+                    summary.ProcessNumber,
+                    summary.TotalPages,
+                    summary.TotalWords,
+                    summary.TotalImages,
+                    summary.TotalFonts,
+                    summary.ScanRatio,
+                    summary.IsScanned,
+                    summary.IsEncrypted,
+                    Permissions = new
                     {
-                        var wordCount = textInfo["WordCount"];
-                        if (wordCount != null)
-                            totalWords += (int)wordCount;
-
-                        var pageLangs = textInfo["Languages"] as JArray;
-                        if (pageLangs != null)
-                        {
-                            foreach (var lang in pageLangs)
-                            {
-                                languages.Add(lang.ToString());
-                            }
-                        }
-                    }
-
-                    var resources = page["Resources"];
-                    if (resources != null)
-                    {
-                        var images = resources["Images"] as JArray;
-                        if (images != null)
-                            totalImages += images.Count;
-                    }
-                }
-
-                output.AppendLine("CONTEÚDO:");
-                output.AppendLine($"├─ Total de palavras: {totalWords:N0}");
-                output.AppendLine($"├─ Média palavras/página: {(totalPages > 0 ? totalWords / totalPages : 0)}");
-                output.AppendLine($"├─ Total de imagens: {totalImages}");
-                output.AppendLine($"└─ Idiomas: {string.Join(", ", languages)}");
-                output.AppendLine();
-
-                // Classification
-                output.AppendLine("CLASSIFICAÇÃO:");
-                if (scannedPercent >= 90)
-                {
-                    output.AppendLine($"→ Tipo: Documento Escaneado ({scannedPercent:F1}%)");
-                    output.AppendLine("→ Categoria provável: Documento digitalizado");
-                    output.AppendLine("→ Recomendação: Aplicar OCR");
-                }
-                else if (scannedPercent >= 50)
-                {
-                    output.AppendLine($"→ Tipo: Documento Misto ({scannedPercent:F1}% escaneado)");
-                    output.AppendLine("→ Recomendação: OCR parcial pode ser necessário");
-                }
-                else
-                {
-                    output.AppendLine("→ Tipo: Documento de Texto Nativo");
-                    output.AppendLine("→ Texto já extraível");
-                }
-
-                // Add page size analysis if requested
-                if (options.ContainsKey("page-sizes"))
-                {
-                    output.AppendLine();
-                    AnalyzePageSizesForSinglePdf(pages, index, output);
-                }
-
-                // Add image analysis if requested
-                if (options.ContainsKey("images"))
-                {
-                    output.AppendLine();
-                    AnalyzeImagesForSinglePdf(pages, index, output);
-                }
-            }
-
-            // Output
-            if (options.ContainsKey("output"))
-            {
-                File.WriteAllText(options["output"], output.ToString());
-                Console.WriteLine($"Output saved to: {options["output"]}");
+                        summary.PermCopy, summary.PermPrint, summary.PermAnnotate, summary.PermFillForms, summary.PermExtract, summary.PermAssemble, summary.PermPrintHq
+                    },
+                    Resources = new { summary.HasJs, summary.HasEmbedded, summary.HasAttachments, summary.HasMultimedia, summary.HasForms },
+                    Metadata = new { summary.MetaTitle, summary.MetaAuthor, summary.MetaSubject, summary.MetaKeywords }
+                };
+                Console.WriteLine(JsonConvert.SerializeObject(obj, Formatting.Indented));
             }
             else
             {
-                Console.Write(output.ToString());
+                OutputSinglePdfText(summary, index);
             }
+        }
+
+        private void OutputSinglePdfText(PgAnalysisLoader.ProcessSummary summary, int index)
+        {
+            var output = new StringBuilder();
+            var fileName = summary.ProcessNumber;
+
+            output.AppendLine($"ANÁLISE ESTATÍSTICA - PDF #{index}");
+            output.AppendLine("================================");
+            output.AppendLine($"📄 Arquivo: {fileName}");
+            output.AppendLine($"📦 Tamanho cache: n/d (Postgres)");
+            output.AppendLine();
+            output.AppendLine("COMPOSIÇÃO:");
+            output.AppendLine($"├─ Total de páginas: {summary.TotalPages}");
+            var scannedPages = (int)Math.Round(summary.ScanRatio * summary.TotalPages / 100m);
+            var textPages = summary.TotalPages - scannedPages;
+            output.AppendLine($"├─ Páginas escaneadas: {scannedPages} ({summary.ScanRatio:F1}%)");
+            output.AppendLine($"├─ Páginas texto: {textPages} ({(summary.TotalPages>0 ? 100 - summary.ScanRatio : 0):F1}%)");
+            output.AppendLine($"└─ Páginas em branco: n/d");
+            output.AppendLine();
+
+            output.AppendLine("CONTEÚDO:");
+            output.AppendLine($"├─ Total de palavras: {summary.TotalWords:N0}");
+            output.AppendLine($"├─ Total de imagens: {summary.TotalImages}");
+            output.AppendLine($"├─ Total de fontes: {summary.TotalFonts}");
+            output.AppendLine($"└─ Média palavras/página: {(summary.TotalPages>0 ? summary.TotalWords/summary.TotalPages : 0)}");
+            output.AppendLine();
+
+            output.AppendLine("CLASSIFICAÇÃO:");
+            if (summary.ScanRatio >= 90)
+            {
+                output.AppendLine($"→ Tipo: Documento Escaneado ({summary.ScanRatio:F1}%)");
+                output.AppendLine("→ Recomendação: Aplicar OCR");
+            }
+            else if (summary.ScanRatio >= 50)
+            {
+                output.AppendLine($"→ Tipo: Documento Misto ({summary.ScanRatio:F1}% escaneado)");
+                output.AppendLine("→ Recomendação: OCR parcial pode ser necessário");
+            }
+            else
+            {
+                output.AppendLine("→ Tipo: Documento de Texto Nativo");
+                output.AppendLine("→ Texto já extraível");
+            }
+
+            output.AppendLine();
+            output.AppendLine("PERMISSÕES/SEGURANÇA:");
+            output.AppendLine($"- Criptografado: {summary.IsEncrypted}");
+            output.AppendLine($"- Pode copiar: {summary.PermCopy} | Imprimir: {summary.PermPrint} | Anotar: {summary.PermAnnotate} | Formulários: {summary.PermFillForms}");
+
+            output.AppendLine();
+            output.AppendLine("RECURSOS:");
+            output.AppendLine($"- JS: {summary.HasJs}, Embedded: {summary.HasEmbedded}, Anexos: {summary.HasAttachments}, Multimedia: {summary.HasMultimedia}, Forms: {summary.HasForms}");
+
+            output.AppendLine();
+            output.AppendLine("METADADOS:");
+            output.AppendLine($"- Título: {summary.MetaTitle}");
+            output.AppendLine($"- Autor: {summary.MetaAuthor}");
+            output.AppendLine($"- Assunto: {summary.MetaSubject}");
+
+            Console.Write(output.ToString());
         }
 
         private void ExecuteRangeStats(List<int> indices, Dictionary<string, string> options)
@@ -242,23 +203,16 @@ namespace FilterPDF.Commands
             // Analyze each PDF in range
             foreach (var index in indices)
             {
-                var cacheFile = CacheManager.FindCacheFile(index.ToString());
-                if (cacheFile == null)
+                var pg = PgAnalysisLoader.GetByIndex(index.ToString());
+                if (!pg.HasValue)
                 {
                     stats.InvalidCount++;
                     continue;
                 }
-
-                try
-                {
-                    var json = File.ReadAllText(cacheFile);
-                    var cache = JsonConvert.DeserializeObject<dynamic>(json);
-                    AnalyzePdf(cache, cacheFile, stats, index);
-                }
-                catch
-                {
-                    stats.InvalidCount++;
-                }
+                var (analysis, row) = pg.Value;
+                var json = string.IsNullOrWhiteSpace(row.Json) ? JsonConvert.SerializeObject(analysis) : row.Json;
+                var cache = JsonConvert.DeserializeObject<dynamic>(json);
+                AnalyzePdf(cache, row.ProcessNumber, stats, index);
             }
 
             // Output results
@@ -457,8 +411,7 @@ namespace FilterPDF.Commands
         {
             stats.ValidCount++;
             
-            var fileInfo = new FileInfo(cacheFile);
-            stats.TotalCacheSize += fileInfo.Length;
+            stats.TotalCacheSize += 0;
 
             var pages = cache.Pages as JArray;
             if (pages != null)
