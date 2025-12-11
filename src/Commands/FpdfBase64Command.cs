@@ -6,8 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using FilterPDF.Utils;
-using iTextSharp.text;
-using iTextSharp.text.pdf;
+using iText.Kernel.Pdf;
 using Newtonsoft.Json;
 
 namespace FilterPDF
@@ -340,83 +339,54 @@ namespace FilterPDF
                     }
                 }
                 
-                // Open the PDF file
-                using (var reader = new PdfReader(pdfPath))
+                // Open the PDF file with iText7 and copy only the requested page
+                using var src = new PdfDocument(new PdfReader(pdfPath));
+                using var ms = new MemoryStream();
+                using (var dest = new PdfDocument(new PdfWriter(ms)))
                 {
-                    // Extract the specific page
-                    using (var memoryStream = new MemoryStream())
+                    src.CopyPagesTo(pageNumber, pageNumber, dest);
+                }
+
+                byte[] pageBytes = ms.ToArray();
+                string base64String = Convert.ToBase64String(pageBytes);
+
+                if (outputOptions.ContainsKey("-F") && outputOptions["-F"] == "ocr" ||
+                    outputOptions.ContainsKey("--format") && outputOptions["--format"] == "ocr")
+                {
+                    ProcessOCRForBase64(base64String, inputPath, pageNumber);
+                }
+                else if (outputOptions.ContainsKey("-F") && outputOptions["-F"] == "json" ||
+                         outputOptions.ContainsKey("--format") && outputOptions["--format"] == "json")
+                {
+                    var jsonResult = new
                     {
-                        // Create a new document with only the requested page
-                        using (var document = new Document())
-                        {
-                            using (var writer = PdfWriter.GetInstance(document, memoryStream))
-                            {
-                                document.Open();
-                                
-                                // Copy the specific page
-                                var cb = writer.DirectContent;
-                                var page = writer.GetImportedPage(reader, pageNumber);
-                                cb.AddTemplate(page, 0, 0);
-                                
-                                document.Close();
-                            }
-                        }
-                        
-                        // Get the bytes of the single-page PDF
-                        byte[] pageBytes = memoryStream.ToArray();
-                        
-                        // Convert to base64
-                        string base64String = Convert.ToBase64String(pageBytes);
-                        
-                        // Debug: Show what's in outputOptions
-                        // foreach (var kvp in outputOptions)
-                        // {
-                        //     Console.WriteLine($"DEBUG: outputOptions[{kvp.Key}] = {kvp.Value}");
-                        // }
-                        
-                        // Output based on format
-                        if (outputOptions.ContainsKey("-F") && outputOptions["-F"] == "ocr" || 
-                            outputOptions.ContainsKey("--format") && outputOptions["--format"] == "ocr")
-                        {
-                            // Process OCR for the extracted page
-                            ProcessOCRForBase64(base64String, inputPath, pageNumber);
-                        }
-                        else if (outputOptions.ContainsKey("-F") && outputOptions["-F"] == "json" || 
-                            outputOptions.ContainsKey("--format") && outputOptions["--format"] == "json")
-                        {
-                            var jsonResult = new
-                            {
-                                source = inputPath,
-                                pageNumber = pageNumber,
-                                base64Length = base64String.Length,
-                                base64Content = base64String,
-                                originalSizeBytes = pageBytes.Length
-                            };
-                            Console.WriteLine(JsonConvert.SerializeObject(jsonResult, Formatting.Indented));
-                        }
-                        else if (outputOptions.ContainsKey("-F") && outputOptions["-F"] == "raw" || 
-                                 outputOptions.ContainsKey("--format") && outputOptions["--format"] == "raw")
-                        {
-                            // Just output the base64 string without any formatting
-                            Console.WriteLine(base64String);
-                        }
-                        else
-                        {
-                            // Default output
-                            Console.WriteLine($"📄 Página {pageNumber} extraída como Base64:");
-                            Console.WriteLine($"   Tamanho original: {pageBytes.Length:N0} bytes");
-                            Console.WriteLine($"   Tamanho base64: {base64String.Length:N0} caracteres");
-                            Console.WriteLine();
-                            Console.WriteLine("BASE64 CONTENT:");
-                            Console.WriteLine("================");
-                            Console.WriteLine(base64String);
-                            Console.WriteLine("================");
-                            Console.WriteLine();
-                            Console.WriteLine("💡 Dica: Use -F raw para obter apenas o conteúdo base64 puro");
-                            Console.WriteLine("💡 Dica: Use -F json para obter resultado estruturado");
-                            Console.WriteLine("💡 Dica: Use -F ocr para extrair texto da página usando EasyOCR");
-                        }
-                    }
+                        source = inputPath,
+                        pageNumber,
+                        base64Length = base64String.Length,
+                        base64Content = base64String,
+                        originalSizeBytes = pageBytes.Length
+                    };
+                    Console.WriteLine(JsonConvert.SerializeObject(jsonResult, Formatting.Indented));
+                }
+                else if (outputOptions.ContainsKey("-F") && outputOptions["-F"] == "raw" ||
+                         outputOptions.ContainsKey("--format") && outputOptions["--format"] == "raw")
+                {
+                    Console.WriteLine(base64String);
+                }
+                else
+                {
+                    Console.WriteLine($"📄 Página {pageNumber} extraída como Base64:");
+                    Console.WriteLine($"   Tamanho original: {pageBytes.Length:N0} bytes");
+                    Console.WriteLine($"   Tamanho base64: {base64String.Length:N0} caracteres");
+                    Console.WriteLine();
+                    Console.WriteLine("BASE64 CONTENT:");
+                    Console.WriteLine("================");
+                    Console.WriteLine(base64String);
+                    Console.WriteLine("================");
+                    Console.WriteLine();
+                    Console.WriteLine("💡 Dica: Use -F raw para obter apenas o conteúdo base64 puro");
+                    Console.WriteLine("💡 Dica: Use -F json para obter resultado estruturado");
+                    Console.WriteLine("💡 Dica: Use -F ocr para extrair texto da página usando EasyOCR");
                 }
             }
             catch (Exception ex)

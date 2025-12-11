@@ -8,8 +8,6 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using FilterPDF.Utils;
 using FilterPDF.Services;
-using iTextSharp.text;
-using iTextSharp.text.pdf;
 
 namespace FilterPDF
 {

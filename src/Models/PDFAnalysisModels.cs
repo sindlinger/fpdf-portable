@@ -647,7 +647,7 @@ namespace FilterPDF
         public int ObjectNumber { get; set; }
         public int Generation { get; set; }
         public string ObjectType { get; set; } = "";
-        public iTextSharp.text.pdf.PdfObject? PdfObject { get; set; } = null;
+        public object? PdfObject { get; set; } = null;
         public List<string> MatchReasons { get; set; } = new List<string>();
         public long StreamLength { get; set; }
         public List<string> DictionaryKeys { get; set; } = new List<string>();
