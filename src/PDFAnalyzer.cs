@@ -5,6 +5,7 @@ using System.Text;
 using System.Linq;
 using System.Text.RegularExpressions;
 using FilterPDF.Strategies;
+using iText.Kernel.Geom;
 using iTextSharp.text.pdf;
 using iTextSharp.text.pdf.parser;
 using iText.Kernel.Pdf.Canvas.Parser;
@@ -13,6 +14,17 @@ using PdfTextExtractor5 = iTextSharp.text.pdf.parser.PdfTextExtractor;
 using PdfReader7 = iText.Kernel.Pdf.PdfReader;
 using PdfDocument7 = iText.Kernel.Pdf.PdfDocument;
 using PdfTextExtractor7 = iText.Kernel.Pdf.Canvas.Parser.PdfTextExtractor;
+// Aliases to avoid ambiguity while migrating
+using PdfDictionary5 = iTextSharp.text.pdf.PdfDictionary;
+using PdfArray5 = iTextSharp.text.pdf.PdfArray;
+using PdfName5 = iTextSharp.text.pdf.PdfName;
+using PdfIndirectReference5 = iTextSharp.text.pdf.PdfIndirectReference;
+using PRStream5 = iTextSharp.text.pdf.PRStream;
+using PdfDictionary7 = iText.Kernel.Pdf.PdfDictionary;
+using PdfArray7 = iText.Kernel.Pdf.PdfArray;
+using PdfName7 = iText.Kernel.Pdf.PdfName;
+using PdfStream7 = iText.Kernel.Pdf.PdfStream;
+using PdfIndirectReference7 = iText.Kernel.Pdf.PdfIndirectReference;
 
 namespace FilterPDF
 {
@@ -138,26 +150,72 @@ namespace FilterPDF
         
         private Metadata ExtractMetadata()
         {
-            var info = reader.Info;
             var metadata = new Metadata();
-            
-            if (info.ContainsKey("Title")) metadata.Title = info["Title"];
-            if (info.ContainsKey("Author")) metadata.Author = info["Author"];
-            if (info.ContainsKey("Subject")) metadata.Subject = info["Subject"];
-            if (info.ContainsKey("Keywords")) metadata.Keywords = info["Keywords"];
-            if (info.ContainsKey("Creator")) metadata.Creator = info["Creator"];
-            if (info.ContainsKey("Producer")) metadata.Producer = info["Producer"];
-            if (info.ContainsKey("CreationDate")) metadata.CreationDate = ParsePDFDate(info["CreationDate"]);
-            if (info.ContainsKey("ModDate")) metadata.ModificationDate = ParsePDFDate(info["ModDate"]);
-            
+
+            // Tenta iText7 primeiro
+            if (i7doc != null)
+            {
+                try
+                {
+                    var info = i7doc.GetDocumentInfo();
+                    metadata.Title = info.GetTitle();
+                    metadata.Author = info.GetAuthor();
+                    metadata.Subject = info.GetSubject();
+                    metadata.Keywords = info.GetKeywords();
+                    metadata.Creator = info.GetCreator();
+                    metadata.Producer = info.GetProducer();
+                    metadata.CreationDate = ParsePDFDate(info.GetMoreInfo(PdfName7.CreationDate.GetValue()));
+                    metadata.ModificationDate = ParsePDFDate(info.GetMoreInfo(PdfName7.ModDate.GetValue()));
+                    metadata.PDFVersion = i7doc.GetPdfVersion().ToString();
+                    metadata.IsTagged = i7doc.IsTagged();
+                    return metadata;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[WARN] iText7 metadata failed: {ex.Message}, falling back to legacy");
+                }
+            }
+
+            // Fallback iTextSharp
+            var infoLegacy = reader.Info;
+            if (infoLegacy.ContainsKey("Title")) metadata.Title = infoLegacy["Title"];
+            if (infoLegacy.ContainsKey("Author")) metadata.Author = infoLegacy["Author"];
+            if (infoLegacy.ContainsKey("Subject")) metadata.Subject = infoLegacy["Subject"];
+            if (infoLegacy.ContainsKey("Keywords")) metadata.Keywords = infoLegacy["Keywords"];
+            if (infoLegacy.ContainsKey("Creator")) metadata.Creator = infoLegacy["Creator"];
+            if (infoLegacy.ContainsKey("Producer")) metadata.Producer = infoLegacy["Producer"];
+            if (infoLegacy.ContainsKey("CreationDate")) metadata.CreationDate = ParsePDFDate(infoLegacy["CreationDate"]);
+            if (infoLegacy.ContainsKey("ModDate")) metadata.ModificationDate = ParsePDFDate(infoLegacy["ModDate"]);
+
             metadata.PDFVersion = reader.PdfVersion.ToString();
-            metadata.IsTagged = false; // Not available in this version
-            
+            metadata.IsTagged = false; // iTextSharp não expõe
             return metadata;
         }
         
         private DocumentInfo ExtractDocumentInfo()
         {
+            if (i7doc != null)
+            {
+                try
+                {
+                    var reader7 = i7doc.GetReader();
+                    return new DocumentInfo
+                    {
+                        TotalPages = i7doc.GetNumberOfPages(),
+                        IsEncrypted = reader7.IsEncrypted(),
+                        IsLinearized = reader7.HasRebuiltXref() == false, // proxy: se não reconstruído, assume linearizado/ok
+                        HasAcroForm = i7doc.GetCatalog()?.GetPdfObject()?.GetAsDictionary(PdfName7.AcroForm) != null,
+                        HasXFA = false, // TODO: detectar XFA em iText7
+                        FileStructure = reader7.HasRebuiltXref() ? "Rebuilt" : "Original"
+                    };
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[WARN] iText7 doc info failed: {ex.Message}, fallback legacy");
+                }
+            }
+
+            // Fallback iTextSharp
             return new DocumentInfo
             {
                 TotalPages = reader.NumberOfPages,
@@ -580,6 +638,62 @@ namespace FilterPDF
         
         private PageResources AnalyzePageResources(int pageNum)
         {
+            if (i7doc != null)
+            {
+                try { return AnalyzePageResources7(pageNum); }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[WARN] iText7 resources failed on page {pageNum}: {ex.Message}, falling back to legacy");
+                }
+            }
+            return AnalyzePageResourcesLegacy(pageNum);
+        }
+
+        // Novo caminho com iText7
+        private PageResources AnalyzePageResources7(int pageNum)
+        {
+            var result = new PageResources();
+            var page = i7doc!.GetPage(pageNum);
+            var resources = page.GetResources();
+            if (resources == null) return result;
+
+            // Imagens (XObject)
+            var xobjects = resources.GetResource(PdfName7.XObject) as PdfDictionary7;
+            if (xobjects != null)
+            {
+                foreach (var key in xobjects.KeySet())
+                {
+                    var obj = xobjects.Get(key);
+                    if (obj == null) continue;
+                    if (obj.IsIndirectReference())
+                        obj = ((PdfIndirectReference7)obj).GetRefersTo();
+                    if (obj is PdfStream7 stream)
+                    {
+                        var subtype = stream.GetAsName(PdfName7.Subtype);
+                        if (PdfName7.Image.Equals(subtype))
+                        {
+                            result.Images.Add(ExtractImageInfo(stream, key.ToString()));
+                        }
+                    }
+                }
+            }
+
+            // Fontes
+            var fonts = resources.GetResource(PdfName7.Font) as PdfDictionary7;
+            if (fonts != null)
+            {
+                result.FontCount = fonts.KeySet().Count;
+            }
+
+            // Forms (AcroForm fields on page) — reaproveita lógica existente
+            result.FormFields = ExtractPageFormFields(pageNum);
+
+            return result;
+        }
+
+        // Caminho legado (iTextSharp)
+        private PageResources AnalyzePageResourcesLegacy(int pageNum)
+        {
             var dict = reader.GetPageN(pageNum);
             var resources = dict.GetAsDict(PdfName.RESOURCES);
             var result = new PageResources();
@@ -631,8 +745,51 @@ namespace FilterPDF
         private List<Annotation> ExtractAnnotations(int pageNum)
         {
             var annotations = new List<Annotation>();
+            // iText7 path
+            if (i7doc != null)
+            {
+                try
+                {
+                    var page = i7doc.GetPage(pageNum);
+                    foreach (var annot in page.GetAnnotations())
+                    {
+                        var rectArray = annot.GetRectangle();
+                        Rectangle rect;
+                        if (rectArray != null && rectArray.Size() >= 4)
+                        {
+                            rect = new Rectangle(
+                                rectArray.GetAsNumber(0)?.FloatValue() ?? 0,
+                                rectArray.GetAsNumber(1)?.FloatValue() ?? 0,
+                                rectArray.GetAsNumber(2)?.FloatValue() ?? 0,
+                                rectArray.GetAsNumber(3)?.FloatValue() ?? 0);
+                        }
+                        else
+                        {
+                            rect = new Rectangle(0, 0, 0, 0);
+                        }
+                        var obj = annot.GetPdfObject();
+                        annotations.Add(new Annotation
+                        {
+                            Type = annot.GetSubtype()?.ToString() ?? string.Empty,
+                            Contents = annot.GetContents()?.ToString() ?? string.Empty,
+                            Author = annot.GetTitle()?.ToString() ?? string.Empty,
+                            Subject = obj?.GetAsString(PdfName7.Subj)?.ToString() ?? string.Empty,
+                            ModificationDate = ParsePDFDate(obj?.GetAsString(PdfName7.M)?.ToString() ?? string.Empty),
+                            X = rect.GetX(),
+                            Y = rect.GetY()
+                        });
+                    }
+                    return annotations;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[WARN] iText7 annotations failed on page {pageNum}: {ex.Message}, fallback legacy");
+                }
+            }
+
+            // Legacy iTextSharp fallback
             var pageDict = reader.GetPageN(pageNum);
-            var annots = pageDict.GetAsArray(PdfName.ANNOTS);
+            var annots = pageDict.GetAsArray(PdfName5.ANNOTS);
             
             if (annots != null)
             {
@@ -643,10 +800,11 @@ namespace FilterPDF
                     {
                         annotations.Add(new Annotation
                         {
-                            Type = annotDict.GetAsName(PdfName.SUBTYPE)?.ToString() ?? string.Empty,
-                            Contents = annotDict.GetAsString(PdfName.CONTENTS)?.ToString() ?? string.Empty,
-                            Author = annotDict.GetAsString(PdfName.T)?.ToString() ?? string.Empty,
-                            ModificationDate = ParsePDFDate(annotDict.GetAsString(PdfName.M)?.ToString() ?? string.Empty)
+                            Type = annotDict.GetAsName(PdfName5.SUBTYPE)?.ToString() ?? string.Empty,
+                            Contents = annotDict.GetAsString(PdfName5.CONTENTS)?.ToString() ?? string.Empty,
+                            Author = annotDict.GetAsString(PdfName5.T)?.ToString() ?? string.Empty,
+                            Subject = annotDict.GetAsString(new PdfName5("Subj"))?.ToString() ?? string.Empty,
+                            ModificationDate = ParsePDFDate(annotDict.GetAsString(PdfName5.M)?.ToString() ?? string.Empty)
                         });
                     }
                 }
@@ -798,6 +956,26 @@ namespace FilterPDF
             return stats;
         }
         
+        private ImageInfo ExtractImageInfo(PdfStream7 stream, string name)
+        {
+            var info = new ImageInfo { Name = name };
+
+            var width = stream.GetAsNumber(PdfName7.Width);
+            var height = stream.GetAsNumber(PdfName7.Height);
+            var bitsPerComponent = stream.GetAsNumber(PdfName7.BitsPerComponent);
+            var filter = stream.GetAsName(PdfName7.Filter);
+
+            if (width != null) info.Width = width.IntValue();
+            if (height != null) info.Height = height.IntValue();
+            if (bitsPerComponent != null) info.BitsPerComponent = bitsPerComponent.IntValue();
+            if (filter != null) info.CompressionType = filter.ToString();
+
+            var cs = stream.GetAsName(PdfName7.ColorSpace);
+            info.ColorSpace = cs?.ToString() ?? "Unknown";
+
+            return info;
+        }
+
         private ImageInfo ExtractImageInfo(PRStream stream, string name)
         {
             var info = new ImageInfo { Name = name };
@@ -1428,7 +1606,66 @@ namespace FilterPDF
         private List<FormField> ExtractPageFormFields(int pageNum)
         {
             var formFields = new List<FormField>();
-            
+
+            // Prefer iText7
+            if (i7doc != null)
+            {
+                try
+                {
+                    var acro7 = iText.Forms.PdfAcroForm.GetAcroForm(i7doc, false);
+                    if (acro7 != null)
+                    {
+                        foreach (var kv in acro7.GetFormFields())
+                        {
+                            var field = kv.Value;
+                            var widgets = field.GetWidgets();
+                            if (widgets == null) continue;
+
+                            foreach (var widget in widgets)
+                            {
+                                var page = widget.GetPage();
+                                // PdfPage doesn't expose GetPageNumber; use PdfDocument helper
+                                if (page != null && i7doc.GetPageNumber(page) == pageNum)
+                                {
+                                    var rect = widget.GetRectangle();
+                                    var formField = new FormField
+                                    {
+                                        Name = kv.Key,
+                                        Type = field.GetFormType()?.ToString() ?? "Unknown",
+                                        Value = field.GetValueAsString(),
+                                        DefaultValue = field.GetDefaultValue() != null ? field.GetDefaultValue().ToString() : string.Empty,
+                                        IsReadOnly = field.IsReadOnly(),
+                                        IsRequired = field.IsRequired(),
+                                        X = rect.GetAsNumber(0)?.FloatValue() ?? 0,
+                                        Y = rect.GetAsNumber(1)?.FloatValue() ?? 0,
+                                        Width = (rect.GetAsNumber(2)?.FloatValue() ?? 0) - (rect.GetAsNumber(0)?.FloatValue() ?? 0),
+                                        Height = (rect.GetAsNumber(3)?.FloatValue() ?? 0) - (rect.GetAsNumber(1)?.FloatValue() ?? 0)
+                                    };
+
+                                    var opt = field.GetPdfObject().GetAsArray(PdfName7.Opt);
+                                    if (opt != null)
+                                    {
+                                        for (int j = 0; j < opt.Size(); j++)
+                                        {
+                                            var option = opt.GetAsString(j);
+                                            if (option != null) formField.Options.Add(option.ToString());
+                                        }
+                                    }
+
+                                    formFields.Add(formField);
+                                }
+                            }
+                        }
+                        return formFields;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[WARN] iText7 form fields failed on page {pageNum}: {ex.Message}, fallback legacy");
+                }
+            }
+
+            // Legacy iTextSharp fallback
             try
             {
                 var acroForm = reader.AcroForm;
@@ -1452,21 +1689,16 @@ namespace FilterPDF
                                     IsReadOnly = (field.GetAsNumber(PdfName.FF)?.IntValue & 1) != 0
                                 };
                                 
-                                // Extrair opções para campos de escolha
                                 var opt = field.GetAsArray(PdfName.OPT);
                                 if (opt != null)
                                 {
                                     for (int j = 0; j < opt.Size; j++)
                                     {
                                         var option = opt.GetAsString(j);
-                                        if (option != null)
-                                        {
-                                            formField.Options.Add(option.ToString());
-                                        }
+                                        if (option != null) formField.Options.Add(option.ToString());
                                     }
                                 }
                                 
-                                // Extrair geometria do campo
                                 var rect = field.GetAsArray(PdfName.RECT);
                                 if (rect != null && rect.Size >= 4)
                                 {
