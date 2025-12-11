@@ -1080,7 +1080,8 @@ namespace FilterPDF
             commands["forensic-batch"] = new BatchForensicCommand();
             commands["visualize-structure"] = new VisualizePdfStructureCommand();
             commands["analyze-objects"] = new AnalyzePdfObjectStructureCommand();
-            commands["pipeline-tjpb"] = new PipelineTjpbCommand();
+            commands["pipeline"] = new PipelineCommand();
+            commands["pipeline-tjpb"] = new PipelineTjpbCommand(); // alias legacy
             
             
             // Comando de gerenciamento
