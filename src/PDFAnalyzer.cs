@@ -4,15 +4,15 @@ using System.IO;
 using System.Text;
 using System.Linq;
 using System.Text.RegularExpressions;
+using FilterPDF.Strategies;
 using iTextSharp.text.pdf;
 using iTextSharp.text.pdf.parser;
-using FilterPDF.Strategies;
-using PdfReader7 = iText.Kernel.Pdf.PdfReader;
-using PdfDocument7 = iText.Kernel.Pdf.PdfDocument;
-using PdfTextExtractor7 = iText.Kernel.Pdf.Canvas.Parser.PdfTextExtractor;
 using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using PdfTextExtractor5 = iTextSharp.text.pdf.parser.PdfTextExtractor;
+using PdfReader7 = iText.Kernel.Pdf.PdfReader;
+using PdfDocument7 = iText.Kernel.Pdf.PdfDocument;
+using PdfTextExtractor7 = iText.Kernel.Pdf.Canvas.Parser.PdfTextExtractor;
 
 namespace FilterPDF
 {
@@ -22,10 +22,10 @@ namespace FilterPDF
     /// </summary>
     public class PDFAnalyzer
     {
-        private PdfReader reader;
+        private PdfReader reader;          // iTextSharp (legacy paths)
         private string pdfPath;
         private bool ownsReader;
-        private PdfDocument7? i7doc;
+        private PdfDocument7? i7doc;       // iText7 document for new extraction
         private bool ownsDoc7;
         private readonly bool forceLegacyText;
         
@@ -34,22 +34,13 @@ namespace FilterPDF
             this.pdfPath = pdfPath;
             this.forceLegacyText = Environment.GetEnvironmentVariable("FPDF_TEXT_LEGACY") == "1";
             Console.WriteLine($"    [PDFAnalyzer] Opening PDF: {Path.GetFileName(pdfPath)}");
-            // Use PdfAccessManager for centralized access
+
+            // Abrir iTextSharp reader (legado) e iText7 doc (novo)
             this.reader = PdfAccessManager.GetReader(pdfPath);
             this.ownsReader = false;
-            // Abrir iText7 para extração avançada
-            try
-            {
-                // Reutiliza doc via PdfAccessManager7 (cache por caminho)
-                this.i7doc = FilterPDF.Utils.PdfAccessManager7.GetDocument(pdfPath);
-                this.ownsDoc7 = false; // cache gerencia ciclo de vida
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"[WARN] iText7 open failed, fallback to iTextSharp only: {ex.Message}");
-                this.i7doc = null;
-                this.ownsDoc7 = false;
-            }
+            this.i7doc = FilterPDF.Utils.PdfAccessManager7.GetDocument(pdfPath);
+            this.ownsDoc7 = false; // cache gerencia ciclo de vida
+
             Console.WriteLine($"    [PDFAnalyzer] PDF opened successfully. Pages: {reader.NumberOfPages}");
         }
         
@@ -60,18 +51,11 @@ namespace FilterPDF
         {
             this.pdfPath = pdfPath;
             this.forceLegacyText = Environment.GetEnvironmentVariable("FPDF_TEXT_LEGACY") == "1";
+            // Manter compat: se veio um reader externo (iText7), usamos doc a partir dele
             this.reader = reader;
             this.ownsReader = false;
-            try
-            {
-                this.i7doc = FilterPDF.Utils.PdfAccessManager7.GetDocument(pdfPath);
-                this.ownsDoc7 = false;
-            }
-            catch
-            {
-                this.i7doc = null;
-                this.ownsDoc7 = false;
-            }
+            this.i7doc = FilterPDF.Utils.PdfAccessManager7.GetDocument(pdfPath);
+            this.ownsDoc7 = false;
             Console.WriteLine($"    [PDFAnalyzer] Using existing reader. Pages: {reader.NumberOfPages}");
         }
         
