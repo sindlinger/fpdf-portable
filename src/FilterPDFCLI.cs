@@ -1076,6 +1076,7 @@ namespace FilterPDF
             commands["ts-last-session"] = new TimestampBasedLastSessionCommand();
             commands["create-modified-test"] = new CreateModifiedTestPdfCommand();
             commands["demo-issue"] = new DemonstrateExtractionIssueCommand();
+            commands["enhanced-last-session"] = new EnhancedLastSessionCommand();
             
             
             // Comando de gerenciamento
