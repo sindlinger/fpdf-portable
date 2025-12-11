@@ -1063,6 +1063,7 @@ namespace FilterPDF
             // Diferenças de template (iText7)
             commands["template-diff"] = new TemplateDiffCommand();
             commands["diff"] = new FpdfDiffCommand();
+            commands["inspect"] = new InspectPdfCommand();
             
             
             // Comando de gerenciamento
