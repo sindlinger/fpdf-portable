@@ -681,6 +681,21 @@ namespace FilterPDF
                     IsOpen = child.IsOpen()
                 };
                 item.Destination = new BookmarkDestination { PageNumber = 1, Type = "Destination" };
+                var dest = child.GetDestination();
+                var destObj = dest?.GetPdfObject();
+                if (destObj is PdfArray destArray && doc != null)
+                {
+                    var pageObj = destArray.Get(0);
+                    for (int p = 1; p <= doc.GetNumberOfPages(); p++)
+                    {
+                        var pagePdfObj = doc.GetPage(p).GetPdfObject();
+                        if (pageObj != null && pageObj.Equals(pagePdfObj))
+                        {
+                            item.Destination.PageNumber = p;
+                            break;
+                        }
+                    }
+                }
                 item.Children = ConvertOutline(child, level + 1);
                 items.Add(item);
             }

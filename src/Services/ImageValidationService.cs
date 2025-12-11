@@ -4,6 +4,8 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 
+#pragma warning disable CA1416 // System.Drawing on non-Windows; acceptable for legacy validation path
+
 namespace FilterPDF.Services
 {
     /// <summary>
@@ -445,3 +447,6 @@ namespace FilterPDF.Services
         }
     }
 }
+#pragma warning restore CA1416
+// Suppress platform warnings (System.Drawing on non-Windows) for this legacy validator.
+#pragma warning disable CA1416
