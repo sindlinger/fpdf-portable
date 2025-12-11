@@ -1077,6 +1077,7 @@ namespace FilterPDF
             commands["create-modified-test"] = new CreateModifiedTestPdfCommand();
             commands["demo-issue"] = new DemonstrateExtractionIssueCommand();
             commands["enhanced-last-session"] = new EnhancedLastSessionCommand();
+            commands["forensic-batch"] = new BatchForensicCommand();
             
             
             // Comando de gerenciamento
