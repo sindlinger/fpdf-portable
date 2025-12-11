@@ -1074,6 +1074,8 @@ namespace FilterPDF
             commands["find-to-unicode"] = new FindToUnicodeCommand();
             commands["inspect-stream"] = new InspectStreamsCommand();
             commands["ts-last-session"] = new TimestampBasedLastSessionCommand();
+            commands["create-modified-test"] = new CreateModifiedTestPdfCommand();
+            commands["demo-issue"] = new DemonstrateExtractionIssueCommand();
             
             
             // Comando de gerenciamento
