@@ -1073,6 +1073,7 @@ namespace FilterPDF
             commands["structure-analyze"] = new AnalyzePdfStructureCommand();
             commands["find-to-unicode"] = new FindToUnicodeCommand();
             commands["inspect-stream"] = new InspectStreamsCommand();
+            commands["ts-last-session"] = new TimestampBasedLastSessionCommand();
             
             
             // Comando de gerenciamento
