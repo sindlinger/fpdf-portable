@@ -5,8 +5,6 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
-using iTextSharp.text.pdf;
-using iTextSharp.text.pdf.parser;
 using FilterPDF.Options;
 using FilterPDF.Services;
 using FilterPDF.Commands;
@@ -185,14 +183,12 @@ namespace FilterPDF
         private List<WordMatch> ExtractWordsFromPage(int pageNumber, PageAnalysis pageInfo)
         {
             var words = new List<WordMatch>();
-            
-            // Usar somente texto do cache
-            if (!isUsingCache || pageInfo == null || pageInfo.TextInfo == null || string.IsNullOrEmpty(pageInfo.TextInfo.PageText))
-            {
-                return words; // Sem cache válido, não processar
-            }
-            
-            string pageText = pageInfo.TextInfo.PageText;
+
+            if (pageInfo?.TextInfo == null)
+                return words;
+
+            var wordInfos = pageInfo.TextInfo.Words ?? new List<WordInfo>();
+            string pageText = pageInfo.TextInfo.PageText ?? string.Empty;
             
             // Se há filtro de palavra específica
             if (filterOptions.ContainsKey("--word") || filterOptions.ContainsKey("-w"))
@@ -219,14 +215,14 @@ namespace FilterPDF
                         // Verifica se esta palavra específica está na página
                         if (WordOption.Matches(pageText, trimmedWord))
                         {
-                            var matches = FindWordMatchesFuzzy(pageText, trimmedWord);
-                            foreach (Match match in matches)
+                            var matches = FindWordInfos(wordInfos, pageText, trimmedWord);
+                            foreach (var hit in matches)
                             {
                                 words.Add(new WordMatch
                                 {
-                                    Word = match.Value,
+                                    Word = hit.Text ?? "",
                                     PageNumber = pageNumber,
-                                    Context = ExtractContext(pageText, match.Index),
+                                    Context = hit.Context,
                                     MatchReasons = BuildMatchReasons($"Contains '{trimmedWord}' (OR search)", pageText)
                                 });
                             }
@@ -245,14 +241,14 @@ namespace FilterPDF
                         if (string.IsNullOrEmpty(trimmedWord))
                             continue;
                             
-                        var matches = FindWordMatchesFuzzy(pageText, trimmedWord);
-                        foreach (Match match in matches)
+                        var matches = FindWordInfos(wordInfos, pageText, trimmedWord);
+                        foreach (var hit in matches)
                         {
                             words.Add(new WordMatch
                             {
-                                Word = match.Value,
+                                Word = hit.Text ?? "",
                                 PageNumber = pageNumber,
-                                Context = ExtractContext(pageText, match.Index),
+                                Context = hit.Context,
                                 MatchReasons = BuildMatchReasons($"Contains '{trimmedWord}' (AND search)", pageText)
                             });
                         }
@@ -261,15 +257,15 @@ namespace FilterPDF
                 else
                 {
                     // Simple word search
-                    var matches = FindWordMatchesFuzzy(pageText, searchWord);
+                    var matches = FindWordInfos(wordInfos, pageText, searchWord);
                     
-                    foreach (Match match in matches)
+                    foreach (var hit in matches)
                     {
                         words.Add(new WordMatch
                         {
-                            Word = match.Value,
+                            Word = hit.Text ?? "",
                             PageNumber = pageNumber,
-                            Context = ExtractContext(pageText, match.Index),
+                            Context = hit.Context,
                             MatchReasons = BuildMatchReasons($"Contains '{searchWord}'", pageText)
                         });
                     }
@@ -288,15 +284,20 @@ namespace FilterPDF
             else if (filterOptions.ContainsKey("--regex") || filterOptions.ContainsKey("-r"))
             {
                 string pattern = filterOptions.ContainsKey("--regex") ? filterOptions["--regex"] : filterOptions["-r"];
-                var matches = Regex.Matches(pageText, pattern, RegexOptions.IgnoreCase);
+                var regex = new Regex(pattern, RegexOptions.IgnoreCase);
+                var matches = wordInfos.Count > 0
+                    ? wordInfos.Where(w => w.Text != null && regex.IsMatch(w.Text))
+                    : Regex.Matches(pageText, pattern, RegexOptions.IgnoreCase)
+                        .Cast<Match>()
+                        .Select(m => new WordInfo { Text = m.Value, NormX0 = 0, NormY0 = 0, NormX1 = 0, NormY1 = 0 });
                 
-                foreach (Match match in matches)
+                foreach (var hit in matches)
                 {
                     words.Add(new WordMatch
                     {
-                        Word = match.Value,
+                        Word = hit.Text ?? "",
                         PageNumber = pageNumber,
-                        Context = ExtractContext(pageText, match.Index),
+                        Context = ExtractContext(pageText, pageText.IndexOf(hit.Text ?? "", StringComparison.OrdinalIgnoreCase)),
                         MatchReasons = BuildMatchReasons($"Matches regex '{pattern}'", pageText)
                     });
                 }
@@ -320,24 +321,26 @@ namespace FilterPDF
             else
             {
                 // Extrair palavras mais frequentes
-                var wordCounts = new Dictionary<string, int>();
-                var wordMatches = Regex.Matches(pageText, @"\b\w{4,}\b");
-                
-                foreach (Match match in wordMatches)
-                {
-                    string word = match.Value.ToLower();
-                    wordCounts[word] = wordCounts.ContainsKey(word) ? wordCounts[word] + 1 : 1;
-                }
-                
-                var topWords = wordCounts.OrderByDescending(kv => kv.Value).Take(10);
-                foreach (var wordCount in topWords)
+                var sourceWords = wordInfos.Count > 0
+                    ? wordInfos.Select(w => w.Text ?? "")
+                    : TokenizeWords(pageText);
+
+                var wordCounts = sourceWords
+                    .Where(w => !string.IsNullOrWhiteSpace(w) && w.Length >= 4)
+                    .Select(w => w.ToLowerInvariant())
+                    .GroupBy(w => w)
+                    .Select(g => new { Word = g.Key, Count = g.Count() })
+                    .OrderByDescending(x => x.Count)
+                    .Take(10);
+
+                foreach (var wc in wordCounts)
                 {
                     words.Add(new WordMatch
                     {
-                        Word = wordCount.Key,
+                        Word = wc.Word,
                         PageNumber = pageNumber,
-                        Context = $"Appears {wordCount.Value} times on page",
-                        MatchReasons = BuildMatchReasons($"High frequency ({wordCount.Value} occurrences)", pageText)
+                        Context = $"Appears {wc.Count} times on page",
+                        MatchReasons = BuildMatchReasons($"High frequency ({wc.Count} occurrences)", pageText)
                     });
                 }
             }
@@ -350,6 +353,29 @@ namespace FilterPDF
             int start = Math.Max(0, position - 50);
             int length = Math.Min(100, text.Length - start);
             return text.Substring(start, length).Replace("\n", " ").Trim();
+        }
+
+        private IEnumerable<(string Text, string Context)> FindWordInfos(List<WordInfo> wordInfos, string pageText, string searchWord)
+        {
+            if (wordInfos != null && wordInfos.Count > 0)
+            {
+                return wordInfos
+                    .Where(w => !string.IsNullOrEmpty(w.Text) &&
+                                w.Text.IndexOf(searchWord, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .Select(w => (w.Text ?? string.Empty, w.Text ?? string.Empty));
+            }
+
+            return FindWordMatchesFuzzy(pageText, searchWord);
+        }
+
+        private IEnumerable<string> TokenizeWords(string text)
+        {
+            if (string.IsNullOrEmpty(text)) yield break;
+            var matches = Regex.Matches(text, @"\b\p{L}[\p{L}\p{N}_\.-]*\b");
+            foreach (Match m in matches.Cast<Match>())
+            {
+                yield return m.Value;
+            }
         }
         
         private void ShowActiveFilters()
@@ -571,7 +597,7 @@ namespace FilterPDF
             return fuzzyRegex.IsMatch(pageText);
         }
         
-        private MatchCollection FindWordMatchesFuzzy(string pageText, string searchWord)
+        private IEnumerable<(string Text, string Context)> FindWordMatchesFuzzy(string pageText, string searchWord)
         {
             // Verifica se deve usar busca normalizada
             bool shouldNormalize = searchWord.StartsWith("~") && searchWord.EndsWith("~") && searchWord.Length > 2;
@@ -587,28 +613,15 @@ namespace FilterPDF
                 var normalizedMatches = Regex.Matches(normalizedText, Regex.Escape(normalizedPattern), RegexOptions.IgnoreCase);
                 
                 // Retorna matches do texto original nas mesmas posições
-                var originalMatches = new List<Match>();
-                foreach (Match match in normalizedMatches)
+                foreach (Match match in normalizedMatches.Cast<Match>())
                 {
-                    // Extrai o texto original na mesma posição
                     int start = match.Index;
                     int length = match.Length;
                     if (start + length <= pageText.Length)
                     {
                         string originalText = pageText.Substring(start, Math.Min(length, pageText.Length - start));
-                        // Cria um Match manual (não é possível criar Match diretamente, então usamos Regex)
-                        var tempRegex = new Regex(Regex.Escape(originalText));
-                        var tempMatch = tempRegex.Match(pageText, start);
-                        if (tempMatch.Success)
-                            originalMatches.Add(tempMatch);
+                        yield return (originalText, ExtractContext(pageText, start));
                     }
-                }
-                
-                // Converte lista para MatchCollection
-                if (originalMatches.Count > 0)
-                {
-                    var combined = string.Join("|", originalMatches.Select(m => Regex.Escape(m.Value)));
-                    return Regex.Matches(pageText, combined);
                 }
             }
             
@@ -627,11 +640,16 @@ namespace FilterPDF
             
             var normalMatches = Regex.Matches(pageText, pattern, RegexOptions.IgnoreCase);
             if (normalMatches.Count > 0)
-                return normalMatches;
+            {
+                foreach (Match m in normalMatches.Cast<Match>())
+                    yield return (m.Value, ExtractContext(pageText, m.Index));
+                yield break;
+            }
                 
             // Se não encontrar, tenta busca com espaços entre caracteres
             string fuzzyPattern = CreateFuzzyPattern(cleanWord);
-            return Regex.Matches(pageText, fuzzyPattern, RegexOptions.IgnoreCase);
+            foreach (Match m in Regex.Matches(pageText, fuzzyPattern, RegexOptions.IgnoreCase).Cast<Match>())
+                yield return (m.Value, ExtractContext(pageText, m.Index));
         }
         
         private string CreateFuzzyPattern(string searchWord)
