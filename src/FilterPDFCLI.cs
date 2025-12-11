@@ -1065,6 +1065,7 @@ namespace FilterPDF
             commands["diff"] = new FpdfDiffCommand();
             commands["inspect"] = new InspectPdfCommand();
             commands["last-session"] = new LastSessionCoordinateCommand();
+            commands["deep-objects"] = new DeepPdfObjectAnalyzerCommand();
             
             
             // Comando de gerenciamento
