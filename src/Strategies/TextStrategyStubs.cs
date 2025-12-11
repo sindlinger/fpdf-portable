@@ -5,7 +5,7 @@ using iTextSharp.text.pdf.parser;
 
 namespace FilterPDF.Strategies
 {
-    // Minimal stub strategies to keep CLI/PDFAnalyzer working while we port to iText7
+    // Legacy stubs retained for compatibility with fallback iTextSharp paths
     public class LayoutPreservingStrategy : ITextExtractionStrategy
     {
         protected StringBuilder sb = new StringBuilder();
@@ -38,8 +38,7 @@ namespace FilterPDF.Strategies
         {
             var fontName = renderInfo.GetFont()?.PostscriptFontName ?? "";
             if (!_sizes.ContainsKey(fontName)) _sizes[fontName] = new HashSet<float>();
-            // fallback: use font size from renderInfo if available
-            _sizes[fontName].Add(12f);
+            _sizes[fontName].Add(12f); // iTextSharp parser não expõe font size direto aqui
         }
         public string GetResultantText() => string.Empty;
         public HashSet<float> GetFontSizes(string fontName) => _sizes.ContainsKey(fontName) ? _sizes[fontName] : new HashSet<float>();
