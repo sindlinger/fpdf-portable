@@ -1211,9 +1211,7 @@ namespace FilterPDF
             Console.WriteLine("Modern unified search system for powerful PDF analysis");
             Console.WriteLine();
             Console.WriteLine("Libraries:");
-            Console.WriteLine("  - iTextSharp 5.5.13");
-            Console.WriteLine("  - iTextSharp.pdfa");
-            Console.WriteLine("  - iTextSharp.xtra");
+            Console.WriteLine("  - iText7 7.2.5");
             Console.WriteLine("  - Newtonsoft.Json");
         }
         
@@ -1483,18 +1481,9 @@ namespace FilterPDF
             }
         }
         
-        private ITextExtractionStrategy GetStrategy(int choice)
-        {
-            switch (choice)
-            {
-                case 1:
-                    return new LayoutPreservingStrategy();
-                case 3:
-                    return new ColumnDetectionStrategy();
-                default:
-                    return new AdvancedLayoutStrategy();
-            }
-        }
+        private ITextExtractionStrategy GetStrategy(int choice) => new LayoutPreservingStrategy();
+
+        // Legacy text strategies removed; current extraction usa PDFAnalyzer/iText7
         
         private string GetStrategyName(int choice)
         {
@@ -1969,7 +1958,7 @@ namespace FilterPDF
                         
                         foreach (int pageNum in notaEmpenhoPages)
                         {
-                            ExtractPageAsImage(reader, pageNum, inputFile, outputDir, foundCount + 1);
+                            ExtractPageAsImage(null, pageNum, inputFile, outputDir, foundCount + 1);
                             foundCount++;
                         }
                     }
@@ -2017,7 +2006,7 @@ namespace FilterPDF
                                         if (shouldExtract)
                                         {
                                             Console.WriteLine($"   ✅ Page {pageNum}: Nota de Empenho detected by dimensions ({width}x{height})");
-                                            ExtractPageAsImage(reader, pageNum, inputFile, outputDir, foundCount + 1);
+                                            ExtractPageAsImage(null, pageNum, inputFile, outputDir, foundCount + 1);
                                             foundCount++;
                                         }
                                         break;
@@ -2108,15 +2097,10 @@ namespace FilterPDF
             return null;
         }
         
-        private void ExtractPageAsImage(PdfReader reader, int pageNum, string inputFile, string outputDir, int sequenceNumber)
+        private void ExtractPageAsImage(object _unused, int pageNum, string inputFile, string outputDir, int sequenceNumber)
         {
             try
             {
-                // Get page size
-                var pageSize = reader.GetPageSize(pageNum);
-                int width = (int)pageSize.Width;
-                int height = (int)pageSize.Height;
-                
                 // Use pdftoppm to extract page as image
                 string outputPath = Path.Combine(outputDir, 
                     $"{Path.GetFileNameWithoutExtension(inputFile)}_NE_{sequenceNumber:D3}_p{pageNum}.png");

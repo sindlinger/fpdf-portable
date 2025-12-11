@@ -9,7 +9,6 @@ using Newtonsoft.Json;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
-using FilterPDF.Strategies;
 using FilterPDF;
 using FilterPDF.Configuration;
 using FilterPDF.Utils;
@@ -1280,63 +1279,7 @@ namespace FilterPDF
             return images;
         }
         
-        private List<ExtractedPage> ExtractUsingAdvancedMethod(string inputFile, int strategy, CancellationToken cancellationToken = default)
-        {
-            var pages = new List<ExtractedPage>();
-            // Use PdfAccessManager for centralized access
-            var reader = PdfAccessManager7.CreateTemporaryDocument(inputFile);
-            
-            try
-            {
-                int totalPages = reader.NumberOfPages;
-                
-                for (int page = 1; page <= totalPages; page++)
-                {
-                    // Check for cancellation during page processing
-                    cancellationToken.ThrowIfCancellationRequested();
-                    
-                    ITextExtractionStrategy extractionStrategy = GetExtractionStrategy(strategy);
-                    string pageText = PdfTextExtractor.GetTextFromPage(reader, page, extractionStrategy);
-                    
-                    pages.Add(new ExtractedPage
-                    {
-                        PageNumber = page,
-                        Text = pageText,
-                        WordCount = pageText.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length,
-                        CharacterCount = pageText.Length
-                    });
-                }
-            }
-            finally
-            {
-                reader.Close();
-            }
-            
-            return pages;
-        }
-        
-        private ITextExtractionStrategy GetExtractionStrategy(int choice)
-        {
-            switch (choice)
-            {
-                case 1:
-                    return new LayoutPreservingStrategy();
-                case 3:
-                    return new ColumnDetectionStrategy();
-                default:
-                    return new AdvancedLayoutStrategy();
-            }
-        }
-        
-        private string GetStrategyName(int strategy)
-        {
-            switch (strategy)
-            {
-                case 1: return "LayoutPreserving";
-                case 3: return "ColumnDetection";
-                default: return "AdvancedLayout";
-            }
-        }
+        // Legacy text extraction strategies (iTextSharp) removed from active build
         
         private object? SerializePdfObject(PdfObject? obj)
         {
