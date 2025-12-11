@@ -9,8 +9,9 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using iTextSharp.text.pdf;
-using iTextSharp.text.pdf.parser;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas.Parser;
+using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using FilterPDF.Commands;
 using FilterPDF.Interfaces;
 using FilterPDF.Utils;
@@ -1432,42 +1433,33 @@ namespace FilterPDF
                 Console.WriteLine($"Strategy: {GetStrategyName(strategy)}");
             }
             
-            // Extract pages
+            // Extract pages via iText7
             var pages = new List<ExtractedPage>();
-            // Use PdfAccessManager for centralized access
-            PdfReader reader = PdfAccessManager.CreateTemporaryReader(inputFile);
+            using var doc = new PdfDocument(new PdfReader(inputFile));
             
-            try
+            int totalPages = doc.GetNumberOfPages();
+            for (int page = 1; page <= totalPages; page++)
             {
-                int totalPages = reader.NumberOfPages;
-                
-                for (int page = 1; page <= totalPages; page++)
-                {
-                    if (showProgress)
-                    {
-                        Console.Write($"\rProcessing page {page}/{totalPages}...");
-                    }
-                    
-                    ITextExtractionStrategy extractionStrategy = GetStrategy(strategy);
-                    string pageText = PdfTextExtractor.GetTextFromPage(reader, page, extractionStrategy);
-                    
-                    pages.Add(new ExtractedPage
-                    {
-                        PageNumber = page,
-                        Text = pageText,
-                        WordCount = pageText.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length,
-                        CharacterCount = pageText.Length
-                    });
-                }
-                
                 if (showProgress)
                 {
-                    Console.WriteLine("\rExtraction complete.                    ");
+                    Console.Write($"\rProcessing page {page}/{totalPages}...");
                 }
+                
+                ITextExtractionStrategy extractionStrategy = GetStrategy7(strategy);
+                string pageText = PdfTextExtractor.GetTextFromPage(doc.GetPage(page), extractionStrategy);
+                
+                pages.Add(new ExtractedPage
+                {
+                    PageNumber = page,
+                    Text = pageText,
+                    WordCount = pageText.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length,
+                    CharacterCount = pageText.Length
+                });
             }
-            finally
+            
+            if (showProgress)
             {
-                reader.Close();
+                Console.WriteLine("\rExtraction complete.                    ");
             }
             
             // Format and save output
@@ -1481,9 +1473,21 @@ namespace FilterPDF
             }
         }
         
-        private ITextExtractionStrategy GetStrategy(int choice) => new LayoutPreservingStrategy();
+        private ITextExtractionStrategy GetStrategy7(int choice)
+        {
+            return choice switch
+            {
+                1 => new FilterPDF.Strategies.LayoutPreservingStrategy7(),
+                3 => new FilterPDF.Strategies.ColumnTextExtractionStrategy7(),
+                _ => new FilterPDF.Strategies.LayoutPreservingStrategy7(),
+            };
+        }
 
-        // Legacy text strategies removed; current extraction usa PDFAnalyzer/iText7
+        private string GetPageTextFast(PdfDocument doc, int pageNum)
+        {
+            var strategy = new FilterPDF.Strategies.LayoutPreservingStrategy7();
+            return PdfTextExtractor.GetTextFromPage(doc.GetPage(pageNum), strategy);
+        }
         
         private string GetStrategyName(int choice)
         {
@@ -1602,81 +1606,77 @@ namespace FilterPDF
             
             try
             {
-                using (var reader = PdfAccessManager.GetReader(inputFile))
+                using (var doc = new PdfDocument(new PdfReader(inputFile)))
                 {
                     int extractedCount = 0;
                     int skippedCount = 0;
                     
-                    for (int pageNum = 1; pageNum <= reader.NumberOfPages; pageNum++)
+                    for (int pageNum = 1; pageNum <= doc.GetNumberOfPages(); pageNum++)
                     {
-                        var page = reader.GetPageN(pageNum);
-                        var resources = page.GetAsDict(PdfName.RESOURCES);
-                        if (resources == null) continue;
-                        
-                        var xobjects = resources.GetAsDict(PdfName.XOBJECT);
+                        var page = doc.GetPage(pageNum);
+                        var resources = page.GetResources();
+                        var xobjects = resources?.GetResource(PdfName.XObject) as PdfDictionary;
                         if (xobjects == null) continue;
                         
-                        foreach (PdfName name in xobjects.Keys)
+                        foreach (var name in xobjects.KeySet())
                         {
-                            var obj = xobjects.GetDirectObject(name);
-                            if (obj?.IsStream() == true)
+                            var stream = xobjects.GetAsStream(name);
+                            if (stream == null) continue;
+                            
+                            var subtype = stream.GetAsName(PdfName.Subtype);
+                            
+                            if (PdfName.Image.Equals(subtype))
                             {
-                                var stream = (PRStream)obj;
-                                var subtype = stream.GetAsName(PdfName.SUBTYPE);
+                                // Get image dimensions
+                                int width = stream.GetAsNumber(PdfName.Width)?.IntValue() ?? 0;
+                                int height = stream.GetAsNumber(PdfName.Height)?.IntValue() ?? 0;
                                 
-                                if (PdfName.IMAGE.Equals(subtype))
+                                // Apply nota de empenho filter if requested
+                                if (notaEmpenhoOnly && !IsNotaDeEmpenho(width, height))
                                 {
-                                    // Get image dimensions
-                                    int width = stream.GetAsNumber(PdfName.WIDTH)?.IntValue ?? 0;
-                                    int height = stream.GetAsNumber(PdfName.HEIGHT)?.IntValue ?? 0;
-                                    
-                                    // Apply nota de empenho filter if requested
-                                    if (notaEmpenhoOnly && !IsNotaDeEmpenho(width, height))
+                                    skippedCount++;
+                                    continue;
+                                }
+                                
+                                // Extract image bytes - try both raw and decoded
+                                byte[] imageBytes = null;
+                                try 
+                                {
+                                    // First try to get decoded bytes
+                                    imageBytes = stream.GetBytes(true);
+                                }
+                                catch
+                                {
+                                    // If that fails, try raw bytes
+                                    try
                                     {
-                                        skippedCount++;
+                                        imageBytes = stream.GetBytes(false);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Console.WriteLine($"   ❌ Error extracting bytes: {ex.Message}");
                                         continue;
                                     }
+                                }
+                                
+                                if (imageBytes != null && imageBytes.Length > 0)
+                                {
+                                    string outputPath = Path.Combine(outputDir, 
+                                        $"{Path.GetFileNameWithoutExtension(inputFile)}_p{pageNum}_img{extractedCount + 1}.png");
                                     
-                                    // Extract image bytes - try both raw and decoded
-                                    byte[] imageBytes = null;
-                                    try 
-                                    {
-                                        // First try to get decoded bytes
-                                        imageBytes = PdfReader.GetStreamBytes(stream);
-                                    }
-                                    catch
-                                    {
-                                        // If that fails, try raw bytes
-                                        try
-                                        {
-                                            imageBytes = PdfReader.GetStreamBytesRaw(stream);
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Console.WriteLine($"   ❌ Error extracting bytes: {ex.Message}");
-                                            continue;
-                                        }
-                                    }
+                                    string format = DetectImageFormat(imageBytes);
+                                    Console.WriteLine($"📄 Page {pageNum}: {width}x{height} (Format: {format}, Size: {imageBytes.Length} bytes)");
                                     
-                                    if (imageBytes != null && imageBytes.Length > 0)
+                                    // Try to save as PNG using ImageMagick
+                                    if (SaveImageAsPng(imageBytes, outputPath, width, height))
                                     {
-                                        string outputPath = Path.Combine(outputDir, 
-                                            $"{Path.GetFileNameWithoutExtension(inputFile)}_p{pageNum}_img{extractedCount + 1}.png");
-                                        
-                                        string format = DetectImageFormat(imageBytes);
-                                        Console.WriteLine($"📄 Page {pageNum}: {width}x{height} (Format: {format}, Size: {imageBytes.Length} bytes)");
-                                        
-                                        // Try to save as PNG using ImageMagick
-                                        if (SaveImageAsPng(imageBytes, outputPath, width, height))
-                                        {
-                                            Console.WriteLine($"   ✅ Saved: {Path.GetFileName(outputPath)}");
-                                            extractedCount++;
-                                        }
-                                        else
-                                        {
-                                            Console.WriteLine($"   ⚠️  Could not convert to PNG");
-                                            skippedCount++;
-                                        }
+                                        Console.WriteLine($"   ✅ Saved: {Path.GetFileName(outputPath)}");
+                                        extractedCount++;
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine($"   ⚠️  Could not convert to PNG");
+                                        skippedCount++;
                                     }
                                 }
                             }
@@ -1916,9 +1916,9 @@ namespace FilterPDF
             
             try
             {
-                using (var reader = PdfAccessManager.GetReader(inputFile))
+                using (var doc = new PdfDocument(new PdfReader(inputFile)))
                 {
-                    int totalPages = reader.NumberOfPages;
+                    int totalPages = doc.GetNumberOfPages();
                     int foundCount = 0;
                     var notaEmpenhoPages = new List<int>();
                     
@@ -1926,15 +1926,10 @@ namespace FilterPDF
                     Console.WriteLine("📝 Analyzing text content...");
                     for (int pageNum = 1; pageNum <= totalPages; pageNum++)
                     {
-                        string pageText = PdfTextExtractor.GetTextFromPage(reader, pageNum);
+                        string pageText = GetPageTextFast(doc, pageNum);
                         
                         // Check if page has required signatures if filter is active
-                        bool hasRequiredSignatures = true;
-                        if (!string.IsNullOrEmpty(signaturePattern))
-                        {
-                            // Use robust WordOption matching with support for &, |, fuzzy search, etc.
-                            hasRequiredSignatures = WordOption.Matches(pageText, signaturePattern);
-                        }
+                        bool hasRequiredSignatures = string.IsNullOrEmpty(signaturePattern) || WordOption.Matches(pageText, signaturePattern);
                         
                         if (IsNotaDeEmpenhoByText(pageText) && hasRequiredSignatures)
                         {
@@ -1972,45 +1967,38 @@ namespace FilterPDF
                         if (notaEmpenhoPages.Contains(pageNum))
                             continue; // Already processed
                             
-                        var page = reader.GetPageN(pageNum);
-                        var resources = page.GetAsDict(PdfName.RESOURCES);
-                        if (resources == null) continue;
-                        
-                        var xobjects = resources.GetAsDict(PdfName.XOBJECT);
+                        var page = doc.GetPage(pageNum);
+                        var resources = page.GetResources();
+                        var xobjects = resources?.GetResource(iText.Kernel.Pdf.PdfName.XObject) as iText.Kernel.Pdf.PdfDictionary;
                         if (xobjects == null) continue;
                         
-                        foreach (PdfName name in xobjects.Keys)
+                        foreach (var name in xobjects.KeySet())
                         {
-                            var obj = xobjects.GetDirectObject(name);
-                            if (obj?.IsStream() == true)
+                            var stream = xobjects.GetAsStream(name);
+                            if (stream == null) continue;
+                            
+                            var subtype = stream.GetAsName(iText.Kernel.Pdf.PdfName.Subtype);
+                            if (iText.Kernel.Pdf.PdfName.Image.Equals(subtype))
                             {
-                                var stream = (PRStream)obj;
-                                var subtype = stream.GetAsName(PdfName.SUBTYPE);
+                                int width = stream.GetAsNumber(iText.Kernel.Pdf.PdfName.Width)?.IntValue() ?? 0;
+                                int height = stream.GetAsNumber(iText.Kernel.Pdf.PdfName.Height)?.IntValue() ?? 0;
                                 
-                                if (PdfName.IMAGE.Equals(subtype))
+                                if (IsNotaDeEmpenho(width, height))
                                 {
-                                    int width = stream.GetAsNumber(PdfName.WIDTH)?.IntValue ?? 0;
-                                    int height = stream.GetAsNumber(PdfName.HEIGHT)?.IntValue ?? 0;
-                                    
-                                    if (IsNotaDeEmpenho(width, height))
+                                    bool shouldExtract = true;
+                                    if (!string.IsNullOrEmpty(signaturePattern))
                                     {
-                                        // Check signatures if filter is active
-                                        bool shouldExtract = true;
-                                        if (!string.IsNullOrEmpty(signaturePattern))
-                                        {
-                                            string pageText = PdfTextExtractor.GetTextFromPage(reader, pageNum);
-                                            // Use robust WordOption matching
-                                            shouldExtract = WordOption.Matches(pageText, signaturePattern);
-                                        }
-                                        
-                                        if (shouldExtract)
-                                        {
-                                            Console.WriteLine($"   ✅ Page {pageNum}: Nota de Empenho detected by dimensions ({width}x{height})");
-                                            ExtractPageAsImage(null, pageNum, inputFile, outputDir, foundCount + 1);
-                                            foundCount++;
-                                        }
-                                        break;
+                                        string pageText = GetPageTextFast(doc, pageNum);
+                                        shouldExtract = WordOption.Matches(pageText, signaturePattern);
                                     }
+                                    
+                                    if (shouldExtract)
+                                    {
+                                        Console.WriteLine($"   ✅ Page {pageNum}: Nota de Empenho detected by dimensions ({width}x{height})");
+                                        ExtractPageAsImage(null, pageNum, inputFile, outputDir, foundCount + 1);
+                                        foundCount++;
+                                    }
+                                    break;
                                 }
                             }
                         }
@@ -2217,15 +2205,15 @@ namespace FilterPDF
                 
                 try
                 {
-                    using (var reader = PdfAccessManager.GetReader(pdfFile))
+                    using (var doc = new PdfDocument(new PdfReader(pdfFile)))
                     {
-                        int totalPages = reader.NumberOfPages;
+                        int totalPages = doc.GetNumberOfPages();
                         var notaEmpenhoPages = new List<int>();
                         
                         // Check text content
                         for (int pageNum = 1; pageNum <= totalPages; pageNum++)
                         {
-                            string pageText = PdfTextExtractor.GetTextFromPage(reader, pageNum);
+                            string pageText = GetPageTextFast(doc, pageNum);
                             
                             if (IsNotaDeEmpenhoByText(pageText))
                             {
@@ -2248,34 +2236,29 @@ namespace FilterPDF
                         {
                             for (int pageNum = 1; pageNum <= totalPages; pageNum++)
                             {
-                                var page = reader.GetPageN(pageNum);
-                                var resources = page.GetAsDict(PdfName.RESOURCES);
-                                if (resources == null) continue;
-                                
-                                var xobjects = resources.GetAsDict(PdfName.XOBJECT);
+                                var page = doc.GetPage(pageNum);
+                                var resources = page.GetResources();
+                                var xobjects = resources?.GetResource(PdfName.XObject) as PdfDictionary;
                                 if (xobjects == null) continue;
                                 
                                 bool foundNE = false;
-                                foreach (PdfName name in xobjects.Keys)
+                                foreach (var name in xobjects.KeySet())
                                 {
-                                    var obj = xobjects.GetDirectObject(name);
-                                    if (obj?.IsStream() == true)
+                                    var stream = xobjects.GetAsStream(name);
+                                    if (stream == null) continue;
+                                    
+                                    var subtype = stream.GetAsName(PdfName.Subtype);
+                                    if (PdfName.Image.Equals(subtype))
                                     {
-                                        var stream = (PRStream)obj;
-                                        var subtype = stream.GetAsName(PdfName.SUBTYPE);
+                                        int width = stream.GetAsNumber(PdfName.Width)?.IntValue() ?? 0;
+                                        int height = stream.GetAsNumber(PdfName.Height)?.IntValue() ?? 0;
                                         
-                                        if (PdfName.IMAGE.Equals(subtype))
+                                        if (IsNotaDeEmpenho(width, height))
                                         {
-                                            int width = stream.GetAsNumber(PdfName.WIDTH)?.IntValue ?? 0;
-                                            int height = stream.GetAsNumber(PdfName.HEIGHT)?.IntValue ?? 0;
-                                            
-                                            if (IsNotaDeEmpenho(width, height))
-                                            {
-                                                notaEmpenhoPages.Add(pageNum);
-                                                Console.WriteLine($"   ✅ Page {pageNum}: NE by dimensions ({width}x{height})");
-                                                foundNE = true;
-                                                break;
-                                            }
+                                            notaEmpenhoPages.Add(pageNum);
+                                            Console.WriteLine($"   ✅ Page {pageNum}: NE by dimensions ({width}x{height})");
+                                            foundNE = true;
+                                            break;
                                         }
                                     }
                                 }
@@ -2690,116 +2673,64 @@ namespace FilterPDF
             sb.AppendLine($"File: {Path.GetFileName(inputFile)}");
             sb.AppendLine($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
             sb.AppendLine();
-            
-            // Extract raw PDF structure data using iTextSharp
-            // Use PdfAccessManager for centralized access
-            var reader = PdfAccessManager.CreateTemporaryReader(inputFile);
-            try
+            using var doc = new PdfDocument(new PdfReader(inputFile));
+
+            sb.AppendLine("PDF CATALOG:");
+            var catalogDict = doc.GetCatalog().GetPdfObject();
+            foreach (var key in catalogDict.KeySet())
             {
-                sb.AppendLine("PDF CATALOG:");
-                var catalog = reader.Catalog;
-                if (catalog != null)
-                {
-                    foreach (var key in catalog.Keys)
-                    {
-                        var value = catalog.Get(key);
-                        sb.AppendLine($"  {key}: {value}");
-                    }
-                }
-                sb.AppendLine();
-                
-                sb.AppendLine("PDF INFO DICTIONARY:");
-                var info = reader.Info;
-                if (info != null)
-                {
-                    foreach (var key in info.Keys)
-                    {
-                        var value = info[key];
-                        sb.AppendLine($"  {key}: {value}");
-                    }
-                }
-                sb.AppendLine();
-                
-                sb.AppendLine("PDF TRAILER:");
-                var trailer = reader.Trailer;
-                if (trailer != null)
-                {
-                    foreach (var key in trailer.Keys)
-                    {
-                        var value = trailer.Get(key);
-                        sb.AppendLine($"  {key}: {value}");
-                    }
-                }
-                sb.AppendLine();
-                
-                sb.AppendLine("PAGE TREE STRUCTURE:");
-                for (int i = 1; i <= reader.NumberOfPages; i++)
-                {
-                    sb.AppendLine($"  PAGE {i}:");
-                    
-                    var pageDict = reader.GetPageN(i);
-                    if (pageDict != null)
-                    {
-                        foreach (var key in pageDict.Keys)
-                        {
-                            var value = pageDict.Get(key);
-                            sb.AppendLine($"    {key}: {value}");
-                        }
-                    }
-                    
-                    var pageSize = reader.GetPageSizeWithRotation(i);
-                    sb.AppendLine($"    MediaBox: {pageSize.Width} x {pageSize.Height}");
-                    sb.AppendLine();
-                }
-                
-                sb.AppendLine("RESOURCE DICTIONARIES:");
-                for (int i = 1; i <= reader.NumberOfPages; i++)
-                {
-                    sb.AppendLine($"  PAGE {i} RESOURCES:");
-                    
-                    var pageDict = reader.GetPageN(i);
-                    if (pageDict != null)
-                    {
-                        var resources = pageDict.GetAsDict(PdfName.RESOURCES);
-                        if (resources != null)
-                        {
-                            foreach (var key in resources.Keys)
-                            {
-                                var value = resources.Get(key);
-                                sb.AppendLine($"    {key}: {value}");
-                            }
-                        }
-                    }
-                    sb.AppendLine();
-                }
-                
-                sb.AppendLine("CROSS-REFERENCE TABLE:");
-                sb.AppendLine($"  Total Objects: {reader.XrefSize}");
-                sb.AppendLine($"  File Length: {reader.FileLength}");
-                sb.AppendLine($"  Is Encrypted: {reader.IsEncrypted()}");
-                sb.AppendLine($"  Is Rebuilt: {reader.IsRebuilt()}");
-                sb.AppendLine($"  PDF Version: {reader.PdfVersion}");
-                sb.AppendLine();
-                
-                sb.AppendLine("OBJECT STREAM INFORMATION:");
-                for (int i = 1; i < reader.XrefSize; i++)
-                {
-                    var obj = reader.GetPdfObjectRelease(i);
-                    if (obj != null)
-                    {
-                        sb.AppendLine($"  Object {i}: {obj.GetType().Name} - {obj}");
-                        if (sb.Length > 100000) // Limit output size
-                        {
-                            sb.AppendLine("  ... (truncated - output too large)");
-                            break;
-                        }
-                    }
-                }
+                var value = catalogDict.Get(key);
+                sb.AppendLine($"  {key}: {value}");
             }
-            finally
+            sb.AppendLine();
+
+            sb.AppendLine("PDF INFO DICTIONARY:");
+            var info = doc.GetDocumentInfo();
+            sb.AppendLine($"  Title: {info.GetTitle()}");
+            sb.AppendLine($"  Author: {info.GetAuthor()}");
+            sb.AppendLine($"  Subject: {info.GetSubject()}");
+            sb.AppendLine($"  Keywords: {info.GetKeywords()}");
+            sb.AppendLine($"  Creator: {info.GetCreator()}");
+            sb.AppendLine($"  Producer: {info.GetProducer()}");
+            sb.AppendLine($"  ModDate: {info.GetMoreInfo("ModDate")}");
+            sb.AppendLine();
+
+            sb.AppendLine("PAGE TREE STRUCTURE:");
+            for (int i = 1; i <= doc.GetNumberOfPages(); i++)
             {
-                reader.Close();
+                sb.AppendLine($"  PAGE {i}:");
+                var page = doc.GetPage(i);
+                var pageDict = page.GetPdfObject();
+                foreach (var key in pageDict.KeySet())
+                {
+                    sb.AppendLine($"    {key}: {pageDict.Get(key)}");
+                }
+                var pageSize = page.GetPageSizeWithRotation();
+                sb.AppendLine($"    MediaBox: {pageSize.GetWidth()} x {pageSize.GetHeight()}");
+                sb.AppendLine();
             }
+
+            sb.AppendLine("RESOURCE DICTIONARIES:");
+            for (int i = 1; i <= doc.GetNumberOfPages(); i++)
+            {
+                sb.AppendLine($"  PAGE {i} RESOURCES:");
+                var res = doc.GetPage(i).GetResources();
+                var resDict = res?.GetPdfObject();
+                if (resDict != null)
+                {
+                    foreach (var key in resDict.KeySet())
+                    {
+                        sb.AppendLine($"    {key}: {resDict.Get(key)}");
+                    }
+                }
+                sb.AppendLine();
+            }
+
+            sb.AppendLine("FILE INFO:");
+            sb.AppendLine($"  Total Pages: {doc.GetNumberOfPages()}");
+            sb.AppendLine($"  Is Encrypted: {doc.GetReader().IsEncrypted()}");
+            sb.AppendLine($"  PDF Version: {doc.GetPdfVersion()}");
+            sb.AppendLine();
             
             return sb.ToString();
         }

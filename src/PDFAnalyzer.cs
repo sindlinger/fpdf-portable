@@ -7,10 +7,9 @@ using System.Text.RegularExpressions;
 using FilterPDF.Strategies;
 using iText.Kernel.Geom;
 using iTextSharp.text.pdf;
-using iTextSharp.text.pdf.parser;
 using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
-using PdfTextExtractor5 = iTextSharp.text.pdf.parser.PdfTextExtractor;
+// All text extraction now via iText7
 using PdfReader7 = iText.Kernel.Pdf.PdfReader;
 using PdfDocument7 = iText.Kernel.Pdf.PdfDocument;
 using PdfTextExtractor7 = iText.Kernel.Pdf.Canvas.Parser.PdfTextExtractor;
@@ -274,24 +273,18 @@ namespace FilterPDF
         
         private TextInfo AnalyzePageText(int pageNum)
         {
-            // USAR texto direto; preferir iText7, fallback para iTextSharp
+            // Texto via iText7 apenas
             string text = string.Empty;
-            bool usedIText7 = false;
-            if (!forceLegacyText && i7doc != null)
+            if (i7doc != null && !forceLegacyText)
             {
                 try
                 {
                     text = PdfTextExtractor7.GetTextFromPage(i7doc.GetPage(pageNum));
-                    usedIText7 = true;
                 }
                 catch (Exception ex)
                 {
                     Console.Error.WriteLine($"[WARN] iText7 text extract failed on page {pageNum}: {ex.Message}");
                 }
-            }
-            if (!usedIText7)
-            {
-                text = PdfTextExtractor5.GetTextFromPage(reader, pageNum);
             }
 
             var textInfo = new TextInfo
@@ -465,145 +458,6 @@ namespace FilterPDF
                                     IsSerif = isSerif,
                                     IsSansSerif = isSansSerif
                                 });
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    // Legacy path (iTextSharp) as fallback
-                    var contents = reader.GetPageContent(pageNum);
-                    var tokenizer = new PRTokeniser(new RandomAccessFileOrArray(contents));
-                    
-                    string? currentFont = null;
-                    float currentSize = 0;
-                    
-                    while (tokenizer.NextToken())
-                    {
-                        if (tokenizer.TokenType == PRTokeniser.TokType.OTHER)
-                        {
-                            string cmd = tokenizer.StringValue;
-                            
-                            // Capturar comando Tf (set font and size)
-                            if (cmd == "Tf" && currentFont != null)
-                            {
-                                if (!fontSizeMap.ContainsKey(currentFont))
-                                    fontSizeMap[currentFont] = new HashSet<float>();
-                                fontSizeMap[currentFont].Add(currentSize);
-                            }
-                        }
-                        else if (tokenizer.TokenType == PRTokeniser.TokType.NAME)
-                        {
-                            // Capturar nome da fonte
-                            currentFont = tokenizer.StringValue;
-                        }
-                        else if (tokenizer.TokenType == PRTokeniser.TokType.NUMBER)
-                        {
-                            // Capturar tamanho da fonte
-                            currentSize = float.Parse(tokenizer.StringValue, System.Globalization.CultureInfo.InvariantCulture);
-                        }
-                    }
-                    
-                    // Agora obter detalhes das fontes do dicionário de recursos
-                    var pageDict = reader.GetPageN(pageNum);
-                    var resources = pageDict.GetAsDict(PdfName.RESOURCES);
-                    
-                    if (resources != null)
-                    {
-                        var fontDict = resources.GetAsDict(PdfName.FONT);
-                        if (fontDict != null)
-                        {
-                            foreach (var fontKey in fontDict.Keys)
-                            {
-                                var fontRef = fontDict.GetAsIndirectObject(fontKey);
-                                if (fontRef != null)
-                                {
-                                    var fontObj = PdfReader.GetPdfObject(fontRef);
-                                    if (fontObj is PdfDictionary fontD)
-                                    {
-                                        // Informações básicas da fonte
-                                        var baseFont = fontD.GetAsName(PdfName.BASEFONT);
-                                        string fontName = baseFont?.ToString() ?? fontKey.ToString();
-                                        
-                                        // Corrigir nome da fonte (remover / do início)
-                                        fontName = FontNameFixer.Fix(fontName);
-                                        
-                                        bool isEmbedded = IsFontEmbedded(fontD);
-                                        string style = ExtractFontStyle(fontD) ?? string.Empty;
-                                        
-                                        // Obter todos os tamanhos desta fonte
-                                        var sizes = new HashSet<float>();
-                                        
-                                        // Procurar correspondência no mapa de tamanhos
-                                        string fontKeyStr = fontKey.ToString();
-                                        if (fontSizeMap.ContainsKey(fontKeyStr))
-                                        {
-                                            sizes.UnionWith(fontSizeMap[fontKeyStr]);
-                                        }
-                                        
-                                        // Também tentar com o nome base da fonte
-                                        foreach (var kvp in fontSizeMap)
-                                        {
-                                            if (fontName.Contains(kvp.Key) || kvp.Key.Contains(fontName))
-                                            {
-                                                sizes.UnionWith(kvp.Value);
-                                            }
-                                        }
-                                        
-                                        // Se ainda não encontrou tamanhos, usar CompleteFontAnalysisStrategy
-                                        if (sizes.Count == 0)
-                                        {
-                                            var fontStrategy = new CompleteFontAnalysisStrategy();
-                                            PdfTextExtractor5.GetTextFromPage(reader, pageNum, fontStrategy);
-                                            var strategySizes = fontStrategy.GetFontSizes(fontName);
-                                            if (strategySizes.Count > 0)
-                                                sizes.UnionWith(strategySizes);
-                                            else
-                                                sizes.Add(12.0f); // Default
-                                        }
-                                        
-                                        // Determinar tipo da fonte
-                                        string fontType = "Type1"; // default
-                                        var subtype = fontD.GetAsName(PdfName.SUBTYPE);
-                                        if (subtype != null)
-                                        {
-                                            string subtypeStr = subtype.ToString();
-                                            if (subtypeStr.Contains("TrueType")) fontType = "TrueType";
-                                            else if (subtypeStr.Contains("Type0")) fontType = "Type0";
-                                            else if (subtypeStr.Contains("CIDFont")) fontType = "CIDFont";
-                                            else if (subtypeStr.Contains("Type3")) fontType = "Type3";
-                                        }
-                                        
-                                        // Detectar estilos da fonte
-                                        bool isBold = fontName.Contains("Bold") || fontName.Contains("bold") || 
-                                                     fontName.Contains("Heavy") || fontName.Contains("Black");
-                                        bool isItalic = fontName.Contains("Italic") || fontName.Contains("italic") || 
-                                                       fontName.Contains("Oblique") || fontName.Contains("Slant");
-                                        bool isMonospace = fontName.Contains("Courier") || fontName.Contains("Mono") || 
-                                                          fontName.Contains("Consolas") || fontName.Contains("Fixed");
-                                        bool isSerif = fontName.Contains("Times") || fontName.Contains("Serif") || 
-                                                      fontName.Contains("Georgia") || fontName.Contains("Palatino");
-                                        bool isSansSerif = fontName.Contains("Arial") || fontName.Contains("Helvetica") || 
-                                                          fontName.Contains("Sans") || fontName.Contains("Verdana");
-                                        
-                                        // Criar uma única entrada de fonte com todos os tamanhos
-                                        fonts.Add(new FontInfo
-                                        {
-                                            Name = fontName,
-                                            BaseFont = fontName,
-                                            FontType = fontType,
-                                            Size = sizes.Count > 0 ? sizes.First() : 12.0f,
-                                            Style = style,
-                                            IsEmbedded = isEmbedded,
-                                            FontSizes = sizes.ToList(),
-                                            IsBold = isBold,
-                                            IsItalic = isItalic,
-                                            IsMonospace = isMonospace,
-                                            IsSerif = isSerif,
-                                            IsSansSerif = isSansSerif
-                                        });
-                                    }
-                                }
                             }
                         }
                     }
@@ -941,16 +795,6 @@ namespace FilterPDF
                 }
             }
 
-            // Legacy iTextSharp fallback
-            var pageSize = reader.GetPageSize(page.PageNumber);
-            pageHeight = pageSize.Height;
-            var headerStrategy = new AdvancedHeaderFooterStrategy(true, pageHeight);
-            string headerTextFallback = PdfTextExtractor5.GetTextFromPage(reader, page.PageNumber, headerStrategy);
-            page.Headers = ParseHeaderFooterText(headerTextFallback);
-
-            var footerStrategy = new AdvancedHeaderFooterStrategy(false, pageHeight);
-            string footerTextFallback = PdfTextExtractor5.GetTextFromPage(reader, page.PageNumber, footerStrategy);
-            page.Footers = ParseHeaderFooterText(footerTextFallback);
         }
         
         private List<string> ParseHeaderFooterText(string text)
