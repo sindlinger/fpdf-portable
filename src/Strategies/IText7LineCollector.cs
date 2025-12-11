@@ -91,12 +91,11 @@ namespace FilterPDF.Strategies
                 bool italic = fontName.ToLower().Contains("italic") || fontName.ToLower().Contains("oblique") ||
                               fontName.ToLower().Contains("slant");
 
-                var gs = info.GetGraphicsState();
-                float charSpacing = 0; // iText7 kernel não expõe diretamente
-                float wordSpacing = gs?.GetWordSpacing() ?? 0;
-                float horizScaling = gs?.GetHorizontalScaling() ?? 0;
-                // iText7 CanvasGraphicsState não expõe rise diretamente; usar 0 por ora
-                float rise = 0;
+                // Métricas de espaçamento diretamente do TextRenderInfo (iText7)
+                float charSpacing = 0;
+                float wordSpacing = info.GetWordSpacing();
+                float horizScaling = info.GetHorizontalScaling();
+                float rise = info.GetRise();
 
                 string norm = text.Trim().ToLowerInvariant();
                 string hash;

@@ -7,10 +7,10 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
-using iTextSharp.text.pdf;
-using iTextSharp.text.pdf.parser;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using iTextSharp.text.pdf;
+using iTextSharp.text.pdf.parser;
 using FilterPDF.Commands;
 using FilterPDF.Interfaces;
 using FilterPDF.Utils;
@@ -227,6 +227,16 @@ namespace FilterPDF
                                 case "modifications":
                                     var modificationsCommand = new FpdfModificationsCommand();
                                     modificationsCommand.Execute(cacheFile, analysisResult, filterOptions, modifiedOutputOptions);
+                                    break;
+                                case "images":
+                                    FpdfImagesCommand.Execute(cacheFile, analysisResult, filterOptions, modifiedOutputOptions);
+                                    break;
+                                case "base64":
+                                    FpdfBase64Command.Execute(cacheFile, analysisResult, filterOptions, modifiedOutputOptions);
+                                    break;
+                                case "templates":
+                                    var templatesCommand = new FpdfTemplatesCommand();
+                                    templatesCommand.Execute(cacheFile, analysisResult, filterOptions);
                                     break;
                                 default:
                                     Console.WriteLine($"Error: Unknown filter subcommand '{subcommand}'");
@@ -828,6 +838,21 @@ namespace FilterPDF
                         return;
                     }
 
+                    if (cmdName == "templates")
+                    {
+                        var filterOptions = new Dictionary<string, string>();
+                        for (int i = 2; i < args.Length; i++)
+                        {
+                            var a = args[i];
+                            if (a == "--template" && i + 1 < args.Length) filterOptions["--template"] = args[++i];
+                            else if (a == "--page" && i + 1 < args.Length) filterOptions["--page"] = args[++i]; // not used directly
+                            else if (a == "--mode" && i + 1 < args.Length) filterOptions["--mode"] = args[++i];
+                        }
+                        var cmd = new Commands.FpdfTemplatesCommand();
+                        cmd.Execute(inputFile, null, filterOptions);
+                        return;
+                    }
+
                     if (commands.ContainsKey(cmdName))
                     {
                         // Para o comando load, garantir que só receba arquivos PDF
@@ -1030,6 +1055,9 @@ namespace FilterPDF
             
             commands["base64"] = new CommandWrapper("base64", "Filter base64 content",
                 args => { var newArgs = new List<string> { "base64" }; newArgs.AddRange(args); /* filterCmd.Execute(newArgs.ToArray()); */ });
+
+            commands["templates"] = new CommandWrapper("templates", "Extract fields using template bboxes",
+                args => { var newArgs = new List<string> { "templates" }; newArgs.AddRange(args); /* filterCmd.Execute(newArgs.ToArray()); */ });
             
             
             // Comando de gerenciamento

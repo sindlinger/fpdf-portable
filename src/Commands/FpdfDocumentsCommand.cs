@@ -244,6 +244,7 @@ namespace FilterPDF
         private Dictionary<string, object> BuildDocObject(DocumentBoundary d, PDFAnalysisResult analysis, Dictionary<string, string> filterOptions)
         {
             bool noLines = filterOptions.ContainsKey("--no-lines");
+            bool noWords = filterOptions.ContainsKey("--no-words");
 
             var docObj = new Dictionary<string, object>
             {
@@ -309,7 +310,36 @@ namespace FilterPDF
                         l.X0,
                         l.Y0,
                         l.X1,
-                        l.Y1
+                        l.Y1,
+                        l.NormX0,
+                        l.NormY0,
+                        l.NormX1,
+                        l.NormY1
+                    }).ToList();
+                }
+
+                if (!noWords && page.TextInfo.Words != null && page.TextInfo.Words.Count > 0)
+                {
+                    pageObj["words"] = page.TextInfo.Words.Select(w => new {
+                        w.Text,
+                        w.Font,
+                        w.Size,
+                        w.Bold,
+                        w.Italic,
+                        w.Underline,
+                        w.RenderMode,
+                        w.CharSpacing,
+                        w.WordSpacing,
+                        w.HorizontalScaling,
+                        w.Rise,
+                        w.X0,
+                        w.Y0,
+                        w.X1,
+                        w.Y1,
+                        w.NormX0,
+                        w.NormY0,
+                        w.NormX1,
+                        w.NormY1
                     }).ToList();
                 }
 

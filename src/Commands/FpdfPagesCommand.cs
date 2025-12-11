@@ -1265,6 +1265,8 @@ namespace FilterPDF
         private void OutputPagesAsJson(List<PageMatch> foundPages)
         {
             // Formato igual ao documents - simples e consistente
+            bool noWords = filterOptions.ContainsKey("--no-words");
+
             var output = new
             {
                 arquivo = System.IO.Path.GetFileName(analysisResult.FilePath),
@@ -1405,6 +1407,32 @@ namespace FilterPDF
                     if (filterOptions.ContainsKey("--max-size-kb"))
                     {
                         pageObj["searchedMaxSizeKB"] = filterOptions["--max-size-kb"];
+                    }
+
+                    // Adicionar tokens/palavras com bbox (útil para campos)
+                    if (!noWords && p.PageInfo.TextInfo.Words != null && p.PageInfo.TextInfo.Words.Count > 0)
+                    {
+                        pageObj["words"] = p.PageInfo.TextInfo.Words.Select(w => new {
+                            w.Text,
+                            w.Font,
+                            w.Size,
+                            w.Bold,
+                            w.Italic,
+                            w.Underline,
+                            w.RenderMode,
+                            w.CharSpacing,
+                            w.WordSpacing,
+                            w.HorizontalScaling,
+                            w.Rise,
+                            w.X0,
+                            w.Y0,
+                            w.X1,
+                            w.Y1,
+                            w.NormX0,
+                            w.NormY0,
+                            w.NormX1,
+                            w.NormY1
+                        }).ToList();
                     }
                     
                     return pageObj;

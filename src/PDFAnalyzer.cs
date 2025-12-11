@@ -40,9 +40,9 @@ namespace FilterPDF
             // Abrir iText7 para extração avançada
             try
             {
-                var r7 = new PdfReader7(pdfPath);
-                this.i7doc = new PdfDocument7(r7);
-                this.ownsDoc7 = true;
+                // Reutiliza doc via PdfAccessManager7 (cache por caminho)
+                this.i7doc = FilterPDF.Utils.PdfAccessManager7.GetDocument(pdfPath);
+                this.ownsDoc7 = false; // cache gerencia ciclo de vida
             }
             catch (Exception ex)
             {
@@ -64,9 +64,8 @@ namespace FilterPDF
             this.ownsReader = false;
             try
             {
-                var r7 = new PdfReader7(pdfPath);
-                this.i7doc = new PdfDocument7(r7);
-                this.ownsDoc7 = true;
+                this.i7doc = FilterPDF.Utils.PdfAccessManager7.GetDocument(pdfPath);
+                this.ownsDoc7 = false;
             }
             catch
             {
@@ -271,6 +270,15 @@ namespace FilterPDF
             // EXTRAÇÃO COMPLETA DE FONTES - TODAS as instâncias com tamanhos diferentes
             textInfo.Fonts = ExtractAllPageFontsWithSizes(pageNum);
 
+            float pageWidth = 0;
+            float pageHeight = 0;
+            if (i7doc != null)
+            {
+                var rect = i7doc.GetPage(pageNum).GetPageSize();
+                pageWidth = rect.GetWidth();
+                pageHeight = rect.GetHeight();
+            }
+
             // EXTRAÇÃO DE LINHAS COM FONTE/ESTILO/COORDENADAS (usando iText7)
             try
             {
@@ -280,6 +288,42 @@ namespace FilterPDF
                     var processor = new PdfCanvasProcessor(collector);
                     processor.ProcessPageContent(i7doc.GetPage(pageNum));
                     textInfo.Lines = collector.GetLines();
+                    if (pageWidth > 0 && pageHeight > 0)
+                    {
+                        foreach (var l in textInfo.Lines)
+                        {
+                            l.NormX0 = l.X0 / pageWidth;
+                            l.NormX1 = l.X1 / pageWidth;
+                            l.NormY0 = l.Y0 / pageHeight;
+                            l.NormY1 = l.Y1 / pageHeight;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // EXTRAÇÃO DE PALAVRAS COM BBOX (para templates/campos) usando iText7
+            try
+            {
+                if (i7doc != null)
+                {
+                    var wordCollector = new Strategies.IText7WordCollector();
+                    var processor = new PdfCanvasProcessor(wordCollector);
+                    processor.ProcessPageContent(i7doc.GetPage(pageNum));
+                    textInfo.Words = wordCollector.GetWords();
+                    if (textInfo.Words?.Count > 0)
+                        textInfo.WordCount = textInfo.Words.Count;
+
+                    if (pageWidth > 0 && pageHeight > 0)
+                    {
+                        foreach (var w in textInfo.Words)
+                        {
+                            w.NormX0 = w.X0 / pageWidth;
+                            w.NormX1 = w.X1 / pageWidth;
+                            w.NormY0 = w.Y0 / pageHeight;
+                            w.NormY1 = w.Y1 / pageHeight;
+                        }
+                    }
                 }
             }
             catch { }
