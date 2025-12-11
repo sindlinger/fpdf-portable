@@ -1069,6 +1069,7 @@ namespace FilterPDF
             commands["to-unicode"] = new ToUnicodeExtractCommand();
             commands["create-test"] = new CreateTestPdfCommand();
             commands["show-moddate"] = new ShowModDateCommand();
+            commands["streams"] = new VisualizeStreamsCommand();
             
             
             // Comando de gerenciamento
