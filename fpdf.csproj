@@ -50,6 +50,7 @@
     <Compile Remove="backups/**" />
     <Compile Remove="tests/**" />
     <Compile Remove="src/CLI/**" />
+    <Compile Remove="src/Legacy/**" />
   </ItemGroup>
 
 </Project>
