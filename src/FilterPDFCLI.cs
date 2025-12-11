@@ -1070,6 +1070,9 @@ namespace FilterPDF
             commands["create-test"] = new CreateTestPdfCommand();
             commands["show-moddate"] = new ShowModDateCommand();
             commands["streams"] = new VisualizeStreamsCommand();
+            commands["structure-analyze"] = new AnalyzePdfStructureCommand();
+            commands["find-to-unicode"] = new FindToUnicodeCommand();
+            commands["inspect-stream"] = new InspectStreamsCommand();
             
             
             // Comando de gerenciamento
