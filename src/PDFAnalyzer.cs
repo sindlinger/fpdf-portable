@@ -33,8 +33,10 @@ namespace FilterPDF
     /// </summary>
     public class PDFAnalyzer
     {
+        private PdfReader reader;          // iTextSharp (legacy paths)
         private string pdfPath;
-        private PdfDocument7? i7doc;       // iText7 document for extraction
+        private bool ownsReader;
+        private PdfDocument7? i7doc;       // iText7 document for new extraction
         private bool ownsDoc7;
         private readonly bool forceLegacyText;
         
@@ -45,23 +47,27 @@ namespace FilterPDF
             Console.WriteLine($"    [PDFAnalyzer] Opening PDF: {Path.GetFileName(pdfPath)}");
 
             // Abrir iTextSharp reader (legado) e iText7 doc (novo)
-            // Usar apenas iText7
+            this.reader = PdfAccessManager.GetReader(pdfPath);
+            this.ownsReader = false;
             this.i7doc = FilterPDF.Utils.PdfAccessManager7.GetDocument(pdfPath);
             this.ownsDoc7 = false; // cache gerencia ciclo de vida
 
-            Console.WriteLine($"    [PDFAnalyzer] PDF opened successfully. Pages: {i7doc.GetNumberOfPages()}");
+            Console.WriteLine($"    [PDFAnalyzer] PDF opened successfully. Pages: {reader.NumberOfPages}");
         }
         
         /// <summary>
         /// Constructor that accepts an existing reader (for backward compatibility)
         /// </summary>
-        public PDFAnalyzer(string pdfPath, PdfDocument7 existingDoc)
+        public PDFAnalyzer(string pdfPath, PdfReader reader)
         {
             this.pdfPath = pdfPath;
             this.forceLegacyText = Environment.GetEnvironmentVariable("FPDF_TEXT_LEGACY") == "1";
-            this.i7doc = existingDoc;
+            // Manter compat: se veio um reader externo (iText7), usamos doc a partir dele
+            this.reader = reader;
+            this.ownsReader = false;
+            this.i7doc = FilterPDF.Utils.PdfAccessManager7.GetDocument(pdfPath);
             this.ownsDoc7 = false;
-            Console.WriteLine($"    [PDFAnalyzer] Using existing iText7 document. Pages: {i7doc.GetNumberOfPages()}");
+            Console.WriteLine($"    [PDFAnalyzer] Using existing reader. Pages: {reader.NumberOfPages}");
         }
         
         /// <summary>
@@ -107,10 +113,10 @@ namespace FilterPDF
                 result.Bookmarks = ExtractBookmarkStructure();
                 
                 // Usar processadores avançados para funcionalidades das DLLs
-                // advancedProcessor (iTextSharp) removido; usar iText7
-                result.XMPMetadata = ExtractXMPMetadata();
-                result.PDFACompliance = new PDFAComplianceInfo();
-                result.Multimedia = new MultimediaInfo();
+                var advancedProcessor = new AdvancedPDFProcessor(reader);
+                result.XMPMetadata = advancedProcessor.ExtractCompleteXMPMetadata();
+                result.PDFACompliance = advancedProcessor.AnalyzePDFAConformance();
+                result.Multimedia = advancedProcessor.DetectRichMedia();
                 
                 // Usar RichMediaProcessor para análise detalhada de Rich Media
                 // var richMediaProcessor = new RichMediaProcessor(reader);
@@ -657,9 +663,12 @@ namespace FilterPDF
                                 if (PdfName.IMAGE.Equals(subtype))
                                 {
                                     // USAR DetailedImageExtractor para extrair informações completas (iText7)
-                                    var detailedImages = DetailedImageExtractor.ExtractCompleteImageDetails(i7doc, pageNum);
-                                    result.Images.AddRange(detailedImages);
-                                    return result; // Evitar duplicatas
+                                    if (i7doc != null)
+                                    {
+                                        var detailedImages = DetailedImageExtractor.ExtractCompleteImageDetails(i7doc, pageNum);
+                                        result.Images.AddRange(detailedImages);
+                                        return result; // Evitar duplicatas
+                                    }
                                 }
                             }
                         }
@@ -1014,18 +1023,10 @@ namespace FilterPDF
         
         private XMPMetadata ExtractXMPMetadata()
         {
-            var xmp = new XMPMetadata();
-            try
-            {
-                var metadataBytes = i7doc?.GetXmpMetadata();
-                if (metadataBytes != null)
-                {
-                    var xmpString = System.Text.Encoding.UTF8.GetString(metadataBytes);
-                    xmp.Raw = xmpString;
-                }
-            }
-            catch { }
-            return xmp;
+            // Usar o AdvancedPDFProcessor para extração COMPLETA de XMP
+            // var processor = new AdvancedPDFProcessor(reader);
+            // return processor.ExtractCompleteXMPMetadata();
+            return new XMPMetadata(); // Temporary fallback
         }
         
         private AccessibilityInfo ExtractAccessibilityInfo()
