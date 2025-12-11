@@ -844,7 +844,8 @@ namespace FilterPDF
         private void DetectDocumentReferences(PageAnalysis page)
         {
             var references = new List<string>();
-            string text = PdfTextExtractor5.GetTextFromPage(reader, page.PageNumber);
+            // Prefer texto já extraído via iText7 (mais fiel e já disponível)
+            string text = page.TextInfo.PageText ?? string.Empty;
 
             // Padrões do código antigo - EXATAMENTE como solicitado
             var patterns = new[] {
