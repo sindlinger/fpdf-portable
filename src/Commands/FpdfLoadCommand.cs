@@ -6,8 +6,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
-using iTextSharp.text.pdf;
-using iTextSharp.text.pdf.parser;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas.Parser;
+using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using FilterPDF.Strategies;
 using FilterPDF;
 using FilterPDF.Configuration;
@@ -24,6 +25,9 @@ namespace FilterPDF
         public override string Name => "load";
         public override string Description => "Pre-process PDF files into cached JSON for ultra-fast operations";
         
+        // Simplified help for subcommands (legacy detail removed)
+        private void ShowSubcommandHelp(string subcmd) => ShowHelp();
+
         private class LoadOptions
         {
             public bool UsePostgres { get; set; } = true;
@@ -913,94 +917,23 @@ namespace FilterPDF
             object cacheData;
             PDFAnalysisResult? analysisModel = null;
             
-            if (options.ExtractUltra)
-            {
-                // ULTRA mode: EVERYTHING! Raw + Analysis + Text + ALL objects + ALL streams
-                cacheData = ExtractUltraComplete(inputFile, options, cancellationToken);
-            }
-            else if (options.ExtractCustom)
-            {
-                // CUSTOM mode: Balanced extraction with user control
-                cacheData = ExtractCustomComplete(inputFile, options, cancellationToken);
-            }
-            else if (options.ExtractRaw && !options.ExtractText)
-            {
-                // RAW mode: Extract complete PDF structure
-                cacheData = ExtractRawDataComplete(inputFile, options, cancellationToken);
-            }
-            else if (options.ExtractText && !options.ExtractRaw)
-            {
-                // TEXT mode: Extract only text content
-                cacheData = ExtractTextDataComplete(inputFile, options, cancellationToken);
-            }
-            else
-            {
-                // BOTH mode (default): Use PDFAnalyzer.AnalyzeFull() - FLAT structure
-                cancellationToken.ThrowIfCancellationRequested();
-                
-                var analyzer = new PDFAnalyzer(inputFile);
-                
-                // Since PDFAnalyzer.AnalyzeFull() doesn't support cancellation token,
-                // we check for cancellation before calling it
-                cancellationToken.ThrowIfCancellationRequested();
-                var analysis = analyzer.AnalyzeFull();
-                analysisModel = analysis;
-                
-                // Add metadata for cache management
-                var analysisDict = JsonConvert.DeserializeObject<Dictionary<string, object>>(JsonConvert.SerializeObject(analysis)) ?? new Dictionary<string, object>();
-                analysisDict["version"] = "3.7.0";
-                analysisDict["source"] = inputFile;
-                analysisDict["created"] = DateTime.UtcNow;
-                analysisDict["extractionMode"] = "both";
-                analysisDict["textStrategy"] = options.TextStrategy;
-                
-                // Ensure images are properly included
-                if (analysisDict.ContainsKey("Pages") && analysisDict["Pages"] is List<object> pagesList)
-                {
-                    using (var reader = PdfAccessManager.CreateTemporaryReader(inputFile))
-                    {
-                        for (int i = 0; i < pagesList.Count; i++)
-                        {
-                            // Check for cancellation during image processing
-                            cancellationToken.ThrowIfCancellationRequested();
-                            if (pagesList[i] is Dictionary<string, object> pageDict)
-                            {
-                                var pageNum = i + 1;
-                                if (pageDict.ContainsKey("PageNumber") && pageDict["PageNumber"] is int pn)
-                                {
-                                    pageNum = pn;
-                                }
-                                
-                                // Extract images if not already present or empty
-                                if (!pageDict.ContainsKey("Resources") || 
-                                    !(pageDict["Resources"] is Dictionary<string, object> resources) ||
-                                    !resources.ContainsKey("Images") ||
-                                    !(resources["Images"] is List<object> imgs) ||
-                                    imgs.Count == 0)
-                                {
-                                    var pageImages = ExtractPageImages(reader, pageNum, options.CustomIncludeImageData);
-                                    if (pageDict.ContainsKey("Resources"))
-                                    {
-                                        if (pageDict["Resources"] is Dictionary<string, object> res)
-                                        {
-                                            res["Images"] = pageImages;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        pageDict["Resources"] = new Dictionary<string, object>
-                                        {
-                                            ["Images"] = pageImages
-                                        };
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                cacheData = analysisDict;
-            }
+            // Unificamos: sempre usamos PDFAnalyzer (iText7) para gerar o cache.
+            cancellationToken.ThrowIfCancellationRequested();
+            var analyzer = new PDFAnalyzer(inputFile);
+            cancellationToken.ThrowIfCancellationRequested();
+            var analysis = analyzer.AnalyzeFull();
+            analysisModel = analysis;
+
+            var analysisDict = JsonConvert.DeserializeObject<Dictionary<string, object>>(JsonConvert.SerializeObject(analysis)) ?? new Dictionary<string, object>();
+            analysisDict["version"] = "3.7.0";
+            analysisDict["source"] = inputFile;
+            analysisDict["created"] = DateTime.UtcNow;
+            analysisDict["extractionMode"] = options.ExtractUltra ? "ultra" :
+                                            options.ExtractCustom ? "custom" :
+                                            options.ExtractRaw ? "raw" :
+                                            options.ExtractText ? "text" : "both";
+            analysisDict["textStrategy"] = options.TextStrategy;
+            cacheData = analysisDict;
             
             // Check for cancellation before saving
             cancellationToken.ThrowIfCancellationRequested();
@@ -1043,6 +976,7 @@ namespace FilterPDF
             }
         }
         
+        #if false // LEGACY ITEXT5 BLOCK (excluded from build)
         private Dictionary<string, object> ExtractRawDataComplete(string inputFile, LoadOptions options, CancellationToken cancellationToken = default)
         {
             if (options.Verbose) Console.WriteLine("  Extracting COMPLETE PDF structure...");
@@ -1059,7 +993,7 @@ namespace FilterPDF
             };
             
             // Use PdfAccessManager for centralized access with using statement
-            using (var reader = PdfAccessManager.CreateTemporaryReader(inputFile))
+            using (var reader = PdfAccessManager7.CreateTemporaryDocument(inputFile))
             {
                 // Extract catalog
                 var catalog = reader.Catalog;
@@ -1158,7 +1092,7 @@ namespace FilterPDF
             
             // Criar estrutura compatível com PDFAnalysisResult
             // Use PdfAccessManager for centralized access with using statement
-            using (var reader = PdfAccessManager.CreateTemporaryReader(inputFile))
+            using (var reader = PdfAccessManager7.CreateTemporaryDocument(inputFile))
             {
             try
             {
@@ -1350,7 +1284,7 @@ namespace FilterPDF
         {
             var pages = new List<ExtractedPage>();
             // Use PdfAccessManager for centralized access
-            var reader = PdfAccessManager.CreateTemporaryReader(inputFile);
+            var reader = PdfAccessManager7.CreateTemporaryDocument(inputFile);
             
             try
             {
@@ -1600,7 +1534,7 @@ namespace FilterPDF
             ultraData["textStrategy"] = options.TextStrategy;
             
             // Use PdfAccessManager for centralized access
-            var reader = PdfAccessManager.CreateTemporaryReader(inputFile);
+            var reader = PdfAccessManager7.CreateTemporaryDocument(inputFile);
             try
             {
                 // Check for cancellation before raw structure processing
@@ -1994,7 +1928,7 @@ namespace FilterPDF
                 if (options.Verbose) Console.WriteLine("    Extracting images with base64 data...");
                 
                 // Extract images with base64 data for each page
-                using (var reader = PdfAccessManager.CreateTemporaryReader(inputFile))
+                using (var reader = PdfAccessManager7.CreateTemporaryDocument(inputFile))
                 {
                     if (ultraData.ContainsKey("Pages"))
                     {
@@ -2218,6 +2152,8 @@ namespace FilterPDF
             }
         }
         
+        #endif // LEGACY ITEXT5 BLOCK
+
         public override void ShowHelp()
         {
             Console.WriteLine($"COMMAND: {Name}");
