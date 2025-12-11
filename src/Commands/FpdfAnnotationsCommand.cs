@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.IO;
-using iTextSharp.text.pdf;
 using Newtonsoft.Json;
 using FilterPDF.Options;
 using FilterPDF.Utils;
