@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using FilterPDF.Utils;
+using iText.Kernel.Pdf;
 
 namespace FilterPDF.Commands
 {
@@ -155,9 +156,9 @@ namespace FilterPDF.Commands
         {
             try
             {
-                using (var reader = PdfAccessManager.GetReader(inputFile))
+                using (var doc = PdfAccessManager7.CreateTemporaryDocument(inputFile))
                 {
-                    var analyses = PageTypeDetector.AnalyzeAllPages(reader);
+                    var analyses = PageTypeDetector.AnalyzeAllPages(doc);
                     
                     Console.WriteLine($"\n📄 Análise de: {Path.GetFileName(inputFile)}");
                     Console.WriteLine(PageTypeDetector.GetSummary(analyses));
@@ -197,9 +198,9 @@ namespace FilterPDF.Commands
                 else
                 {
                     // Detecta automaticamente páginas que precisam de OCR
-                    using (var reader = PdfAccessManager.GetReader(inputFile))
+                    using (var doc = PdfAccessManager7.CreateTemporaryDocument(inputFile))
                     {
-                        var analyses = PageTypeDetector.AnalyzeAllPages(reader);
+                        var analyses = PageTypeDetector.AnalyzeAllPages(doc);
                         pagesToProcess = analyses.Where(a => a.NeedsOCR)
                                                  .Select(a => a.PageNumber)
                                                  .ToList();
@@ -212,7 +213,7 @@ namespace FilterPDF.Commands
                                 return;
                             }
                             // Processa todas se --all foi especificado
-                            pagesToProcess = Enumerable.Range(1, reader.NumberOfPages).ToList();
+                            pagesToProcess = Enumerable.Range(1, doc.GetNumberOfPages()).ToList();
                         }
                     }
                 }

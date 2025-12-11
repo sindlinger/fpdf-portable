@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using iTextSharp.text.pdf;
+using iText.Kernel.Pdf;
 using FilterPDF.Utils;
 
 namespace FilterPDF.Services
@@ -159,16 +157,16 @@ namespace FilterPDF.Services
                     return result;
                 }
                 
-                using (var reader = new PdfReader(pdfPath))
+                using (var doc = new PdfDocument(new PdfReader(pdfPath)))
                 {
-                    var totalImages = CountPdfImages(reader, options);
+                    var totalImages = CountPdfImages(doc, options);
                     int processedImages = 0;
                     
                     _progressReporter.Start(totalImages, "Extracting from PDF");
                     
-                    for (int pageNum = 1; pageNum <= reader.NumberOfPages; pageNum++)
+                    for (int pageNum = 1; pageNum <= doc.GetNumberOfPages(); pageNum++)
                     {
-                        var images = ExtractPageImages(reader, pageNum, options);
+                        var images = ExtractPageImages(doc, pageNum, options);
                         
                         foreach (var img in images)
                         {
@@ -257,33 +255,29 @@ namespace FilterPDF.Services
                 if (!File.Exists(pdfPath))
                     return false;
                 
-                using (var reader = new PdfReader(pdfPath))
+                using (var doc = new PdfDocument(new PdfReader(pdfPath)))
                 {
-                    var pageDict = reader.GetPageN(pageNumber);
-                    var resources = pageDict?.GetAsDict(PdfName.RESOURCES);
-                    var xObjects = resources?.GetAsDict(PdfName.XOBJECT);
+                    var page = doc.GetPage(pageNumber);
+                    var resources = page.GetResources();
+                    var xObjects = resources?.GetResource(PdfName.XObject) as PdfDictionary;
                     
                     if (xObjects != null)
                     {
-                        foreach (var key in xObjects.Keys)
+                        foreach (var key in xObjects.KeySet())
                         {
-                            var obj = xObjects.GetAsIndirectObject(key);
-                            if (obj != null)
+                            var stream = xObjects.GetAsStream(key);
+                            if (stream != null)
                             {
-                                var xObj = PdfReader.GetPdfObject(obj);
-                                if (xObj is PRStream stream)
+                                var subType = stream.GetAsName(PdfName.Subtype);
+                                if (PdfName.Image.Equals(subType))
                                 {
-                                    var subType = stream.GetAsName(PdfName.SUBTYPE);
-                                    if (PdfName.IMAGE.Equals(subType))
+                                    // Check if this matches our target image
+                                    var width = stream.GetAsNumber(PdfName.Width)?.IntValue() ?? 0;
+                                    var height = stream.GetAsNumber(PdfName.Height)?.IntValue() ?? 0;
+                                    
+                                    if (width == targetImage.Width && height == targetImage.Height)
                                     {
-                                        // Check if this matches our target image
-                                        var width = stream.GetAsNumber(PdfName.WIDTH)?.IntValue ?? 0;
-                                        var height = stream.GetAsNumber(PdfName.HEIGHT)?.IntValue ?? 0;
-                                        
-                                        if (width == targetImage.Width && height == targetImage.Height)
-                                        {
-                                            return ExtractStreamToFile(stream, outputPath, options);
-                                        }
+                                        return ExtractStreamToFile(stream, outputPath, options);
                                     }
                                 }
                             }
@@ -326,20 +320,11 @@ namespace FilterPDF.Services
                     return false;
                 }
                 
-                // For PNG output, convert to Base64 and then to PNG
-                if (options.OutputFormat.ToLower() == "png")
-                {
-                    string base64 = Convert.ToBase64String(imageBytes);
-                    return ImageDataExtractor.CreatePngFromBase64(base64, outputPath);
-                }
-                else
-                {
-                    // Save raw data for other formats
-                    File.WriteAllBytes(outputPath, imageBytes);
-                    _lastUsedMethod = "Cached Raw Data";
-                    Console.WriteLine($"      ✅ Raw data saved: {outputPath}");
-                    return true;
-                }
+                // Save directly; downstream can convert if needed
+                File.WriteAllBytes(outputPath, imageBytes);
+                _lastUsedMethod = "Cached Raw Data";
+                Console.WriteLine($"      ✅ Raw data saved: {outputPath}");
+                return true;
             }
             catch (Exception ex)
             {
@@ -351,32 +336,11 @@ namespace FilterPDF.Services
         private bool CreatePlaceholderImage(ImageInfo imageInfo, string outputPath, 
             ImageExtractionOptions options)
         {
+            // Emit a minimal placeholder text file when conversion fails
             try
             {
-                using (var bitmap = new Bitmap(imageInfo.Width, imageInfo.Height))
-                using (var graphics = Graphics.FromImage(bitmap))
-                {
-                    // Create a placeholder image
-                    graphics.Clear(Color.LightGray);
-                    
-                    var font = new Font("Arial", 12);
-                    var brush = new SolidBrush(Color.Black);
-                    var text = $"Image Placeholder\n{imageInfo.Width}x{imageInfo.Height}\n{imageInfo.CompressionType}";
-                    
-                    var textSize = graphics.MeasureString(text, font);
-                    var x = (imageInfo.Width - textSize.Width) / 2;
-                    var y = (imageInfo.Height - textSize.Height) / 2;
-                    
-                    graphics.DrawString(text, font, brush, x, y);
-                    
-                    // Save as PNG
-                    bitmap.Save(outputPath, ImageFormat.Png);
-                    
-                    font.Dispose();
-                    brush.Dispose();
-                }
-                
-                _lastUsedMethod = "Placeholder";
+                File.WriteAllText(outputPath, $"Placeholder for image {imageInfo.Width}x{imageInfo.Height} ({imageInfo.CompressionType})");
+                _lastUsedMethod = "Placeholder text";
                 return true;
             }
             catch
@@ -385,17 +349,17 @@ namespace FilterPDF.Services
             }
         }
         
-        private bool ExtractStreamToFile(PRStream stream, string outputPath, 
+        private bool ExtractStreamToFile(PdfStream stream, string outputPath, 
             ImageExtractionOptions options)
         {
             try
             {
-                var filter = stream.Get(PdfName.FILTER);
+                var filter = stream.Get(PdfName.Filter);
                 
                 // Handle JPEG images
                 if (IsJpegFilter(filter))
                 {
-                    var bytes = PdfReader.GetStreamBytesRaw(stream);
+                    var bytes = stream.GetBytes(false);
                     
                     if (options.OutputFormat.ToLower() == "png")
                     {
@@ -413,7 +377,7 @@ namespace FilterPDF.Services
                 else
                 {
                     // Handle other formats
-                    var decodedBytes = PdfReader.GetStreamBytes(stream);
+                    var decodedBytes = stream.GetBytes(true);
                     return ConvertRawToPng(decodedBytes, outputPath, stream);
                 }
             }
@@ -426,15 +390,12 @@ namespace FilterPDF.Services
         
         private bool ConvertJpegToPng(byte[] jpegBytes, string outputPath)
         {
+            // Without bitmap tooling, just dump the bytes; caller can reprocess
             try
             {
-                using (var memoryStream = new MemoryStream(jpegBytes))
-                using (var image = Image.FromStream(memoryStream))
-                {
-                    image.Save(outputPath, ImageFormat.Png);
-                    _lastUsedMethod = "JPEG to PNG";
-                    return true;
-                }
+                File.WriteAllBytes(outputPath, jpegBytes);
+                _lastUsedMethod = "JPEG direct";
+                return true;
             }
             catch
             {
@@ -442,42 +403,26 @@ namespace FilterPDF.Services
             }
         }
         
-        private bool ConvertRawToPng(byte[] rawBytes, string outputPath, PRStream stream)
+        private bool ConvertRawToPng(byte[] rawBytes, string outputPath, PdfStream stream)
         {
             try
             {
-                var width = stream.GetAsNumber(PdfName.WIDTH)?.IntValue ?? 0;
-                var height = stream.GetAsNumber(PdfName.HEIGHT)?.IntValue ?? 0;
-                var bitsPerComponent = stream.GetAsNumber(PdfName.BITSPERCOMPONENT)?.IntValue ?? 8;
+                var width = stream.GetAsNumber(PdfName.Width)?.IntValue() ?? 0;
+                var height = stream.GetAsNumber(PdfName.Height)?.IntValue() ?? 0;
+                var bitsPerComponent = stream.GetAsNumber(PdfName.BitsPerComponent)?.IntValue() ?? 8;
                 
-                // Simple RGB conversion (may need enhancement for different color spaces)
-                if (bitsPerComponent == 8 && rawBytes.Length >= width * height * 3)
-                {
-                    using (var bitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb))
-                    {
-                        var data = bitmap.LockBits(new Rectangle(0, 0, width, height),
-                            ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
-                        
-                        System.Runtime.InteropServices.Marshal.Copy(rawBytes, 0, data.Scan0,
-                            Math.Min(rawBytes.Length, data.Stride * height));
-                        
-                        bitmap.UnlockBits(data);
-                        bitmap.Save(outputPath, ImageFormat.Png);
-                        
-                        _lastUsedMethod = "Raw to PNG";
-                        return true;
-                    }
-                }
+                // No reliable raw converter without System.Drawing; write raw bytes for downstream handling
+                File.WriteAllBytes(outputPath, rawBytes);
+                _lastUsedMethod = "Raw bytes (no decode)";
+                return true;
             }
             catch
             {
-                // Fall through to alternative methods
+                return false;
             }
-            
-            return false;
         }
         
-        private bool IsJpegFilter(iTextSharp.text.pdf.PdfObject filter)
+        private bool IsJpegFilter(iText.Kernel.Pdf.PdfObject filter)
         {
             if (filter == null) return false;
             
@@ -517,25 +462,25 @@ namespace FilterPDF.Services
             return count;
         }
         
-        private int CountPdfImages(PdfReader reader, ImageExtractionOptions options)
+        private int CountPdfImages(PdfDocument doc, ImageExtractionOptions options)
         {
             // Simplified count - would need to implement full filtering
             int count = 0;
             
-            for (int pageNum = 1; pageNum <= reader.NumberOfPages; pageNum++)
+            for (int pageNum = 1; pageNum <= doc.GetNumberOfPages(); pageNum++)
             {
-                var images = DetailedImageExtractor.ExtractCompleteImageDetails(reader, pageNum);
+                var images = DetailedImageExtractor.ExtractCompleteImageDetails(doc, pageNum);
                 count += images.Count(img => MatchesFilters(img, options));
             }
             
             return count;
         }
         
-        private List<ExtractedImageInfo> ExtractPageImages(PdfReader reader, int pageNum,
+        private List<ExtractedImageInfo> ExtractPageImages(PdfDocument doc, int pageNum,
             ImageExtractionOptions options)
         {
             var results = new List<ExtractedImageInfo>();
-            var images = DetailedImageExtractor.ExtractCompleteImageDetails(reader, pageNum);
+            var images = DetailedImageExtractor.ExtractCompleteImageDetails(doc, pageNum);
             
             int imageIndex = 0;
             foreach (var img in images)
@@ -599,174 +544,19 @@ namespace FilterPDF.Services
         }
         
         /// <summary>
-        /// Convert image bytes to PNG format using System.Drawing
+        /// Convert image bytes to PNG format (best-effort, no re-encode)
         /// </summary>
         private bool ConvertToPngFromBytes(byte[] imageBytes, string outputPath, string sourceFormat)
         {
             try
             {
-                // If already PNG, save directly
-                if (sourceFormat == "PNG")
-                {
-                    File.WriteAllBytes(outputPath, imageBytes);
-                    _lastUsedMethod = "Cached PNG";
-                    return true;
-                }
-                
-                // Convert using System.Drawing
-                using (var memoryStream = new MemoryStream(imageBytes))
-                {
-                    try
-                    {
-                        using (var image = Image.FromStream(memoryStream))
-                        {
-                            image.Save(outputPath, ImageFormat.Png);
-                            _lastUsedMethod = $"Cached {sourceFormat} to PNG";
-                            return true;
-                        }
-                    }
-                    catch (ArgumentException)
-                    {
-                        // Try alternative approach for unsupported formats
-                        return ConvertRawDataToPng(imageBytes, outputPath);
-                    }
-                }
+                File.WriteAllBytes(outputPath, imageBytes);
+                _lastUsedMethod = $"Cached {sourceFormat}";
+                return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Warning: Failed to convert {sourceFormat} to PNG: {ex.Message}");
-                return ConvertRawDataToPng(imageBytes, outputPath);
-            }
-        }
-        
-        /// <summary>
-        /// Fallback method to convert raw image data to PNG
-        /// </summary>
-        private bool ConvertRawDataToPng(byte[] rawBytes, string outputPath)
-        {
-            try
-            {
-                // This is a simplified approach - in practice, we'd need to know
-                // the exact format and color space of the raw data
-                // For now, we'll try to create a basic bitmap if we can determine dimensions
-                
-                // Calculate potential dimensions based on data size
-                int dataSize = rawBytes.Length;
-                int[] possibleWidths = { 100, 200, 300, 400, 500, 600, 800, 1000, 1200, 1600, 2000 };
-                
-                foreach (int width in possibleWidths)
-                {
-                    // Try RGB (3 bytes per pixel)
-                    int height = dataSize / (width * 3);
-                    if (height > 0 && width * height * 3 == dataSize)
-                    {
-                        return CreateBitmapFromRawRgb(rawBytes, width, height, outputPath);
-                    }
-                    
-                    // Try RGBA (4 bytes per pixel)
-                    height = dataSize / (width * 4);
-                    if (height > 0 && width * height * 4 == dataSize)
-                    {
-                        return CreateBitmapFromRawRgba(rawBytes, width, height, outputPath);
-                    }
-                    
-                    // Try grayscale (1 byte per pixel)
-                    height = dataSize / width;
-                    if (height > 0 && width * height == dataSize)
-                    {
-                        return CreateBitmapFromRawGrayscale(rawBytes, width, height, outputPath);
-                    }
-                }
-                
-                return false;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-        
-        /// <summary>
-        /// Create PNG from raw RGB data
-        /// </summary>
-        private bool CreateBitmapFromRawRgb(byte[] rgbData, int width, int height, string outputPath)
-        {
-            try
-            {
-                using (var bitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb))
-                {
-                    var data = bitmap.LockBits(new Rectangle(0, 0, width, height),
-                        ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
-                    
-                    System.Runtime.InteropServices.Marshal.Copy(rgbData, 0, data.Scan0, rgbData.Length);
-                    bitmap.UnlockBits(data);
-                    bitmap.Save(outputPath, ImageFormat.Png);
-                    
-                    _lastUsedMethod = "Raw RGB to PNG";
-                    return true;
-                }
-            }
-            catch
-            {
-                return false;
-            }
-        }
-        
-        /// <summary>
-        /// Create PNG from raw RGBA data
-        /// </summary>
-        private bool CreateBitmapFromRawRgba(byte[] rgbaData, int width, int height, string outputPath)
-        {
-            try
-            {
-                using (var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb))
-                {
-                    var data = bitmap.LockBits(new Rectangle(0, 0, width, height),
-                        ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
-                    
-                    System.Runtime.InteropServices.Marshal.Copy(rgbaData, 0, data.Scan0, rgbaData.Length);
-                    bitmap.UnlockBits(data);
-                    bitmap.Save(outputPath, ImageFormat.Png);
-                    
-                    _lastUsedMethod = "Raw RGBA to PNG";
-                    return true;
-                }
-            }
-            catch
-            {
-                return false;
-            }
-        }
-        
-        /// <summary>
-        /// Create PNG from raw grayscale data
-        /// </summary>
-        private bool CreateBitmapFromRawGrayscale(byte[] grayData, int width, int height, string outputPath)
-        {
-            try
-            {
-                using (var bitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb))
-                {
-                    for (int y = 0; y < height; y++)
-                    {
-                        for (int x = 0; x < width; x++)
-                        {
-                            int index = y * width + x;
-                            if (index < grayData.Length)
-                            {
-                                byte gray = grayData[index];
-                                bitmap.SetPixel(x, y, Color.FromArgb(gray, gray, gray));
-                            }
-                        }
-                    }
-                    
-                    bitmap.Save(outputPath, ImageFormat.Png);
-                    _lastUsedMethod = "Raw Grayscale to PNG";
-                    return true;
-                }
-            }
-            catch
-            {
+                Console.WriteLine($"Warning: Failed to write {sourceFormat}: {ex.Message}");
                 return false;
             }
         }

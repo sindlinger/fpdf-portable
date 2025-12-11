@@ -1,7 +1,8 @@
 using System;
 using System.Linq;
-using iTextSharp.text.pdf;
-using iTextSharp.text.pdf.parser;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas.Parser;
+using iText.Kernel.Pdf.Canvas.Parser.Listener;
 
 namespace FilterPDF.Utils
 {
@@ -33,7 +34,7 @@ namespace FilterPDF.Utils
         /// <summary>
         /// Analisa uma página específica do PDF
         /// </summary>
-        public static PageAnalysis AnalyzePage(PdfReader reader, int pageNumber)
+        public static PageAnalysis AnalyzePage(PdfDocument doc, int pageNumber)
         {
             var analysis = new PageAnalysis
             {
@@ -49,28 +50,27 @@ namespace FilterPDF.Utils
             try
             {
                 // Extrai texto da página
-                string pageText = PdfTextExtractor.GetTextFromPage(reader, pageNumber);
+                string pageText = PdfTextExtractor.GetTextFromPage(doc.GetPage(pageNumber), new SimpleTextExtractionStrategy());
                 analysis.TextCharCount = pageText?.Trim().Length ?? 0;
                 analysis.HasExtractableText = analysis.TextCharCount > 10; // Mais de 10 chars = tem texto
 
                 // Analisa recursos da página (imagens, etc.)
-                var pageDict = reader.GetPageN(pageNumber);
-                var resources = pageDict.GetAsDict(PdfName.RESOURCES);
+                var page = doc.GetPage(pageNumber);
+                var resources = page.GetResources();
                 
                 if (resources != null)
                 {
                     // Conta imagens (XObjects)
-                    var xobjects = resources.GetAsDict(PdfName.XOBJECT);
+                    var xobjects = resources.GetResource(PdfName.XObject) as PdfDictionary;
                     if (xobjects != null)
                     {
-                        foreach (var key in xobjects.Keys)
+                        foreach (var key in xobjects.KeySet())
                         {
-                            var xobj = xobjects.GetAsIndirectObject(key);
-                            if (xobj != null)
+                            var stream = xobjects.GetAsStream(key);
+                            if (stream != null)
                             {
-                                var stream = (PRStream)PdfReader.GetPdfObject(xobj);
-                                var subtype = stream.GetAsName(PdfName.SUBTYPE);
-                                if (PdfName.IMAGE.Equals(subtype))
+                                var subtype = stream.GetAsName(PdfName.Subtype);
+                                if (PdfName.Image.Equals(subtype))
                                 {
                                     analysis.ImageCount++;
                                 }
@@ -127,14 +127,14 @@ namespace FilterPDF.Utils
         /// <summary>
         /// Analisa todas as páginas de um PDF
         /// </summary>
-        public static PageAnalysis[] AnalyzeAllPages(PdfReader reader)
+        public static PageAnalysis[] AnalyzeAllPages(PdfDocument doc)
         {
-            int pageCount = reader.NumberOfPages;
+            int pageCount = doc.GetNumberOfPages();
             var analyses = new PageAnalysis[pageCount];
 
             for (int i = 1; i <= pageCount; i++)
             {
-                analyses[i - 1] = AnalyzePage(reader, i);
+                analyses[i - 1] = AnalyzePage(doc, i);
             }
 
             return analyses;

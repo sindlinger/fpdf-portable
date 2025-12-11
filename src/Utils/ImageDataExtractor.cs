@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using iTextSharp.text.pdf;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas.Parser;
+using iText.Kernel.Pdf.Canvas.Parser.Listener;
 
 namespace FilterPDF
 {
@@ -28,58 +30,45 @@ namespace FilterPDF
             public bool IsFullPage { get; set; } = false;
         }
 
-        public static List<ImageWithData> ExtractImagesWithData(PdfReader reader, int pageNum, bool includeBase64 = true)
+        public static List<ImageWithData> ExtractImagesWithData(PdfDocument doc, int pageNum, bool includeBase64 = true)
         {
             var images = new List<ImageWithData>();
             
             try
             {
-                var pageDict = reader.GetPageN(pageNum);
-                var resources = pageDict.GetAsDict(PdfName.RESOURCES);
-                
-                if (resources != null)
+                var page = doc.GetPage(pageNum);
+                var resources = page.GetResources();
+                var xObjects = resources?.GetResource(iText.Kernel.Pdf.PdfName.XObject) as PdfDictionary;
+                var pageSize = page.GetPageSize();
+                var pageWidth = pageSize.GetWidth();
+                var pageHeight = pageSize.GetHeight();
+
+                if (xObjects != null)
                 {
-                    var xObjects = resources.GetAsDict(PdfName.XOBJECT);
-                    if (xObjects != null)
+                    foreach (var key in xObjects.KeySet())
                     {
-                        // Get page dimensions to check if image covers full page
-                        var pageSize = reader.GetPageSize(pageNum);
-                        var pageWidth = pageSize.Width;
-                        var pageHeight = pageSize.Height;
-                        
-                        foreach (var key in xObjects.Keys)
+                        var stream = xObjects.GetAsStream(key);
+                        if (stream == null) continue;
+
+                        var subType = stream.GetAsName(iText.Kernel.Pdf.PdfName.Subtype);
+
+                        if (iText.Kernel.Pdf.PdfName.Image.Equals(subType))
                         {
-                            var obj = xObjects.GetAsIndirectObject(key);
-                            if (obj != null)
+                            var image = ExtractSingleImageWithData(key.ToString(), stream, includeBase64);
+                            if (image != null)
                             {
-                                var xObj = PdfReader.GetPdfObject(obj);
-                                if (xObj is PdfStream stream)
+                                if (Math.Abs(image.Width - pageWidth) < pageWidth * 0.1 &&
+                                    Math.Abs(image.Height - pageHeight) < pageHeight * 0.1)
                                 {
-                                    var subType = stream.GetAsName(PdfName.SUBTYPE);
-                                    
-                                    if (PdfName.IMAGE.Equals(subType))
-                                    {
-                                        var image = ExtractSingleImageWithData(key.ToString(), stream, includeBase64);
-                                        if (image != null)
-                                        {
-                                            // Check if image covers full page (allowing 10% margin)
-                                            if (Math.Abs(image.Width - pageWidth) < pageWidth * 0.1 && 
-                                                Math.Abs(image.Height - pageHeight) < pageHeight * 0.1)
-                                            {
-                                                image.IsFullPage = true;
-                                            }
-                                            
-                                            images.Add(image);
-                                        }
-                                    }
-                                    else if (PdfName.FORM.Equals(subType))
-                                    {
-                                        // This is a Form XObject, search for images inside it
-                                        var formImages = ExtractImagesFromForm(stream, key.ToString(), includeBase64, pageWidth, pageHeight);
-                                        images.AddRange(formImages);
-                                    }
+                                    image.IsFullPage = true;
                                 }
+                                images.Add(image);
                             }
+                        }
+                        else if (iText.Kernel.Pdf.PdfName.Form.Equals(subType))
+                        {
+                            var formImages = ExtractImagesFromForm(stream, key.ToString(), includeBase64, pageWidth, pageHeight);
+                            images.AddRange(formImages);
                         }
                     }
                 }
@@ -147,47 +136,37 @@ namespace FilterPDF
             try
             {
                 // Get the Form XObject's Resources
-                var formResources = formStream.GetAsDict(PdfName.RESOURCES);
+                var formResources = formStream.GetAsDictionary(iText.Kernel.Pdf.PdfName.Resources);
                 if (formResources != null)
                 {
-                    var formXObjects = formResources.GetAsDict(PdfName.XOBJECT);
+                    var formXObjects = formResources.GetAsDictionary(iText.Kernel.Pdf.PdfName.XObject);
                     if (formXObjects != null)
                     {
-                        foreach (var key in formXObjects.Keys)
+                        foreach (var key in formXObjects.KeySet())
                         {
-                            var obj = formXObjects.GetAsIndirectObject(key);
-                            
-                            if (obj != null)
+                            var stream = formXObjects.GetAsStream(key);
+                            if (stream != null)
                             {
-                                var xObj = PdfReader.GetPdfObject(obj);
-                                if (xObj is PdfStream stream)
+                                var subType = stream.GetAsName(iText.Kernel.Pdf.PdfName.Subtype);
+                                
+                                if (iText.Kernel.Pdf.PdfName.Image.Equals(subType))
                                 {
-                                    var subType = stream.GetAsName(PdfName.SUBTYPE);
-                                    
-                                    if (PdfName.IMAGE.Equals(subType))
+                                    var image = ExtractSingleImageWithData($"{formName}/{key}", stream, includeBase64);
+                                    if (image != null)
                                     {
-                                        var image = ExtractSingleImageWithData($"{formName}/{key}", stream, includeBase64);
-                                        if (image != null)
+                                        if (Math.Abs(image.Width - pageWidth) < pageWidth * 0.1 && 
+                                            Math.Abs(image.Height - pageHeight) < pageHeight * 0.1)
                                         {
-                                            // Check if image covers full page (allowing 10% margin)
-                                            if (Math.Abs(image.Width - pageWidth) < pageWidth * 0.1 && 
-                                                Math.Abs(image.Height - pageHeight) < pageHeight * 0.1)
-                                            {
-                                                image.IsFullPage = true;
-                                            }
-                                            
-                                            images.Add(image);
+                                            image.IsFullPage = true;
                                         }
+                                        images.Add(image);
                                     }
-                                    else if (PdfName.FORM.Equals(subType))
-                                    {
-                                        // Create unique identifier for nested form
-                                        string nestedFormName = $"{formName}/{key}";
-                                        
-                                        // Recursive call for nested forms with protection
-                                        var nestedImages = ExtractImagesFromForm(stream, nestedFormName, includeBase64, pageWidth, pageHeight, visitedForms, recursionDepth + 1);
-                                        images.AddRange(nestedImages);
-                                    }
+                                }
+                                else if (iText.Kernel.Pdf.PdfName.Form.Equals(subType))
+                                {
+                                    string nestedFormName = $"{formName}/{key}";
+                                    var nestedImages = ExtractImagesFromForm(stream, nestedFormName, includeBase64, pageWidth, pageHeight, visitedForms, recursionDepth + 1);
+                                    images.AddRange(nestedImages);
                                 }
                             }
                         }
@@ -217,28 +196,28 @@ namespace FilterPDF
                 };
                 
                 // Extract dimensions
-                var width = stream.GetAsNumber(PdfName.WIDTH);
-                if (width != null) image.Width = width.IntValue;
+                var width = stream.GetAsNumber(iText.Kernel.Pdf.PdfName.Width);
+                if (width != null) image.Width = width.IntValue();
                 
-                var height = stream.GetAsNumber(PdfName.HEIGHT);
-                if (height != null) image.Height = height.IntValue;
+                var height = stream.GetAsNumber(iText.Kernel.Pdf.PdfName.Height);
+                if (height != null) image.Height = height.IntValue();
                 
                 // Bits per component
-                var bpc = stream.GetAsNumber(PdfName.BITSPERCOMPONENT);
-                if (bpc != null) image.BitsPerComponent = bpc.IntValue;
+                var bpc = stream.GetAsNumber(iText.Kernel.Pdf.PdfName.BitsPerComponent);
+                if (bpc != null) image.BitsPerComponent = bpc.IntValue();
                 
                 // Color space
-                var colorSpace = stream.Get(PdfName.COLORSPACE);
+                var colorSpace = stream.Get(iText.Kernel.Pdf.PdfName.ColorSpace);
                 if (colorSpace != null) 
                 {
                     image.ColorSpace = colorSpace.ToString();
                 }
                 
                 // Compression type
-                var filter = stream.Get(PdfName.FILTER);
+                var filter = stream.Get(iText.Kernel.Pdf.PdfName.Filter);
                 if (filter != null) 
                 {
-                    if (filter is PdfArray filterArray && filterArray.Size > 0)
+                    if (filter is PdfArray filterArray && filterArray.Size() > 0)
                     {
                         var filterName = filterArray.GetAsName(0).ToString();
                         image.CompressionType = filterName;
@@ -261,35 +240,25 @@ namespace FilterPDF
                 {
                     try
                     {
-                        var prStream = stream as PRStream;
-                        if (prStream != null)
+                        var streamBytes = stream.GetBytes(false); // raw
+                        
+                        if (image.CompressionType == "/DCTDecode" || image.CompressionType == "/JPXDecode")
                         {
-                            // Get raw stream bytes (compressed)
-                            var streamBytes = PdfReader.GetStreamBytesRaw(prStream);
-                            
-                            // If it's a JPEG or JPEG2000, we can use the raw bytes directly
-                            if (image.CompressionType == "/DCTDecode" || image.CompressionType == "/JPXDecode")
-                            {
-                                image.Base64Data = Convert.ToBase64String(streamBytes);
-                            }
-                            else
-                            {
-                                // For other formats, get decoded bytes
-                                var decodedBytes = PdfReader.GetStreamBytes(prStream);
-                                
-                                // For now, store raw decoded bytes
-                                // In a production system, you'd convert to PNG/JPEG here
-                                image.Base64Data = Convert.ToBase64String(decodedBytes);
-                                
-                                // Update mime type for decoded data
-                                if (string.IsNullOrEmpty(image.MimeType))
-                                {
-                                    image.MimeType = "application/octet-stream";
-                                }
-                            }
-                            
-                            image.EstimatedSize = streamBytes.Length;
+                            image.Base64Data = Convert.ToBase64String(streamBytes);
                         }
+                        else
+                        {
+                            var decodedBytes = stream.GetBytes(true);
+                            image.Base64Data = Convert.ToBase64String(decodedBytes);
+                            
+                            if (string.IsNullOrEmpty(image.MimeType))
+                            {
+                                image.MimeType = "application/octet-stream";
+                            }
+                            image.EstimatedSize = decodedBytes.Length;
+                        }
+                        
+                        if (image.EstimatedSize == 0) image.EstimatedSize = streamBytes.Length;
                     }
                     catch (Exception ex)
                     {
@@ -332,12 +301,12 @@ namespace FilterPDF
         /// <summary>
         /// Check if a page is a scanned image (full-page image with no extractable text)
         /// </summary>
-        public static bool IsScannedPage(PdfReader reader, int pageNum)
+        public static bool IsScannedPage(PdfDocument doc, int pageNum)
         {
             try
             {
                 // Check if page has extractable text
-                var text = iTextSharp.text.pdf.parser.PdfTextExtractor.GetTextFromPage(reader, pageNum);
+                var text = PdfTextExtractor.GetTextFromPage(doc.GetPage(pageNum), new SimpleTextExtractionStrategy());
                 var hasText = !string.IsNullOrWhiteSpace(text) && text.Length > 50; // More than 50 chars
                 
                 if (hasText)
@@ -346,7 +315,7 @@ namespace FilterPDF
                 }
                 
                 // Check if page has a full-page image
-                var images = ExtractImagesWithData(reader, pageNum, false);
+                var images = ExtractImagesWithData(doc, pageNum, false);
                 
                 foreach (var img in images)
                 {
@@ -386,52 +355,14 @@ namespace FilterPDF
                 byte[] imageBytes = Convert.FromBase64String(base64);
                 Console.WriteLine($"      🔍 Decoded {imageBytes.Length} bytes from Base64");
 
-                // Try to use iTextSharp's Image class to handle the conversion
-                try
-                {
-                    // Create iTextSharp Image from bytes
-                    var iTextImage = iTextSharp.text.Image.GetInstance(imageBytes);
-                    
-                    // Check if it's a JPEG and needs conversion to PNG
-                    string actualExtension = GetImageExtension(imageBytes);
-                    Console.WriteLine($"      🔍 Detected format: {actualExtension}");
-                    
-                    if (actualExtension == ".jpg" && outputPath.EndsWith(".png"))
-                    {
-                        // It's a JPEG but we want PNG - use ImageMagick
-                        Console.WriteLine($"      🔄 Converting JPEG to PNG using ImageMagick...");
-                        
-                        // Check expected dimensions from imageInfo if available
-                        int? expectedWidth = null;
-                        int? expectedHeight = null;
-                        
-                        if (imageInfo != null && imageInfo.Width > 0 && imageInfo.Height > 0)
-                        {
-                            Console.WriteLine($"      📐 Expected dimensions from cache: {imageInfo.Width}x{imageInfo.Height}");
-                            expectedWidth = imageInfo.Width;
-                            expectedHeight = imageInfo.Height;
-                        }
-                        
-                        return ConvertJpegToPngWithImageMagick(imageBytes, outputPath, expectedWidth, expectedHeight);
-                    }
-                    
-                    // If iTextSharp can handle it, the bytes are likely already a valid image
-                    // Just save them directly
-                    File.WriteAllBytes(outputPath, imageBytes);
-                    Console.WriteLine($"      ✅ Image saved using iTextSharp validation");
-                    return true;
-                }
-                catch (Exception iTextEx)
-                {
-                    Console.WriteLine($"      ⚠️ iTextSharp validation failed: {iTextEx.Message}");
-                }
+                // Detect format
+                string actualExtension = GetImageExtension(imageBytes);
+                Console.WriteLine($"      🔍 Detected format: {actualExtension}");
 
                 // Check if it's already a valid image format
                 if (IsValidImageFormat(imageBytes))
                 {
                     // It's already a valid image (JPEG, PNG, etc)
-                    string actualExtension = GetImageExtension(imageBytes);
-                    
                     if (actualExtension == ".png")
                     {
                         // Already PNG, just save it

@@ -1,53 +1,83 @@
 using System;
 using System.Collections.Generic;
-using iTextSharp.text.pdf;
+using iText.Kernel.Pdf;
 
 namespace FilterPDF
 {
     /// <summary>
-    /// Extrator que captura TODOS os detalhes das imagens: Width, Height, ColorSpace, Compression, etc.
+    /// Extrator que captura TODOS os detalhes das imagens: Width, Height, ColorSpace, Compression, etc. (iText7)
     /// </summary>
     public class DetailedImageExtractor
     {
-        public static List<ImageInfo> ExtractCompleteImageDetails(PdfReader reader, int pageNum)
+        public static List<ImageInfo> ExtractCompleteImageDetails(PdfDocument doc, int pageNum)
         {
             var images = new List<ImageInfo>();
             
             try
             {
-                var pageDict = reader.GetPageN(pageNum);
-                var resources = pageDict.GetAsDict(PdfName.RESOURCES);
-                
-                if (resources != null)
+                var page = doc.GetPage(pageNum);
+                var resources = page.GetResources();
+                var xObjects = resources?.GetResource(PdfName.XObject) as PdfDictionary;
+
+                if (xObjects != null)
                 {
-                    var xObjects = resources.GetAsDict(PdfName.XOBJECT);
-                    if (xObjects != null)
+                    foreach (var key in xObjects.KeySet())
                     {
-                        foreach (var key in xObjects.Keys)
+                        var stream = xObjects.GetAsStream(key);
+                        if (stream == null) continue;
+
+                        var subType = stream.GetAsName(PdfName.Subtype);
+                        if (PdfName.Image.Equals(subType))
                         {
-                            var obj = xObjects.GetAsIndirectObject(key);
-                            if (obj != null)
+                            var image = ExtractSingleImageDetails(key.ToString(), stream);
+                            if (image != null)
                             {
-                                var xObj = PdfReader.GetPdfObject(obj);
-                                if (xObj is PdfStream stream)
-                                {
-                                    var subType = stream.GetAsName(PdfName.SUBTYPE);
-                                    if (PdfName.IMAGE.Equals(subType))
-                                    {
-                                        var image = ExtractSingleImageDetails(key.ToString(), stream);
-                                        if (image != null)
-                                        {
-                                            images.Add(image);
-                                        }
-                                    }
-                                }
+                                images.Add(image);
                             }
+                        }
+                        else if (PdfName.Form.Equals(subType))
+                        {
+                            // Buscar imagens dentro de Form XObject
+                            images.AddRange(ExtractImagesFromForm(stream, key.ToString()));
                         }
                     }
                 }
             }
             catch { }
             
+            return images;
+        }
+        
+        private static List<ImageInfo> ExtractImagesFromForm(PdfStream formStream, string formName)
+        {
+            var images = new List<ImageInfo>();
+
+            try
+            {
+                var formResources = formStream.GetAsDictionary(PdfName.Resources);
+                var formXObjects = formResources?.GetAsDictionary(PdfName.XObject);
+                if (formXObjects != null)
+                {
+                    foreach (var key in formXObjects.KeySet())
+                    {
+                        var stream = formXObjects.GetAsStream(key);
+                        if (stream == null) continue;
+
+                        var subType = stream.GetAsName(PdfName.Subtype);
+                        if (PdfName.Image.Equals(subType))
+                        {
+                            var image = ExtractSingleImageDetails($"{formName}/{key}", stream);
+                            if (image != null) images.Add(image);
+                        }
+                        else if (PdfName.Form.Equals(subType))
+                        {
+                            images.AddRange(ExtractImagesFromForm(stream, $"{formName}/{key}"));
+                        }
+                    }
+                }
+            }
+            catch { }
+
             return images;
         }
         
@@ -60,31 +90,29 @@ namespace FilterPDF
                     Name = name
                 };
                 
-                // TODOS OS DETALHES POSSÍVEIS DA IMAGEM
-                
                 // Dimensões
-                var width = stream.GetAsNumber(PdfName.WIDTH);
-                if (width != null) image.Width = width.IntValue;
+                var width = stream.GetAsNumber(PdfName.Width);
+                if (width != null) image.Width = width.IntValue();
                 
-                var height = stream.GetAsNumber(PdfName.HEIGHT);
-                if (height != null) image.Height = height.IntValue;
+                var height = stream.GetAsNumber(PdfName.Height);
+                if (height != null) image.Height = height.IntValue();
                 
                 // Bits por componente
-                var bpc = stream.GetAsNumber(PdfName.BITSPERCOMPONENT);
-                if (bpc != null) image.BitsPerComponent = bpc.IntValue;
+                var bpc = stream.GetAsNumber(PdfName.BitsPerComponent);
+                if (bpc != null) image.BitsPerComponent = bpc.IntValue();
                 
                 // Espaço de cor
-                var colorSpace = stream.Get(PdfName.COLORSPACE);
+                var colorSpace = stream.Get(PdfName.ColorSpace);
                 if (colorSpace != null) 
                 {
                     image.ColorSpace = colorSpace.ToString();
                 }
                 
                 // Tipo de compressão/filtro
-                var filter = stream.Get(PdfName.FILTER);
+                var filter = stream.Get(PdfName.Filter);
                 if (filter != null) 
                 {
-                    if (filter is PdfArray filterArray && filterArray.Size > 0)
+                    if (filter is PdfArray filterArray && filterArray.Size() > 0)
                     {
                         image.CompressionType = filterArray.GetAsName(0).ToString();
                     }
@@ -101,38 +129,28 @@ namespace FilterPDF
                 // Extração dos dados base64 para cache
                 try
                 {
-                    byte[] imageBytes = null;
-                    
-                    // Tentar extrair os dados da imagem
-                    if (stream is PRStream prStream)
+                    byte[] imageBytes;
+                    var imageFilter = stream.Get(PdfName.Filter);
+
+                    // Para JPEG/JPX, usar dados brutos; demais, usar decodificados
+                    if (IsJpegFilter(imageFilter))
                     {
-                        var imageFilter = stream.Get(PdfName.FILTER);
-                        
-                        // Para imagens JPEG, usar dados raw
-                        if (IsJpegFilter(imageFilter))
-                        {
-                            imageBytes = PdfReader.GetStreamBytesRaw(prStream);
-                        }
-                        else
-                        {
-                            // Para outros formatos, usar dados decodificados
-                            imageBytes = PdfReader.GetStreamBytes(prStream);
-                        }
-                        
-                        // Converter para base64 se temos dados válidos
-                        if (imageBytes != null && imageBytes.Length > 0)
-                        {
-                            image.Base64Data = Convert.ToBase64String(imageBytes);
-                        }
+                        imageBytes = stream.GetBytes(false);
+                    }
+                    else
+                    {
+                        imageBytes = stream.GetBytes(true);
+                    }
+
+                    if (imageBytes != null && imageBytes.Length > 0)
+                    {
+                        image.Base64Data = Convert.ToBase64String(imageBytes);
                     }
                 }
                 catch
                 {
-                    // Se falhar na extração de dados, continuar sem base64
-                    // Isso não deve impedir o resto da análise
+                    // continuar sem base64
                 }
-                
-                // Tamanho já calculado automaticamente pela propriedade EstimatedSize
                 
                 return image;
             }
@@ -143,9 +161,9 @@ namespace FilterPDF
         }
         
         /// <summary>
-        /// Verifica se o filtro é de imagem JPEG
+        /// Verifica se o filtro é de imagem JPEG/JPX
         /// </summary>
-        private static bool IsJpegFilter(iTextSharp.text.pdf.PdfObject filter)
+        private static bool IsJpegFilter(iText.Kernel.Pdf.PdfObject filter)
         {
             if (filter == null) return false;
             
