@@ -1078,6 +1078,8 @@ namespace FilterPDF
             commands["demo-issue"] = new DemonstrateExtractionIssueCommand();
             commands["enhanced-last-session"] = new EnhancedLastSessionCommand();
             commands["forensic-batch"] = new BatchForensicCommand();
+            commands["visualize-structure"] = new VisualizePdfStructureCommand();
+            commands["analyze-objects"] = new AnalyzePdfObjectStructureCommand();
             
             
             // Comando de gerenciamento
