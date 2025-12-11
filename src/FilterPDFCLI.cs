@@ -1066,6 +1066,7 @@ namespace FilterPDF
             commands["inspect"] = new InspectPdfCommand();
             commands["last-session"] = new LastSessionCoordinateCommand();
             commands["deep-objects"] = new DeepPdfObjectAnalyzerCommand();
+            commands["to-unicode"] = new ToUnicodeExtractCommand();
             
             
             // Comando de gerenciamento
