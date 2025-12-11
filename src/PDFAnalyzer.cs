@@ -815,19 +815,49 @@ namespace FilterPDF
         
         private void DetectHeadersFooters(PageAnalysis page)
         {
-            // Obter altura da página
-            var pageSize = reader.GetPageSize(page.PageNumber);
-            float pageHeight = pageSize.Height;
+            // Obter altura da página (iText7 ou legado)
+            float pageHeight;
+            if (i7doc != null)
+            {
+                pageHeight = i7doc.GetPage(page.PageNumber).GetPageSize().GetHeight();
+            }
+            else
+            {
+                pageHeight = reader.GetPageSize(page.PageNumber).Height;
+            }
             
-            // USAR AdvancedHeaderFooterStrategy para HEADERS com altura correta
-            var headerStrategy = new AdvancedHeaderFooterStrategy(true, pageHeight);
-            string headerText = PdfTextExtractor5.GetTextFromPage(reader, page.PageNumber, headerStrategy);
-            page.Headers = ParseHeaderFooterText(headerText);
+            // Prefer iText7 listener; fallback to legacy if something goes wrong
+            if (i7doc != null)
+            {
+                try
+                {
+                    var headerStrategy7 = new FilterPDF.Strategies.AdvancedHeaderFooterStrategy7(true, pageHeight);
+                    var procHeader = new PdfCanvasProcessor(headerStrategy7);
+                    procHeader.ProcessPageContent(i7doc.GetPage(page.PageNumber));
+                    page.Headers = ParseHeaderFooterText(headerStrategy7.GetResultantText());
 
-            // USAR AdvancedHeaderFooterStrategy para FOOTERS com altura correta
+                    var footerStrategy7 = new FilterPDF.Strategies.AdvancedHeaderFooterStrategy7(false, pageHeight);
+                    var procFooter = new PdfCanvasProcessor(footerStrategy7);
+                    procFooter.ProcessPageContent(i7doc.GetPage(page.PageNumber));
+                    page.Footers = ParseHeaderFooterText(footerStrategy7.GetResultantText());
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[WARN] iText7 header/footer failed on page {page.PageNumber}: {ex.Message}, fallback legacy");
+                }
+            }
+
+            // Legacy iTextSharp fallback
+            var pageSize = reader.GetPageSize(page.PageNumber);
+            pageHeight = pageSize.Height;
+            var headerStrategy = new AdvancedHeaderFooterStrategy(true, pageHeight);
+            string headerTextFallback = PdfTextExtractor5.GetTextFromPage(reader, page.PageNumber, headerStrategy);
+            page.Headers = ParseHeaderFooterText(headerTextFallback);
+
             var footerStrategy = new AdvancedHeaderFooterStrategy(false, pageHeight);
-            string footerText = PdfTextExtractor5.GetTextFromPage(reader, page.PageNumber, footerStrategy);
-            page.Footers = ParseHeaderFooterText(footerText);
+            string footerTextFallback = PdfTextExtractor5.GetTextFromPage(reader, page.PageNumber, footerStrategy);
+            page.Footers = ParseHeaderFooterText(footerTextFallback);
         }
         
         private List<string> ParseHeaderFooterText(string text)
