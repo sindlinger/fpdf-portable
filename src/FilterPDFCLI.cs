@@ -1064,6 +1064,7 @@ namespace FilterPDF
             commands["template-diff"] = new TemplateDiffCommand();
             commands["diff"] = new FpdfDiffCommand();
             commands["inspect"] = new InspectPdfCommand();
+            commands["last-session"] = new LastSessionCoordinateCommand();
             
             
             // Comando de gerenciamento
