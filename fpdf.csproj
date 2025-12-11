@@ -53,6 +53,7 @@
     <Compile Remove="src/Strategies/TextStrategyStubs.cs" />
     <Compile Remove="src/Utils/HexTextDecoder.cs" />
     <Compile Remove="src/Processors/AdvancedPDFProcessor.cs" />
+    <Compile Remove="Lixeira/**" />
   </ItemGroup>
 
 </Project>
