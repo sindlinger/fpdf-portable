@@ -125,6 +125,7 @@ namespace FilterPDF
         public int WordCount { get; set; }
         public int LineCount { get; set; }
         public List<FontInfo> Fonts { get; set; } = new List<FontInfo>();
+        public List<LineInfo> Lines { get; set; } = new List<LineInfo>();
         public List<string> Languages { get; set; } = new List<string>();
         public bool HasTables { get; set; }
         public bool HasColumns { get; set; }
@@ -666,5 +667,28 @@ namespace FilterPDF
         public float Y { get; set; }
         public float Width { get; set; }
         public float Height { get; set; }
+    }
+
+    /// <summary>
+    /// Texto por linha com fonte/estilo e coordenadas básicas.
+    /// </summary>
+    public class LineInfo
+    {
+        public string Text { get; set; } = string.Empty;
+        public string Font { get; set; } = string.Empty;
+        public float Size { get; set; }
+        public bool Bold { get; set; }
+        public bool Italic { get; set; }
+        public bool Underline { get; set; }
+        public int RenderMode { get; set; }
+        public float CharSpacing { get; set; }
+        public float WordSpacing { get; set; }
+        public float HorizontalScaling { get; set; }
+        public float Rise { get; set; }
+        public string LineHash { get; set; } = string.Empty;
+        public float X0 { get; set; }
+        public float Y0 { get; set; }
+        public float X1 { get; set; }
+        public float Y1 { get; set; }
     }
 }

@@ -788,4 +788,5 @@ namespace FilterPDF.Models
         /// <summary>Post-processing filters</summary>
         public List<string> PostProcessingFilters { get; set; } = new List<string>();
     }
+
 }

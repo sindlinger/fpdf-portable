@@ -235,54 +235,126 @@ namespace FilterPDF
             {
                 arquivo = System.IO.Path.GetFileName(analysis.FilePath),
                 documentosEncontrados = documents.Count,
-                documentos = documents.Select(d => {
-                    var docObj = new Dictionary<string, object>
-                    {
-                        ["documentNumber"] = d.Number,
-                        ["pages"] = $"{d.StartPage}-{d.EndPage}",
-                        ["documentName"] = ExtractDocumentName(d),
-                        ["content"] = CleanTextForReading(d.FullText ?? d.FirstPageText ?? "")
-                    };
-                    
-                    // ALWAYS add information from active filters
-                    if (filterOptions.ContainsKey("-w") || filterOptions.ContainsKey("--word"))
-                    {
-                        docObj["searchedWords"] = filterOptions.ContainsKey("-w") ? filterOptions["-w"] : filterOptions["--word"];
-                    }
-                    
-                    if (filterOptions.ContainsKey("--not-words"))
-                    {
-                        docObj["excludedWords"] = filterOptions["--not-words"];
-                    }
-                    
-                    if (filterOptions.ContainsKey("-f") || filterOptions.ContainsKey("--font"))
-                    {
-                        docObj["searchedFont"] = filterOptions.ContainsKey("-f") ? filterOptions["-f"] : filterOptions["--font"];
-                        docObj["fontsFound"] = d.Fonts.ToArray();
-                    }
-                    
-                    if (filterOptions.ContainsKey("-r") || filterOptions.ContainsKey("--regex"))
-                    {
-                        docObj["regexPattern"] = filterOptions.ContainsKey("-r") ? filterOptions["-r"] : filterOptions["--regex"];
-                    }
-                    
-                    if (filterOptions.ContainsKey("-v") || filterOptions.ContainsKey("--value") || filterOptions.ContainsKey("value"))
-                    {
-                        docObj["monetaryValues"] = true;
-                    }
-                    
-                    if (filterOptions.ContainsKey("-s") || filterOptions.ContainsKey("--signature"))
-                    {
-                        string signatureFilter = filterOptions.ContainsKey("-s") ? filterOptions["-s"] : filterOptions["--signature"];
-                        docObj["searchedSignature"] = signatureFilter;
-                        docObj["hasSignaturePatterns"] = true;
-                    }
-                    
-                    return docObj;
-                }).ToArray()
+                documentos = documents.Select(d => BuildDocObject(d, analysis, filterOptions)).ToArray()
             };
             
             Console.WriteLine(JsonConvert.SerializeObject(output, Formatting.Indented));
+        }
+
+        private Dictionary<string, object> BuildDocObject(DocumentBoundary d, PDFAnalysisResult analysis, Dictionary<string, string> filterOptions)
+        {
+            bool noLines = filterOptions.ContainsKey("--no-lines");
+
+            var docObj = new Dictionary<string, object>
+            {
+                ["documentNumber"] = d.Number,
+                ["pages"] = $"{d.StartPage}-{d.EndPage}",
+                ["documentName"] = ExtractDocumentName(d),
+                ["content"] = CleanTextForReading(d.FullText ?? d.FirstPageText ?? "")
+            };
+
+            docObj["start_page"] = d.StartPage;
+            docObj["end_page"] = d.EndPage;
+            docObj["doc_pages"] = d.PageCount;
+            docObj["doc_label"] = ExtractDocumentName(d);
+            docObj["doc_type"] = d.DetectedType;
+            docObj["confidence"] = d.Confidence;
+            docObj["has_signature_image"] = d.HasSignatureImage;
+            docObj["fonts"] = d.Fonts.ToArray();
+            docObj["page_size"] = d.PageSize;
+
+            double totalChars = 0;
+            double totalArea = 0;
+            double totalImageArea = 0;
+
+            var pages = new List<object>();
+            for (int p = d.StartPage; p <= d.EndPage; p++)
+            {
+                var page = analysis.Pages[p - 1];
+                var area = page.Size.WidthPoints * page.Size.HeightPoints;
+                totalArea += area;
+                totalChars += page.TextInfo.PageText?.Length ?? 0;
+                double imageArea = page.Resources.Images?.Sum(img => img.Width * img.Height) ?? 0;
+                totalImageArea += imageArea;
+
+                double textDensity = area > 0 ? (page.TextInfo.PageText?.Length ?? 0) / area : 0;
+                double imageDensity = area > 0 ? imageArea / area : 0;
+
+                var pageObj = new Dictionary<string, object>
+                {
+                    ["page_number"] = p,
+                    ["text"] = page.TextInfo.PageText,
+                    ["fonts"] = page.TextInfo.Fonts,
+                    ["font_flags"] = FontFlags(page.TextInfo.Fonts),
+                    ["images"] = page.Resources.Images?.Count ?? 0,
+                    ["text_density"] = textDensity,
+                    ["image_density"] = imageDensity
+                };
+
+                if (!noLines && page.TextInfo.Lines != null && page.TextInfo.Lines.Count > 0)
+                {
+                    pageObj["lines"] = page.TextInfo.Lines.Select(l => new {
+                        l.Text,
+                        l.Font,
+                        l.Size,
+                        l.Bold,
+                        l.Italic,
+                        l.Underline,
+                        l.RenderMode,
+                        l.CharSpacing,
+                        l.WordSpacing,
+                        l.HorizontalScaling,
+                        l.Rise,
+                        l.LineHash,
+                        l.X0,
+                        l.Y0,
+                        l.X1,
+                        l.Y1
+                    }).ToList();
+                }
+
+                pages.Add(pageObj);
+            }
+
+            docObj["pages_detail"] = pages;
+            docObj["doc_text_density"] = totalArea > 0 ? totalChars / totalArea : 0;
+            docObj["doc_image_density"] = totalArea > 0 ? totalImageArea / totalArea : 0;
+            docObj["font_flags_doc"] = FontFlags(d.Fonts.Select(f => new FontInfo { Name = f }).ToList());
+
+            // filters info
+            if (filterOptions.ContainsKey("-w") || filterOptions.ContainsKey("--word"))
+                docObj["searchedWords"] = filterOptions.ContainsKey("-w") ? filterOptions["-w"] : filterOptions["--word"];
+            if (filterOptions.ContainsKey("--not-words"))
+                docObj["excludedWords"] = filterOptions["--not-words"];
+            if (filterOptions.ContainsKey("-f") || filterOptions.ContainsKey("--font"))
+            {
+                docObj["searchedFont"] = filterOptions.ContainsKey("-f") ? filterOptions["-f"] : filterOptions["--font"];
+                docObj["fontsFound"] = d.Fonts.ToArray();
+            }
+            if (filterOptions.ContainsKey("-r") || filterOptions.ContainsKey("--regex"))
+                docObj["regexPattern"] = filterOptions.ContainsKey("-r") ? filterOptions["-r"] : filterOptions["--regex"];
+            if (filterOptions.ContainsKey("-v") || filterOptions.ContainsKey("--value") || filterOptions.ContainsKey("value"))
+                docObj["monetaryValues"] = true;
+            if (filterOptions.ContainsKey("-s") || filterOptions.ContainsKey("--signature"))
+            {
+                string signatureFilter = filterOptions.ContainsKey("-s") ? filterOptions["-s"] : filterOptions["--signature"];
+                docObj["searchedSignature"] = signatureFilter;
+                docObj["hasSignaturePatterns"] = true;
+            }
+
+            return docObj;
+        }
+
+        private Dictionary<string, bool> FontFlags(List<FontInfo> fonts)
+        {
+            var lower = fonts?.Select(f => f.Name?.ToLower() ?? "").ToList() ?? new List<string>();
+            return new Dictionary<string, bool>
+            {
+                ["has_bold"] = lower.Any(f => f.Contains("bold") || f.Contains("black") || f.Contains("heavy")),
+                ["has_italic"] = lower.Any(f => f.Contains("italic") || f.Contains("oblique") || f.Contains("slant")),
+                ["has_mono"] = lower.Any(f => f.Contains("mono") || f.Contains("courier") || f.Contains("consolas") || f.Contains("fixed")),
+                ["has_serif"] = lower.Any(f => f.Contains("serif") || f.Contains("times") || f.Contains("georgia") || f.Contains("palatino"))
+            };
         }
         
         private void OutputDetailed(List<DocumentBoundary> documents, PDFAnalysisResult analysis, bool verbose)

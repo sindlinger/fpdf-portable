@@ -25,7 +25,9 @@
 
   <ItemGroup>
     <PackageReference Include="BouncyCastle" Version="1.8.9" />
+    <!-- Mantemos iTextSharp para caminhos legados enquanto migramos; adicionamos iText7 para o novo coletor de linhas -->
     <PackageReference Include="iTextSharp" Version="5.5.13.3" />
+    <PackageReference Include="itext7" Version="7.2.5" />
     <!-- Substituímos System.Data.SQLite por Microsoft.Data.Sqlite (suporta FTS5 no Linux) -->
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="7.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.1" />

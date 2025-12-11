@@ -808,6 +808,26 @@ namespace FilterPDF
                     string inputFile = resolvedFile;
                     string cmdName = args[1].ToLower();
                     
+                    // Comando direto de documentos (não herdava de Command)
+                    if (cmdName == "documents")
+                    {
+                        var filterOptions = new Dictionary<string, string>();
+                        var outputOptions = new Dictionary<string, string>();
+                        // Parse options simples: manter --no-lines se presente
+                        for (int i = 2; i < args.Length; i++)
+                        {
+                            var a = args[i];
+                            if (a == "--no-lines") filterOptions["--no-lines"] = "1";
+                            else if (a == "--min-pages" && i + 1 < args.Length) { filterOptions["--min-pages"] = args[++i]; }
+                            else if (a == "--min-confidence" && i + 1 < args.Length) { filterOptions["--min-confidence"] = args[++i]; }
+                            else if (a == "-v" || a == "--verbose") outputOptions[a] = "1";
+                            else if (a == "--format" && i + 1 < args.Length) { outputOptions["-F"] = args[++i]; }
+                        }
+                        var cmd = new FpdfDocumentsCommand();
+                        cmd.Execute(inputFile, null, filterOptions, outputOptions);
+                        return;
+                    }
+
                     if (commands.ContainsKey(cmdName))
                     {
                         // Para o comando load, garantir que só receba arquivos PDF

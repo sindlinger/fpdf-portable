@@ -7,6 +7,12 @@ using System.Text.RegularExpressions;
 using iTextSharp.text.pdf;
 using iTextSharp.text.pdf.parser;
 using FilterPDF.Strategies;
+using PdfReader7 = iText.Kernel.Pdf.PdfReader;
+using PdfDocument7 = iText.Kernel.Pdf.PdfDocument;
+using PdfTextExtractor7 = iText.Kernel.Pdf.Canvas.Parser.PdfTextExtractor;
+using iText.Kernel.Pdf.Canvas.Parser;
+using iText.Kernel.Pdf.Canvas.Parser.Listener;
+using PdfTextExtractor5 = iTextSharp.text.pdf.parser.PdfTextExtractor;
 
 namespace FilterPDF
 {
@@ -19,14 +25,31 @@ namespace FilterPDF
         private PdfReader reader;
         private string pdfPath;
         private bool ownsReader;
+        private PdfDocument7? i7doc;
+        private bool ownsDoc7;
+        private readonly bool forceLegacyText;
         
         public PDFAnalyzer(string pdfPath)
         {
             this.pdfPath = pdfPath;
+            this.forceLegacyText = Environment.GetEnvironmentVariable("FPDF_TEXT_LEGACY") == "1";
             Console.WriteLine($"    [PDFAnalyzer] Opening PDF: {Path.GetFileName(pdfPath)}");
             // Use PdfAccessManager for centralized access
             this.reader = PdfAccessManager.GetReader(pdfPath);
             this.ownsReader = false;
+            // Abrir iText7 para extração avançada
+            try
+            {
+                var r7 = new PdfReader7(pdfPath);
+                this.i7doc = new PdfDocument7(r7);
+                this.ownsDoc7 = true;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[WARN] iText7 open failed, fallback to iTextSharp only: {ex.Message}");
+                this.i7doc = null;
+                this.ownsDoc7 = false;
+            }
             Console.WriteLine($"    [PDFAnalyzer] PDF opened successfully. Pages: {reader.NumberOfPages}");
         }
         
@@ -36,8 +59,20 @@ namespace FilterPDF
         public PDFAnalyzer(string pdfPath, PdfReader reader)
         {
             this.pdfPath = pdfPath;
+            this.forceLegacyText = Environment.GetEnvironmentVariable("FPDF_TEXT_LEGACY") == "1";
             this.reader = reader;
             this.ownsReader = false;
+            try
+            {
+                var r7 = new PdfReader7(pdfPath);
+                this.i7doc = new PdfDocument7(r7);
+                this.ownsDoc7 = true;
+            }
+            catch
+            {
+                this.i7doc = null;
+                this.ownsDoc7 = false;
+            }
             Console.WriteLine($"    [PDFAnalyzer] Using existing reader. Pages: {reader.NumberOfPages}");
         }
         
@@ -108,6 +143,10 @@ namespace FilterPDF
                 if (ownsReader && reader != null)
                 {
                     reader.Close();
+                }
+                if (ownsDoc7 && i7doc != null)
+                {
+                    i7doc.Close();
                 }
             }
             
@@ -194,9 +233,26 @@ namespace FilterPDF
         
         private TextInfo AnalyzePageText(int pageNum)
         {
-            // USAR texto direto sem reconstrução - NÃO ALTERAR O TEXTO ORIGINAL
-            string text = PdfTextExtractor.GetTextFromPage(reader, pageNum);
-            
+            // USAR texto direto; preferir iText7, fallback para iTextSharp
+            string text = string.Empty;
+            bool usedIText7 = false;
+            if (!forceLegacyText && i7doc != null)
+            {
+                try
+                {
+                    text = PdfTextExtractor7.GetTextFromPage(i7doc.GetPage(pageNum));
+                    usedIText7 = true;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[WARN] iText7 text extract failed on page {pageNum}: {ex.Message}");
+                }
+            }
+            if (!usedIText7)
+            {
+                text = PdfTextExtractor5.GetTextFromPage(reader, pageNum);
+            }
+
             var textInfo = new TextInfo
             {
                 CharacterCount = text.Length,
@@ -214,7 +270,20 @@ namespace FilterPDF
             
             // EXTRAÇÃO COMPLETA DE FONTES - TODAS as instâncias com tamanhos diferentes
             textInfo.Fonts = ExtractAllPageFontsWithSizes(pageNum);
-            
+
+            // EXTRAÇÃO DE LINHAS COM FONTE/ESTILO/COORDENADAS (usando iText7)
+            try
+            {
+                if (i7doc != null)
+                {
+                    var collector = new Strategies.IText7LineCollector();
+                    var processor = new PdfCanvasProcessor(collector);
+                    processor.ProcessPageContent(i7doc.GetPage(pageNum));
+                    textInfo.Lines = collector.GetLines();
+                }
+            }
+            catch { }
+
             return textInfo;
         }
         
@@ -311,7 +380,7 @@ namespace FilterPDF
                                     if (sizes.Count == 0)
                                     {
                                         var fontStrategy = new CompleteFontAnalysisStrategy();
-                                        PdfTextExtractor.GetTextFromPage(reader, pageNum, fontStrategy);
+                                        PdfTextExtractor5.GetTextFromPage(reader, pageNum, fontStrategy);
                                         var strategySizes = fontStrategy.GetFontSizes(fontName);
                                         if (strategySizes.Count > 0)
                                             sizes.UnionWith(strategySizes);
@@ -566,12 +635,12 @@ namespace FilterPDF
             
             // USAR AdvancedHeaderFooterStrategy para HEADERS com altura correta
             var headerStrategy = new AdvancedHeaderFooterStrategy(true, pageHeight);
-            string headerText = PdfTextExtractor.GetTextFromPage(reader, page.PageNumber, headerStrategy);
+            string headerText = PdfTextExtractor5.GetTextFromPage(reader, page.PageNumber, headerStrategy);
             page.Headers = ParseHeaderFooterText(headerText);
 
             // USAR AdvancedHeaderFooterStrategy para FOOTERS com altura correta
             var footerStrategy = new AdvancedHeaderFooterStrategy(false, pageHeight);
-            string footerText = PdfTextExtractor.GetTextFromPage(reader, page.PageNumber, footerStrategy);
+            string footerText = PdfTextExtractor5.GetTextFromPage(reader, page.PageNumber, footerStrategy);
             page.Footers = ParseHeaderFooterText(footerText);
         }
         
@@ -589,7 +658,7 @@ namespace FilterPDF
         private void DetectDocumentReferences(PageAnalysis page)
         {
             var references = new List<string>();
-            string text = PdfTextExtractor.GetTextFromPage(reader, page.PageNumber);
+            string text = PdfTextExtractor5.GetTextFromPage(reader, page.PageNumber);
 
             // Padrões do código antigo - EXATAMENTE como solicitado
             var patterns = new[] {
