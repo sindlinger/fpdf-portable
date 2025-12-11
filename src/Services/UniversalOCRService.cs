@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using FilterPDF.Utils;
-using iTextSharp.text.pdf;
+using iText.Kernel.Pdf;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -152,26 +152,14 @@ namespace FilterPDF.Services
         {
             try
             {
-                using (var reader = new PdfReader(pdfPath))
+                using var src = new PdfDocument(new PdfReader(pdfPath));
+                using var ms = new MemoryStream();
+                using (var dest = new PdfDocument(new PdfWriter(ms)))
                 {
-                    using (var memoryStream = new MemoryStream())
-                    {
-                        using (var document = new iTextSharp.text.Document())
-                        {
-                            using (var writer = PdfWriter.GetInstance(document, memoryStream))
-                            {
-                                document.Open();
-                                var cb = writer.DirectContent;
-                                var page = writer.GetImportedPage(reader, pageNumber);
-                                cb.AddTemplate(page, 0, 0);
-                                document.Close();
-                            }
-                        }
-                        
-                        byte[] pageBytes = memoryStream.ToArray();
-                        return Convert.ToBase64String(pageBytes);
-                    }
+                    var copied = src.GetPage(pageNumber).CopyTo(dest);
+                    dest.AddPage(copied);
                 }
+                return Convert.ToBase64String(ms.ToArray());
             }
             catch (Exception ex)
             {
