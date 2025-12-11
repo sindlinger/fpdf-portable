@@ -1068,6 +1068,7 @@ namespace FilterPDF
             commands["deep-objects"] = new DeepPdfObjectAnalyzerCommand();
             commands["to-unicode"] = new ToUnicodeExtractCommand();
             commands["create-test"] = new CreateTestPdfCommand();
+            commands["show-moddate"] = new ShowModDateCommand();
             
             
             // Comando de gerenciamento
