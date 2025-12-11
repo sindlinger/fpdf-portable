@@ -1060,8 +1060,9 @@ namespace FilterPDF
             commands["templates"] = new CommandWrapper("templates", "Extract fields using template bboxes",
                 args => { var newArgs = new List<string> { "templates" }; newArgs.AddRange(args); /* filterCmd.Execute(newArgs.ToArray()); */ });
 
-            // New template diff command (iText7)
+            // Diferenças de template (iText7)
             commands["template-diff"] = new TemplateDiffCommand();
+            commands["diff"] = new FpdfDiffCommand();
             
             
             // Comando de gerenciamento
