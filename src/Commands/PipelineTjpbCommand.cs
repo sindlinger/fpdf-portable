@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using FilterPDF.Utils;
@@ -189,6 +190,7 @@ namespace FilterPDF.Commands
             double blankRatio = 1 - textDensity;
 
             var docType = string.IsNullOrEmpty(d.DetectedType) ? "heuristic" : d.DetectedType;
+            var docSummary = BuildDocSummary(d, pdfPath, docText, header, footer, docBookmarks);
 
             return new Dictionary<string, object>
             {
@@ -214,8 +216,102 @@ namespace FilterPDF.Commands
                 ["header"] = header,
                 ["footer"] = footer,
                 ["bookmarks"] = docBookmarks,
-                ["anexos_bookmarks"] = anexos
+                ["anexos_bookmarks"] = anexos,
+                ["doc_summary"] = docSummary
             };
+        }
+
+        private Dictionary<string, object> BuildDocSummary(DocumentBoundary d, string pdfPath, string fullText, string header, string footer, List<Dictionary<string, object>> bookmarks)
+        {
+            string docId = $"{Path.GetFileNameWithoutExtension(pdfPath)}_{d.StartPage}-{d.EndPage}";
+            string originMain = ExtractOrigin(header, bookmarks, fullText);
+            string originSub = ExtractSubOrigin(header, bookmarks, fullText, originMain);
+            string signer = ExtractSigner(fullText, footer);
+            string signedAt = ExtractSignedAt(fullText, footer);
+            string template = string.IsNullOrWhiteSpace(d.DetectedType) ? "unknown" : d.DetectedType;
+
+            return new Dictionary<string, object>
+            {
+                ["doc_id"] = docId,
+                ["origin_main"] = originMain,
+                ["origin_sub"] = originSub,
+                ["signer"] = signer,
+                ["signed_at"] = signedAt,
+                ["template"] = template
+            };
+        }
+
+        private string ExtractOrigin(string header, List<Dictionary<string, object>> bookmarks, string text)
+        {
+            // 1) header em maiúsculas é o melhor candidato
+            if (!string.IsNullOrWhiteSpace(header))
+            {
+                var lines = header.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 3).ToList();
+                var upper = lines.FirstOrDefault(l => l.All(c => !char.IsLetter(c) || char.IsUpper(c)));
+                if (!string.IsNullOrWhiteSpace(upper)) return upper;
+                if (lines.Count > 0) return lines[0];
+            }
+
+            // 2) bookmark de nível 1
+            var bm = bookmarks.FirstOrDefault(b =>
+            {
+                if (b.TryGetValue("level", out var lvlObj) && int.TryParse(lvlObj?.ToString(), out var lvl))
+                    return lvl <= 1;
+                return false;
+            });
+            if (bm != null && bm.TryGetValue("title", out var t) && t != null)
+                return t.ToString() ?? "";
+
+            // 3) primeira linha do texto
+            var firstLine = (text ?? "").Split('\n').FirstOrDefault() ?? "";
+            return firstLine;
+        }
+
+        private string ExtractSubOrigin(string header, List<Dictionary<string, object>> bookmarks, string text, string originMain)
+        {
+            if (!string.IsNullOrWhiteSpace(header))
+            {
+                var lines = header.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 3).ToList();
+                if (lines.Count > 1)
+                {
+                    var second = lines.Skip(1).FirstOrDefault(l => !string.Equals(l, originMain, StringComparison.OrdinalIgnoreCase));
+                    if (!string.IsNullOrWhiteSpace(second)) return second;
+                }
+            }
+
+            var bmSub = bookmarks.Skip(1).FirstOrDefault();
+            if (bmSub != null && bmSub.TryGetValue("title", out var t) && t != null)
+                return t.ToString() ?? "";
+
+            // fallback: segunda linha do texto
+            var secondLine = (text ?? "").Split('\n').Skip(1).FirstOrDefault() ?? "";
+            return secondLine;
+        }
+
+        private string ExtractSigner(string text, string footer)
+        {
+            var source = $"{text}\n{footer}";
+            var match = Regex.Match(source, @"assinado(?:\s+digitalmente|\s+eletronicamente)?\s+por\s+([\\p{L} .'’-]+)", RegexOptions.IgnoreCase);
+            if (match.Success) return match.Groups[1].Value.Trim();
+
+            // Digital signature block (X.509)
+            var sigMatch = Regex.Match(source, @"Assinatura(?:\s+)?:(.+)", RegexOptions.IgnoreCase);
+            if (sigMatch.Success) return sigMatch.Groups[1].Value.Trim();
+            return "";
+        }
+
+        private string ExtractSignedAt(string text, string footer)
+        {
+            var source = $"{text}\n{footer}";
+            var match = Regex.Match(source, @"\b(\d{1,2}[\\/]\d{1,2}[\\/]\d{2,4})\b");
+            if (match.Success)
+            {
+                var raw = match.Groups[1].Value;
+                if (DateTime.TryParseExact(raw, new[] { "dd/MM/yyyy", "d/M/yyyy", "dd-MM-yyyy", "d-M-yyyy" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+                    return dt.ToString("yyyy-MM-dd");
+                return raw;
+            }
+            return "";
         }
 
         private List<Dictionary<string, object>> ExtractBookmarksForRange(PDFAnalysisResult analysis, int startPage, int endPage)
