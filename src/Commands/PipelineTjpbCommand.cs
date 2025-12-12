@@ -563,10 +563,105 @@ namespace FilterPDF.Commands
 
         private static readonly Regex CnjRegex = new Regex(@"\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b", RegexOptions.Compiled);
         private static readonly Regex SeiLikeRegex = new Regex(@"\b\d{6,}\b", RegexOptions.Compiled);
+        private static readonly Regex CpfRegex = new Regex(@"\b\d{3}\.\d{3}\.\d{3}-\d{2}\b", RegexOptions.Compiled);
+        private static readonly Regex MoneyRegex = new Regex(@"R\$ ?\d{1,3}(\.\d{3})*,\d{2}", RegexOptions.Compiled);
+        private static readonly Regex DateNumRegex = new Regex(@"\b[0-3]?\d/[01]?\d/\d{2,4}\b", RegexOptions.Compiled);
 
         private List<Dictionary<string, object>> ExtractFields(string fullText, List<Dictionary<string, object>> words)
         {
             var list = new List<Dictionary<string, object>>();
+
+            // PARTES (Promovente / Promovido)
+            var reqReq = Regex.Match(fullText, @"requerente\s*[:\-]?\s*(.+?)\s+requerid[oa]\s*[:\-]?\s*(.+)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (reqReq.Success)
+                AddTwoFields(list, "PROMOVENTE", reqReq.Groups[1].Value, "PROMOVIDO", reqReq.Groups[2].Value, "requerente_requerido");
+
+            var autorReu = Regex.Match(fullText, @"autor\s*[:\-]?\s*(.+?)\s+r[eé]u\s*[:\-]?\s*(.+)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (autorReu.Success)
+                AddTwoFields(list, "PROMOVENTE", autorReu.Groups[1].Value, "PROMOVIDO", autorReu.Groups[2].Value, "autor_reu");
+
+            var movidoPor = Regex.Match(fullText, @"movid[oa]\s+por\s+(.+?)\s+em\s+face\s+de\s+(.+)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (movidoPor.Success)
+                AddTwoFields(list, "PROMOVENTE", movidoPor.Groups[1].Value, "PROMOVIDO", movidoPor.Groups[2].Value, "movido_por");
+
+            // PERITO / CPF / PROFISSÃO
+            var peritoLinha = Regex.Match(fullText, @"perit[oa]\s*[:\-]?\s*([A-ZÁÂÃÀÉÊÍÓÔÕÚÇ][A-Za-zÁÂÃÀÉÊÍÓÔÕÚÇ\s\.\-]{5,})", RegexOptions.IgnoreCase);
+            if (peritoLinha.Success)
+                list.Add(MakeField("PERITO", peritoLinha.Groups[1].Value, "perito_linha"));
+
+            var interessado = Regex.Match(fullText, @"interessad[oa]\s*[:\-]?\s*([A-ZÁÂÃÀÉÊÍÓÔÕÚÇ][A-Za-zÁÂÃÀÉÊÍÓÔÕÚÇ\s\.\-]{5,})", RegexOptions.IgnoreCase);
+            if (interessado.Success)
+                list.Add(MakeField("PERITO", interessado.Groups[1].Value, "interessado"));
+
+            var cpfMatch = CpfRegex.Match(fullText);
+            if (cpfMatch.Success)
+                list.Add(MakeField("CPF/CNPJ", cpfMatch.Value, "cpf"));
+
+            var prof = Regex.Match(fullText, @"perit[oa][^\n]{0,40}?(m[eé]dic[oa]|psic[oó]log[oa]|engenheir[oa](?:\s+civil)?|odont[oó]log[oa]|contabil|grafot[eé]cnico|assistente\s+social)", RegexOptions.IgnoreCase);
+            if (prof.Success)
+                list.Add(MakeField("PROFISSÃO", prof.Groups[1].Value, "profissao_no_despacho"));
+            else
+            {
+                var profIso = Regex.Match(fullText, @"(m[eé]dic[oa]|psic[oó]log[oa]|engenheir[oa](?:\s+civil)?|odont[oó]log[oa]|contabil|grafot[eé]cnico|assistente\s+social)", RegexOptions.IgnoreCase);
+                if (profIso.Success)
+                    list.Add(MakeField("PROFISSÃO", profIso.Groups[1].Value, "profissao_isolada"));
+            }
+
+            // VALOR TABELADO / FATOR (honorários)
+            var fator = Regex.Match(fullText, @"fator\s*[:\-]?\s*([A-Za-z0-9]+)", RegexOptions.IgnoreCase);
+            if (fator.Success)
+                list.Add(MakeField("Fator", fator.Groups[1].Value, "fator_inline"));
+
+            var valorTab = MoneyRegex.Match(fullText);
+            if (valorTab.Success)
+                list.Add(MakeField("Valor Tabelado Anexo I - Tabela I", valorTab.Value, "valor_tabelado"));
+
+            // VALORES ARBITRADOS / DATA AUTORIZAÇÃO / ADIANTAMENTO
+            var valArb = Regex.Match(fullText, @"valor\s+dos\s+honor[aá]rios\s+(?:finais|arbitrados)[^\d]*(R\\$ ?\\d{1,3}(?:\\.\\d{3})*,\\d{2})", RegexOptions.IgnoreCase);
+            if (valArb.Success)
+                list.Add(MakeField("VALOR ARBITRADO - JZ", valArb.Groups[1].Value, "valor_arbitrado"));
+
+            var dataAut = Regex.Match(fullText, @"autoriz[aç][aã]o\s+da\s+despesa[^\d]*(\d{1,2}/\d{1,2}/\d{2,4})", RegexOptions.IgnoreCase);
+            if (dataAut.Success)
+                list.Add(MakeField("DATA DA AUTORIZACAO DA DESPESA", dataAut.Groups[1].Value, "data_autorizacao"));
+
+            var adiant = Regex.Match(fullText, @"adiantamento[^\d]*(R\\$ ?\\d{1,3}(?:\\.\\d{3})*,\\d{2})", RegexOptions.IgnoreCase);
+            if (adiant.Success)
+                list.Add(MakeField("ADIANTAMENTO", adiant.Groups[1].Value, "adiantamento"));
+
+            // JUÍZO / COMARCA
+            var juizoLinha = Regex.Match(fullText, @"ju[ií]zo\s*[:\-]?\s*([^\n]+)", RegexOptions.IgnoreCase);
+            if (juizoLinha.Success)
+                list.Add(MakeField("JUÍZO", juizoLinha.Groups[1].Value, "juizo_linha"));
+
+            var orgaoJulg = Regex.Match(fullText, @"[óo]rg[aã]o julgador\s*[:\-]?\s*([^\n]+)", RegexOptions.IgnoreCase);
+            if (orgaoJulg.Success)
+                list.Add(MakeField("JUÍZO", orgaoJulg.Groups[1].Value, "orgao_julgador"));
+
+            var varaComarca = Regex.Match(fullText, @"(\d+\s*a?\s*vara[^\n]{0,80}?)\s+da\s+comarca\s+de\s+([\w\sçãáéíóúãõç]+)", RegexOptions.IgnoreCase);
+            if (varaComarca.Success)
+            {
+                list.Add(MakeField("JUÍZO", varaComarca.Groups[1].Value, "vara_comarca_dupla"));
+                list.Add(MakeField("COMARCA", varaComarca.Groups[2].Value, "vara_comarca_dupla"));
+            }
+
+            if (Regex.IsMatch(fullText, @"comarca da capital", RegexOptions.IgnoreCase))
+                list.Add(MakeField("COMARCA", "João Pessoa", "comarca_capital"));
+
+            var comarcaDe = Regex.Match(fullText, @"comarca\s+de\s+([\w\sçãáéíóúãõç]+)", RegexOptions.IgnoreCase);
+            if (comarcaDe.Success)
+                list.Add(MakeField("COMARCA", comarcaDe.Groups[1].Value, "comarca_de"));
+
+            // ESPECIALIDADE / ESPÉCIE (simplificada, com keywords)
+            var especMatch = Regex.Match(fullText, @"esp[eé]cie\s+de\s+per[ií]cia\s*[:\-]?\s*([^\n]+)", RegexOptions.IgnoreCase);
+            if (especMatch.Success)
+                list.Add(MakeField("ESPÉCIE DE PERÍCIA", especMatch.Groups[1].Value, "especie_inline"));
+            if (Regex.IsMatch(fullText, @"\\blaudo\\b", RegexOptions.IgnoreCase))
+                list.Add(MakeField("ESPÉCIE DE PERÍCIA", "LAUDO", "laudo_kw"));
+            if (Regex.IsMatch(fullText, @"grafo[té]cnic", RegexOptions.IgnoreCase))
+                list.Add(MakeField("ESPECIALIDADE", "GRAFOTÉCNICO", "especialidade_kw"));
+            if (Regex.IsMatch(fullText, @"m[eé]dic", RegexOptions.IgnoreCase))
+                list.Add(MakeField("ESPECIALIDADE", "MÉDICA", "especialidade_kw"));
 
             // PROCESSO JUDICIAL (CNJ)
             var cnjMatch = CnjRegex.Match(fullText);
@@ -602,6 +697,25 @@ namespace FilterPDF.Commands
             }
 
             return list;
+        }
+
+        private void AddTwoFields(List<Dictionary<string, object>> list, string f1, string v1, string f2, string v2, string pattern)
+        {
+            if (!string.IsNullOrWhiteSpace(v1))
+                list.Add(MakeField(f1, v1, pattern));
+            if (!string.IsNullOrWhiteSpace(v2))
+                list.Add(MakeField(f2, v2, pattern));
+        }
+
+        private Dictionary<string, object> MakeField(string name, string value, string pattern)
+        {
+            return new Dictionary<string, object>
+            {
+                ["name"] = name,
+                ["value"] = value.Trim(),
+                ["page"] = 0,
+                ["pattern"] = pattern
+            };
         }
 
         private int FindPageForText(List<Dictionary<string, object>> words, string text)
