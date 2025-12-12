@@ -31,6 +31,7 @@ namespace FilterPDF
         // public PDFACharacteristics PDFACharacteristics { get; set; }
         public SecurityInfo SecurityInfo { get; set; } = new SecurityInfo();
         public AccessibilityInfo AccessibilityInfo { get; set; } = new AccessibilityInfo();
+        public ModificationDates ModificationDates { get; set; } = new ModificationDates();
     }
     
     /// <summary>
@@ -210,6 +211,8 @@ namespace FilterPDF
         public DateTime? ModificationDate { get; set; }
         public float X { get; set; }
         public float Y { get; set; }
+        public string FileName { get; set; } = "";
+        public long? FileSize { get; set; }
     }
     
     /// <summary>
@@ -257,6 +260,15 @@ namespace FilterPDF
         public int AttachmentCount { get; set; }
         public bool HasMultimedia { get; set; }
         public List<string> EmbeddedFiles { get; set; } = new List<string>();
+        public List<EmbeddedFileInfo> EmbeddedFileInfos { get; set; } = new List<EmbeddedFileInfo>();
+    }
+
+    public class EmbeddedFileInfo
+    {
+        public string Name { get; set; } = "";
+        public long? Size { get; set; }
+        public string Source { get; set; } = "EmbeddedFiles"; // EmbeddedFiles or FileAttachment
+        public int? Page { get; set; } // se vier de anotação, página
     }
     
     /// <summary>
@@ -294,6 +306,8 @@ namespace FilterPDF
         public List<EditHistoryEntry> EditHistory { get; set; } = new List<EditHistoryEntry>();
         public string CreatorTool { get; set; } = "";
         public DateTime? MetadataDate { get; set; }
+        public DateTime? CreateDate { get; set; }
+        public DateTime? ModifyDate { get; set; }
         public string DocumentID { get; set; } = "";
         public string InstanceID { get; set; } = "";
         public string PDFAConformance { get; set; } = "";
@@ -360,6 +374,16 @@ namespace FilterPDF
         public string Usage { get; set; } = "";
         public int Order { get; set; }
         public List<OptionalContentGroup> SubGroups { get; set; } = new List<OptionalContentGroup>();
+    }
+
+    public class ModificationDates
+    {
+        public DateTime? InfoCreationDate { get; set; }
+        public DateTime? InfoModDate { get; set; }
+        public DateTime? XmpCreateDate { get; set; }
+        public DateTime? XmpModifyDate { get; set; }
+        public List<DateTime?> SignatureDates { get; set; } = new List<DateTime?>();
+        public List<DateTime?> AnnotationDates { get; set; } = new List<DateTime?>();
     }
     
     /// <summary>

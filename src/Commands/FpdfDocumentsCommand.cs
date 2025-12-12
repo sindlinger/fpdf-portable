@@ -259,6 +259,7 @@ namespace FilterPDF
             docObj["doc_pages"] = d.PageCount;
             docObj["doc_label"] = ExtractDocumentName(d);
             docObj["doc_type"] = d.DetectedType;
+            docObj["modification_dates"] = analysis.ModificationDates;
             docObj["confidence"] = d.Confidence;
             docObj["has_signature_image"] = d.HasSignatureImage;
             docObj["fonts"] = d.Fonts.ToArray();

@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using FilterPDF.Utils;
+using System.Text;
 
 namespace FilterPDF.Commands
 {
@@ -34,6 +35,32 @@ namespace FilterPDF.Commands
             bool splitAnexos = false; // backward compat (anexos now covered by bookmark docs)
             int maxBookmarkPages = 30; // agora interno, sem flag na CLI
             string? pgUri = null;
+            bool pgStoreJson = false;
+            // Localiza configs/fields e docid/layout_hashes.csv respeitando cwd ou pasta do binário.
+            string cwd = Directory.GetCurrentDirectory();
+            string exeBase = AppContext.BaseDirectory;
+            string[] fieldsCandidates =
+            {
+                Path.Combine(cwd, "configs/fields"),
+                Path.Combine(cwd, "../configs/fields"),
+                Path.Combine(cwd, "../../configs/fields"),
+                Path.GetFullPath(Path.Combine(exeBase, "../../../../configs/fields"))
+            };
+            string[] hashCandidates =
+            {
+                Path.Combine(cwd, "docid/layout_hashes.csv"),
+                Path.Combine(cwd, "../docid/layout_hashes.csv"),
+                Path.Combine(cwd, "../../docid/layout_hashes.csv"),
+                Path.GetFullPath(Path.Combine(exeBase, "../../../../docid/layout_hashes.csv"))
+            };
+
+            string fieldScriptsPath = fieldsCandidates.FirstOrDefault(Directory.Exists)
+                                      ?? throw new DirectoryNotFoundException("configs/fields não encontrado");
+            string layoutHashesPath = hashCandidates.FirstOrDefault(File.Exists) ?? "";
+
+            var fieldScripts = FieldScripts.LoadScripts(fieldScriptsPath);
+            if (!string.IsNullOrEmpty(layoutHashesPath))
+                DocIdClassifier.LoadHashes(layoutHashesPath);
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -41,6 +68,7 @@ namespace FilterPDF.Commands
                 if (args[i] == "--output" && i + 1 < args.Length) output = args[i + 1];
                 if (args[i] == "--split-anexos") splitAnexos = true;
                 if (args[i] == "--pg-uri" && i + 1 < args.Length) pgUri = args[i + 1];
+                if (args[i] == "--pg-store-json") pgStoreJson = true;
             }
 
             var dir = new DirectoryInfo(inputDir);
@@ -65,7 +93,7 @@ namespace FilterPDF.Commands
                         try
                         {
                             var classifier = new BookmarkClassifier();
-                            PgDocStore.UpsertProcess(pgUri, pdf.FullName, analysis, classifier, storeJson: false);
+                            PgDocStore.UpsertProcess(pgUri, pdf.FullName, analysis, classifier, storeJson: pgStoreJson);
                         }
                         catch (Exception ex)
                         {
@@ -78,13 +106,13 @@ namespace FilterPDF.Commands
 
                     foreach (var d in docs)
                     {
-                        var obj = BuildDocObject(d, analysis, pdf.FullName);
+                        var obj = BuildDocObject(d, analysis, pdf.FullName, fieldScripts);
                         allDocs.Add(obj);
 
                         // Legacy split-anexos now redundant; kept for compatibility
                         if (splitAnexos && d.DetectedType == "anexo")
                         {
-                            var anexosChildren = SplitAnexos(d, analysis, pdf.FullName);
+                        var anexosChildren = SplitAnexos(d, analysis, pdf.FullName, fieldScripts);
                             allDocs.AddRange(anexosChildren);
                         }
                     }
@@ -104,12 +132,14 @@ namespace FilterPDF.Commands
 
         public override void ShowHelp()
         {
-            Console.WriteLine("fpdf pipeline-tjpb --input-dir <dir> --output fpdf.json [--split-anexos]");
+            Console.WriteLine("fpdf pipeline-tjpb --input-dir <dir> --output fpdf.json [--split-anexos] [--pg-uri <uri>] [--pg-store-json]");
             Console.WriteLine("Gera JSON compatível com tmp/pipeline/step2/fpdf.json para o CI Dashboard.");
             Console.WriteLine("--split-anexos: cria subdocumentos a partir de bookmarks 'Anexo/Anexos' dentro de cada documento.");
+            Console.WriteLine("--pg-uri: salva processo/documentos/páginas no Postgres (usa schema tools/pg_ddl_new.sql).");
+            Console.WriteLine("--pg-store-json: além dos agregados, persiste o JSON completo da análise (pode ser grande).");
         }
 
-        private Dictionary<string, object> BuildDocObject(DocumentBoundary d, PDFAnalysisResult analysis, string pdfPath)
+        private Dictionary<string, object> BuildDocObject(DocumentBoundary d, PDFAnalysisResult analysis, string pdfPath, List<FieldScript> scripts)
         {
             var docText = string.Join("\n", Enumerable.Range(d.StartPage, d.PageCount)
                                                       .Select(p => analysis.Pages[p - 1].TextInfo.PageText ?? ""));
@@ -126,6 +156,8 @@ namespace FilterPDF.Commands
                 foreach (var f in analysis.Pages[p - 1].TextInfo.Fonts)
                     fonts.Add(f.Name);
 
+            // Capturar rodapé predominante do intervalo
+            var footerLines = new List<string>();
             int images = 0;
             bool hasSignature = false;
             int wordCount = 0;
@@ -183,7 +215,15 @@ namespace FilterPDF.Commands
 
                 if (string.IsNullOrEmpty(header) && page.TextInfo.Headers.Any()) header = page.TextInfo.Headers.First();
                 if (string.IsNullOrEmpty(footer) && page.TextInfo.Footers.Any()) footer = page.TextInfo.Footers.First();
+                if (page.TextInfo.Footers != null && page.TextInfo.Footers.Count > 0)
+                    footerLines.AddRange(page.TextInfo.Footers);
             }
+
+            string footerLabel = footerLines
+                .GroupBy(x => x)
+                .OrderByDescending(g => g.Count())
+                .Select(g => g.Key)
+                .FirstOrDefault() ?? "";
 
             var pageSize = analysis.Pages.First().Size.GetPaperSize();
 
@@ -196,16 +236,25 @@ namespace FilterPDF.Commands
             double textDensity = pageAreaAcc > 0 ? wordsArea / pageAreaAcc : 0;
             double blankRatio = 1 - textDensity;
 
-            var docType = string.IsNullOrEmpty(d.DetectedType) ? "heuristic" : d.DetectedType;
-            var docSummary = BuildDocSummary(d, pdfPath, docText, lastPageText, lastTwoText, header, footer, docBookmarks, analysis.Signatures);
-            var extractedFields = ExtractFields(docText, wordsWithCoords);
+            var docLabel = !string.IsNullOrWhiteSpace(d.Title) ? d.Title : ExtractDocumentName(d);
+            var docType = docLabel; // não classificar; manter o nome do bookmark
+            // Se houver rodapé com SEI/nome de peça, usar como rótulo preferencial
+            if (!string.IsNullOrWhiteSpace(footerLabel) && footerLabel.Contains("SEI"))
+            {
+                docLabel = footerLabel;
+                docType = footerLabel;
+            }
+
+            var docSummary = BuildDocSummary(d, pdfPath, docText, lastPageText, lastTwoText, header, footer, docBookmarks, analysis.Signatures, docLabel);
+            var extractedFields = ExtractFields(docText, wordsWithCoords, d, pdfPath, scripts);
 
             return new Dictionary<string, object>
             {
                 ["process"] = Path.GetFileNameWithoutExtension(pdfPath),
                 ["pdf_path"] = pdfPath,
-                ["doc_label"] = ExtractDocumentName(d),
+                ["doc_label"] = docLabel,
                 ["doc_type"] = docType,
+                ["modification_dates"] = analysis.ModificationDates,
                 ["start_page"] = d.StartPage,
                 ["end_page"] = d.EndPage,
                 ["doc_pages"] = d.PageCount,
@@ -230,7 +279,9 @@ namespace FilterPDF.Commands
             };
         }
 
-        private Dictionary<string, object> BuildDocSummary(DocumentBoundary d, string pdfPath, string fullText, string lastPageText, string lastTwoText, string header, string footer, List<Dictionary<string, object>> bookmarks, List<DigitalSignature> signatures)
+        // Doc type classification removida: usamos apenas o nome do bookmark como rótulo.
+
+        private Dictionary<string, object> BuildDocSummary(DocumentBoundary d, string pdfPath, string fullText, string lastPageText, string lastTwoText, string header, string footer, List<Dictionary<string, object>> bookmarks, List<DigitalSignature> signatures, string docLabel)
         {
             string docId = $"{Path.GetFileNameWithoutExtension(pdfPath)}_{d.StartPage}-{d.EndPage}";
             string originMain = ExtractOrigin(header, bookmarks, fullText, excludeGeneric: true);
@@ -238,7 +289,7 @@ namespace FilterPDF.Commands
             string originExtra = ExtractExtraOrigin(header, bookmarks, fullText, originMain, originSub);
             string signer = ExtractSigner(lastTwoText, footer, signatures);
             string signedAt = ExtractSignedAt(lastTwoText, footer);
-            string template = string.IsNullOrWhiteSpace(d.DetectedType) ? "unknown" : d.DetectedType;
+            string template = docLabel; // não classificar; manter o nome do bookmark
             string title = ExtractTitle(header, bookmarks, fullText, originMain, originSub);
 
             return new Dictionary<string, object>
@@ -567,158 +618,43 @@ namespace FilterPDF.Commands
         private static readonly Regex MoneyRegex = new Regex(@"R\$ ?\d{1,3}(\.\d{3})*,\d{2}", RegexOptions.Compiled);
         private static readonly Regex DateNumRegex = new Regex(@"\b[0-3]?\d/[01]?\d/\d{2,4}\b", RegexOptions.Compiled);
 
-        private List<Dictionary<string, object>> ExtractFields(string fullText, List<Dictionary<string, object>> words)
+        private List<Dictionary<string, object>> ExtractFields(string fullText, List<Dictionary<string, object>> words, DocumentBoundary d, string pdfPath, List<FieldScript> scripts)
         {
-            var list = new List<Dictionary<string, object>>();
-
-            // PARTES (Promovente / Promovido)
-            var reqReq = Regex.Match(fullText, @"requerente\s*[:\-]?\s*(.+?)\s+requerid[oa]\s*[:\-]?\s*(.+)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            if (reqReq.Success)
-                AddTwoFields(list, "PROMOVENTE", reqReq.Groups[1].Value, "PROMOVIDO", reqReq.Groups[2].Value, "requerente_requerido");
-
-            var autorReu = Regex.Match(fullText, @"autor\s*[:\-]?\s*(.+?)\s+r[eé]u\s*[:\-]?\s*(.+)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            if (autorReu.Success)
-                AddTwoFields(list, "PROMOVENTE", autorReu.Groups[1].Value, "PROMOVIDO", autorReu.Groups[2].Value, "autor_reu");
-
-            var movidoPor = Regex.Match(fullText, @"movid[oa]\s+por\s+(.+?)\s+em\s+face\s+de\s+(.+)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            if (movidoPor.Success)
-                AddTwoFields(list, "PROMOVENTE", movidoPor.Groups[1].Value, "PROMOVIDO", movidoPor.Groups[2].Value, "movido_por");
-
-            // PERITO / CPF / PROFISSÃO
-            var peritoLinha = Regex.Match(fullText, @"perit[oa]\s*[:\-]?\s*([A-ZÁÂÃÀÉÊÍÓÔÕÚÇ][A-Za-zÁÂÃÀÉÊÍÓÔÕÚÇ\s\.\-]{5,})", RegexOptions.IgnoreCase);
-            if (peritoLinha.Success)
-                list.Add(MakeField("PERITO", peritoLinha.Groups[1].Value, "perito_linha"));
-
-            var interessado = Regex.Match(fullText, @"interessad[oa]\s*[:\-]?\s*([A-ZÁÂÃÀÉÊÍÓÔÕÚÇ][A-Za-zÁÂÃÀÉÊÍÓÔÕÚÇ\s\.\-]{5,})", RegexOptions.IgnoreCase);
-            if (interessado.Success)
-                list.Add(MakeField("PERITO", interessado.Groups[1].Value, "interessado"));
-
-            var cpfMatch = CpfRegex.Match(fullText);
-            if (cpfMatch.Success)
-                list.Add(MakeField("CPF/CNPJ", cpfMatch.Value, "cpf"));
-
-            var prof = Regex.Match(fullText, @"perit[oa][^\n]{0,40}?(m[eé]dic[oa]|psic[oó]log[oa]|engenheir[oa](?:\s+civil)?|odont[oó]log[oa]|contabil|grafot[eé]cnico|assistente\s+social)", RegexOptions.IgnoreCase);
-            if (prof.Success)
-                list.Add(MakeField("PROFISSÃO", prof.Groups[1].Value, "profissao_no_despacho"));
-            else
-            {
-                var profIso = Regex.Match(fullText, @"(m[eé]dic[oa]|psic[oó]log[oa]|engenheir[oa](?:\s+civil)?|odont[oó]log[oa]|contabil|grafot[eé]cnico|assistente\s+social)", RegexOptions.IgnoreCase);
-                if (profIso.Success)
-                    list.Add(MakeField("PROFISSÃO", profIso.Groups[1].Value, "profissao_isolada"));
-            }
-
-            // VALOR TABELADO / FATOR (honorários)
-            var fator = Regex.Match(fullText, @"fator\s*[:\-]?\s*([A-Za-z0-9]+)", RegexOptions.IgnoreCase);
-            if (fator.Success)
-                list.Add(MakeField("Fator", fator.Groups[1].Value, "fator_inline"));
-
-            var valorTab = MoneyRegex.Match(fullText);
-            if (valorTab.Success)
-                list.Add(MakeField("Valor Tabelado Anexo I - Tabela I", valorTab.Value, "valor_tabelado"));
-
-            // VALORES ARBITRADOS / DATA AUTORIZAÇÃO / ADIANTAMENTO
-            var valArb = Regex.Match(fullText, @"valor\s+dos\s+honor[aá]rios\s+(?:finais|arbitrados)[^\d]*(R\\$ ?\\d{1,3}(?:\\.\\d{3})*,\\d{2})", RegexOptions.IgnoreCase);
-            if (valArb.Success)
-                list.Add(MakeField("VALOR ARBITRADO - JZ", valArb.Groups[1].Value, "valor_arbitrado"));
-
-            var dataAut = Regex.Match(fullText, @"autoriz[aç][aã]o\s+da\s+despesa[^\d]*(\d{1,2}/\d{1,2}/\d{2,4})", RegexOptions.IgnoreCase);
-            if (dataAut.Success)
-                list.Add(MakeField("DATA DA AUTORIZACAO DA DESPESA", dataAut.Groups[1].Value, "data_autorizacao"));
-
-            var adiant = Regex.Match(fullText, @"adiantamento[^\d]*(R\\$ ?\\d{1,3}(?:\\.\\d{3})*,\\d{2})", RegexOptions.IgnoreCase);
-            if (adiant.Success)
-                list.Add(MakeField("ADIANTAMENTO", adiant.Groups[1].Value, "adiantamento"));
-
-            // JUÍZO / COMARCA
-            var juizoLinha = Regex.Match(fullText, @"ju[ií]zo\s*[:\-]?\s*([^\n]+)", RegexOptions.IgnoreCase);
-            if (juizoLinha.Success)
-                list.Add(MakeField("JUÍZO", juizoLinha.Groups[1].Value, "juizo_linha"));
-
-            var orgaoJulg = Regex.Match(fullText, @"[óo]rg[aã]o julgador\s*[:\-]?\s*([^\n]+)", RegexOptions.IgnoreCase);
-            if (orgaoJulg.Success)
-                list.Add(MakeField("JUÍZO", orgaoJulg.Groups[1].Value, "orgao_julgador"));
-
-            var varaComarca = Regex.Match(fullText, @"(\d+\s*a?\s*vara[^\n]{0,80}?)\s+da\s+comarca\s+de\s+([\w\sçãáéíóúãõç]+)", RegexOptions.IgnoreCase);
-            if (varaComarca.Success)
-            {
-                list.Add(MakeField("JUÍZO", varaComarca.Groups[1].Value, "vara_comarca_dupla"));
-                list.Add(MakeField("COMARCA", varaComarca.Groups[2].Value, "vara_comarca_dupla"));
-            }
-
-            if (Regex.IsMatch(fullText, @"comarca da capital", RegexOptions.IgnoreCase))
-                list.Add(MakeField("COMARCA", "João Pessoa", "comarca_capital"));
-
-            var comarcaDe = Regex.Match(fullText, @"comarca\s+de\s+([\w\sçãáéíóúãõç]+)", RegexOptions.IgnoreCase);
-            if (comarcaDe.Success)
-                list.Add(MakeField("COMARCA", comarcaDe.Groups[1].Value, "comarca_de"));
-
-            // ESPECIALIDADE / ESPÉCIE (simplificada, com keywords)
-            var especMatch = Regex.Match(fullText, @"esp[eé]cie\s+de\s+per[ií]cia\s*[:\-]?\s*([^\n]+)", RegexOptions.IgnoreCase);
-            if (especMatch.Success)
-                list.Add(MakeField("ESPÉCIE DE PERÍCIA", especMatch.Groups[1].Value, "especie_inline"));
-            if (Regex.IsMatch(fullText, @"\\blaudo\\b", RegexOptions.IgnoreCase))
-                list.Add(MakeField("ESPÉCIE DE PERÍCIA", "LAUDO", "laudo_kw"));
-            if (Regex.IsMatch(fullText, @"grafo[té]cnic", RegexOptions.IgnoreCase))
-                list.Add(MakeField("ESPECIALIDADE", "GRAFOTÉCNICO", "especialidade_kw"));
-            if (Regex.IsMatch(fullText, @"m[eé]dic", RegexOptions.IgnoreCase))
-                list.Add(MakeField("ESPECIALIDADE", "MÉDICA", "especialidade_kw"));
-
-            // PROCESSO JUDICIAL (CNJ)
-            var cnjMatch = CnjRegex.Match(fullText);
-            if (cnjMatch.Success)
-            {
-                list.Add(new Dictionary<string, object>
-                {
-                    ["name"] = "PROCESSO JUDICIAL",
-                    ["value"] = cnjMatch.Value,
-                    ["page"] = FindPageForText(words, cnjMatch.Value),
-                    ["pattern"] = "cnj_regex"
-                });
-            }
-
-            // PROCESSO ADMINISTRATIVO / SEI
-            // Aceita número SEI ou administrativo longo (>=14 dígitos) que não seja CNJ
-            var seiMatch = SeiLikeRegex.Matches(fullText)
-                .Cast<Match>()
-                .FirstOrDefault(m => m.Value.Length >= 14 && !CnjRegex.IsMatch(m.Value));
-            if (seiMatch != null)
-            {
-                var norm = NormalizeDigits(seiMatch.Value);
-                if (!string.IsNullOrEmpty(norm))
-                {
-                    list.Add(new Dictionary<string, object>
-                    {
-                        ["name"] = "PROCESSO ADMINISTRATIVO",
-                        ["value"] = norm,
-                        ["page"] = FindPageForText(words, seiMatch.Value),
-                        ["pattern"] = "sei_numeric"
-                    });
-                }
-            }
-
-            return list;
+            var name = ExtractDocumentName(d);
+            var bucket = ClassifyBucket(name, fullText);
+            var namePdf = name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? name : name + ".pdf";
+            return FieldScripts.RunScripts(scripts, namePdf, fullText ?? string.Empty, d.StartPage, bucket);
         }
 
-        private void AddTwoFields(List<Dictionary<string, object>> list, string f1, string v1, string f2, string v2, string pattern)
+        private string ClassifyBucket(string name, string text)
         {
-            if (!string.IsNullOrWhiteSpace(v1))
-                list.Add(MakeField(f1, v1, pattern));
-            if (!string.IsNullOrWhiteSpace(v2))
-                list.Add(MakeField(f2, v2, pattern));
+            var n = (name ?? string.Empty).ToLowerInvariant();
+            var t = (text ?? string.Empty).ToLowerInvariant();
+            var snippet = t.Length > 2000 ? t.Substring(0, 2000) : t;
+            if (IsLaudo(n, snippet)) return "laudo";
+            if (IsPrincipal(n, snippet)) return "principal";
+            if (IsApoio(n, snippet)) return "apoio";
+            return "outro";
         }
 
-        private Dictionary<string, object> MakeField(string name, string value, string pattern)
+        private bool IsLaudo(string name, string text)
         {
-            return new Dictionary<string, object>
-            {
-                ["name"] = name,
-                ["value"] = value.Trim(),
-                ["page"] = 0,
-                ["pattern"] = pattern
-            };
+            string[] kws = { "laudo", "quesito", "perícia", "pericial", "esclarecimento", "parecer" };
+            return kws.Any(k => name.Contains(k) || text.Contains(k));
         }
 
-        private int FindPageForText(List<Dictionary<string, object>> words, string text)
+        private bool IsPrincipal(string name, string text)
+        {
+            string[] kws = { "despacho", "decisão", "decisao", "senten", "certidao", "certidão", "oficio", "ofício", "nota de empenho", "autorizacao", "autorização", "requisição", "requisicao" };
+            return kws.Any(k => name.Contains(k) || text.Contains(k));
+        }
+
+        private bool IsApoio(string name, string text)
+        {
+            string[] kws = { "anexo", "relatório", "relatorio", "planilha" };
+            return kws.Any(k => name.Contains(k) || text.Contains(k));
+        }
+private int FindPageForText(List<Dictionary<string, object>> words, string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return 0;
             var tokens = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(t => t.ToLowerInvariant()).ToList();
@@ -791,60 +727,24 @@ namespace FilterPDF.Commands
                 int end = (i + 1 < bms.Count) ? ((int)bms[i + 1]["page"]) - 1 : analysis.DocumentInfo.TotalPages;
                 if (end < start) end = start;
 
-                bool isAnexo = Regex.IsMatch(bms[i]["title"].ToString() ?? "", "^anexos?$", RegexOptions.IgnoreCase);
-                bool needsSegment = (end - start + 1) > maxBookmarkPages;
-
-                // Se o bookmark for muito grande, resegmenta internamente com o segmenter heurístico
-                if (needsSegment)
+                var titleStr = bms[i]["title"].ToString() ?? "";
+                bool isAnexo = Regex.IsMatch(titleStr, "^anexos?$", RegexOptions.IgnoreCase);
+                // Mesmo que seja grande, respeitamos o bookmark: não resegmentamos aqui.
+                var boundary = new DocumentBoundary
                 {
-                    var segmenter = new DocumentSegmenter(new DocumentSegmentationConfig());
-                    var subAnalysis = CloneRange(analysis, start, end);
-                    var subDocs = segmenter.FindDocuments(subAnalysis);
-
-                    foreach (var sd in subDocs)
-                    {
-                        sd.StartPage += (start - 1); // ajustar para páginas originais
-                        sd.EndPage += (start - 1);
-                        sd.DetectedType = isAnexo ? "anexo+segment" : "bookmark+segment";
-                        result.Add(sd);
-                    }
-
-                    // Se não encontrou subdocs (caso extremo), registra o próprio bookmark
-                    if (subDocs.Count == 0)
-                    {
-                        var fallback = new DocumentBoundary
-                        {
-                            StartPage = start,
-                            EndPage = end,
-                            DetectedType = isAnexo ? "anexo" : "bookmark",
-                            FirstPageText = analysis.Pages[start - 1].TextInfo.PageText,
-                            LastPageText = analysis.Pages[end - 1].TextInfo.PageText,
-                            FullText = string.Join("\n", Enumerable.Range(start, end - start + 1).Select(p => analysis.Pages[p - 1].TextInfo.PageText)),
-                            Fonts = new HashSet<string>(analysis.Pages.Skip(start - 1).Take(end - start + 1).SelectMany(p => p.TextInfo.Fonts.Select(f => f.Name)), StringComparer.OrdinalIgnoreCase),
-                            PageSize = analysis.Pages.First().Size.GetPaperSize(),
-                            HasSignatureImage = analysis.Pages.Skip(start - 1).Take(end - start + 1).Any(p => p.Resources.Images?.Any(img => img.Width > 100 && img.Height > 30) ?? false),
-                            TotalWords = analysis.Pages.Skip(start - 1).Take(end - start + 1).Sum(p => p.TextInfo.WordCount)
-                        };
-                        result.Add(fallback);
-                    }
-                }
-                else
-                {
-                    var boundary = new DocumentBoundary
-                    {
-                        StartPage = start,
-                        EndPage = end,
-                        DetectedType = isAnexo ? "anexo" : "bookmark",
-                        FirstPageText = analysis.Pages[start - 1].TextInfo.PageText,
-                        LastPageText = analysis.Pages[end - 1].TextInfo.PageText,
-                        FullText = string.Join("\n", Enumerable.Range(start, end - start + 1).Select(p => analysis.Pages[p - 1].TextInfo.PageText)),
-                        Fonts = new HashSet<string>(analysis.Pages.Skip(start - 1).Take(end - start + 1).SelectMany(p => p.TextInfo.Fonts.Select(f => f.Name)), StringComparer.OrdinalIgnoreCase),
-                        PageSize = analysis.Pages.First().Size.GetPaperSize(),
-                        HasSignatureImage = analysis.Pages.Skip(start - 1).Take(end - start + 1).Any(p => p.Resources.Images?.Any(img => img.Width > 100 && img.Height > 30) ?? false),
-                        TotalWords = analysis.Pages.Skip(start - 1).Take(end - start + 1).Sum(p => p.TextInfo.WordCount)
-                    };
-                    result.Add(boundary);
-                }
+                    StartPage = start,
+                    EndPage = end,
+                    Title = titleStr,
+                    DetectedType = isAnexo ? "anexo" : "bookmark",
+                    FirstPageText = analysis.Pages[start - 1].TextInfo.PageText,
+                    LastPageText = analysis.Pages[end - 1].TextInfo.PageText,
+                    FullText = string.Join("\n", Enumerable.Range(start, end - start + 1).Select(p => analysis.Pages[p - 1].TextInfo.PageText)),
+                    Fonts = new HashSet<string>(analysis.Pages.Skip(start - 1).Take(end - start + 1).SelectMany(p => p.TextInfo.Fonts.Select(f => f.Name)), StringComparer.OrdinalIgnoreCase),
+                    PageSize = analysis.Pages.First().Size.GetPaperSize(),
+                    HasSignatureImage = analysis.Pages.Skip(start - 1).Take(end - start + 1).Any(p => p.Resources.Images?.Any(img => img.Width > 100 && img.Height > 30) ?? false),
+                    TotalWords = analysis.Pages.Skip(start - 1).Take(end - start + 1).Sum(p => p.TextInfo.WordCount)
+                };
+                result.Add(boundary);
             }
 
             return result;
@@ -888,7 +788,7 @@ namespace FilterPDF.Commands
             return firstLine.Length > 80 ? firstLine.Substring(0, 80) + "..." : firstLine;
         }
 
-        private List<Dictionary<string, object>> SplitAnexos(DocumentBoundary parent, PDFAnalysisResult analysis, string pdfPath)
+        private List<Dictionary<string, object>> SplitAnexos(DocumentBoundary parent, PDFAnalysisResult analysis, string pdfPath, List<FieldScript> scripts)
         {
             var list = new List<Dictionary<string, object>>();
 
@@ -922,7 +822,7 @@ namespace FilterPDF.Commands
                     TotalWords = parent.TotalWords
                 };
 
-                var obj = BuildDocObject(boundary, analysis, pdfPath);
+                var obj = BuildDocObject(boundary, analysis, pdfPath, scripts);
                 obj["parent_doc_label"] = ExtractDocumentName(parent);
                 obj["doc_label"] = anexos[i]["title"]?.ToString() ?? "Anexo";
                 obj["doc_type"] = "anexo_split";

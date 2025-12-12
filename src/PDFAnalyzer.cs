@@ -68,6 +68,7 @@ namespace FilterPDF
                 result.Layers = ExtractOptionalContentGroups();
                 result.Signatures = ExtractDigitalSignatures();
                 result.ColorProfiles = ExtractColorProfiles();
+                result.ModificationDates = BuildModificationDates(result);
                 result.Bookmarks = ExtractBookmarkStructure();
                 // PDFA compliance básica: se tagged e sem encriptação simples heurística
                 result.PDFACompliance = new PDFAInfo { IsPDFA = doc?.IsTagged() ?? false };
@@ -358,7 +359,7 @@ namespace FilterPDF
             foreach (var annot in page.GetAnnotations())
             {
                 var rect = annot.GetRectangle() ?? new iText.Kernel.Pdf.PdfArray(new float[] { 0, 0, 0, 0 });
-                list.Add(new Annotation
+                var ann = new Annotation
                 {
                     Type = annot.GetSubtype()?.ToString() ?? "",
                     Contents = annot.GetContents()?.ToString() ?? "",
@@ -367,7 +368,25 @@ namespace FilterPDF
                     ModificationDate = ParsePDFDate(annot.GetPdfObject()?.GetAsString(PdfName.M)?.ToString()),
                     X = rect.GetAsNumber(0)?.FloatValue() ?? 0,
                     Y = rect.GetAsNumber(1)?.FloatValue() ?? 0
-                });
+                };
+
+                // File attachment info
+                if (PdfName.FileAttachment.Equals(annot.GetSubtype()))
+                {
+                    var fs = annot.GetPdfObject()?.GetAsDictionary(PdfName.FS);
+                    if (fs != null)
+                    {
+                        ann.FileName = fs.GetAsString(PdfName.F)?.ToString() ?? "";
+                        var ef = fs.GetAsDictionary(PdfName.EF);
+                        var fstream = ef?.GetAsStream(PdfName.F);
+                        if (fstream != null)
+                        {
+                            try { ann.FileSize = fstream.GetLength(); } catch { }
+                        }
+                    }
+                }
+
+                list.Add(ann);
             }
             return list;
         }
@@ -445,14 +464,42 @@ namespace FilterPDF
 
             try
             {
-                var catalog = doc!.GetCatalog();
-                var names = catalog.GetNameTree(PdfName.EmbeddedFiles);
-                if (names != null)
+                var catalogDict = doc!.GetCatalog().GetPdfObject();
+                var namesDict = catalogDict.GetAsDictionary(PdfName.Names);
+                var embeddedDict = namesDict?.GetAsDictionary(PdfName.EmbeddedFiles);
+                var nameArray = embeddedDict?.GetAsArray(PdfName.Names);
+                if (nameArray != null)
                 {
-                    res.HasAttachments = names.GetNames().Any();
-                    res.AttachmentCount = names.GetNames().Count;
-                    foreach (var n in names.GetNames())
-                        res.EmbeddedFiles.Add(n.ToString());
+                    res.HasAttachments = nameArray.Size() > 0;
+                    res.AttachmentCount = nameArray.Size() / 2;
+
+                    for (int i = 0; i < nameArray.Size(); i += 2)
+                    {
+                        var keyStrObj = nameArray.GetAsString(i);
+                        var fsDict = nameArray.GetAsDictionary(i + 1);
+                        string fname = keyStrObj?.ToString() ?? $"Embedded_{i / 2}";
+                        long? fsize = null;
+
+                        if (fsDict != null)
+                        {
+                            var fileName = fsDict.GetAsString(PdfName.F);
+                            if (fileName != null) fname = fileName.ToString();
+                            var ef = fsDict.GetAsDictionary(PdfName.EF);
+                            var fstream = ef?.GetAsStream(PdfName.F);
+                            if (fstream != null)
+                            {
+                                try { fsize = fstream.GetLength(); } catch { }
+                            }
+                        }
+
+                        res.EmbeddedFiles.Add(fname);
+                        res.EmbeddedFileInfos.Add(new EmbeddedFileInfo
+                        {
+                            Name = fname,
+                            Size = fsize,
+                            Source = "EmbeddedFiles"
+                        });
+                    }
                 }
             }
             catch { }
@@ -549,6 +596,9 @@ namespace FilterPDF
                     xmp.CreatorTool = ExtractXmpSimple(xmpString, "xmp:CreatorTool");
                     xmp.DublinCoreTitle = ExtractXmpSimple(xmpString, "dc:title");
                     xmp.DublinCoreSubject = ExtractXmpSimple(xmpString, "dc:subject");
+                    xmp.CreateDate = ParseXmpDate(ExtractXmpSimple(xmpString, "xmp:CreateDate"));
+                    xmp.ModifyDate = ParseXmpDate(ExtractXmpSimple(xmpString, "xmp:ModifyDate"));
+                    xmp.MetadataDate = ParseXmpDate(ExtractXmpSimple(xmpString, "xmp:MetadataDate"));
                 }
             }
             catch { }
@@ -559,6 +609,18 @@ namespace FilterPDF
         {
             var m = Regex.Match(xml, $"<{tag}[^>]*>(.*?)</{tag}>", RegexOptions.Singleline);
             return m.Success ? m.Groups[1].Value : "";
+        }
+
+        private DateTime? ParseXmpDate(string? iso)
+        {
+            if (string.IsNullOrWhiteSpace(iso)) return null;
+            try
+            {
+                if (DateTimeOffset.TryParse(iso, out var dto))
+                    return dto.UtcDateTime;
+            }
+            catch { }
+            return null;
         }
 
         private AccessibilityInfo ExtractAccessibilityInfo()
@@ -650,6 +712,37 @@ namespace FilterPDF
             }
             catch { }
             return profiles;
+        }
+
+        private ModificationDates BuildModificationDates(PDFAnalysisResult result)
+        {
+            var md = new ModificationDates
+            {
+                InfoCreationDate = result.Metadata.CreationDate,
+                InfoModDate = result.Metadata.ModificationDate,
+                XmpCreateDate = result.XMPMetadata.CreateDate,
+                XmpModifyDate = result.XMPMetadata.ModifyDate ?? result.XMPMetadata.MetadataDate
+            };
+
+            if (result.Signatures != null)
+            {
+                foreach (var sig in result.Signatures)
+                {
+                    var when = sig.SignDate ?? sig.SigningTime ?? sig.TimestampDate;
+                    md.SignatureDates.Add(when);
+                }
+            }
+
+            if (result.Pages != null)
+            {
+                foreach (var p in result.Pages)
+                {
+                    if (p.Annotations == null) continue;
+                    foreach (var a in p.Annotations)
+                        md.AnnotationDates.Add(a.ModificationDate);
+                }
+            }
+            return md;
         }
 
         private BookmarkStructure ExtractBookmarkStructure()
