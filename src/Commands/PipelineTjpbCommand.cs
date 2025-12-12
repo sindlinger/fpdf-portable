@@ -303,13 +303,37 @@ namespace FilterPDF.Commands
         private string ExtractSignedAt(string text, string footer)
         {
             var source = $"{text}\n{footer}";
-            var match = Regex.Match(source, @"\b(\d{1,2}[\\/]\d{1,2}[\\/]\d{2,4})\b");
+
+            // Prefer datas próximas a termos de assinatura
+            var windowMatch = Regex.Match(source, @"assinado[^\\n]{0,120}?(\\d{1,2}[\\/]-?\\d{1,2}[\\/]-?\\d{2,4})", RegexOptions.IgnoreCase);
+            if (windowMatch.Success)
+            {
+                var val = NormalizeDate(windowMatch.Groups[1].Value);
+                if (!string.IsNullOrEmpty(val)) return val;
+            }
+
+            // Fallback: primeira data plausível
+            var match = Regex.Match(source, @"\\b(\\d{1,2}[\\/-]\\d{1,2}[\\/-]\\d{2,4})\\b");
             if (match.Success)
             {
-                var raw = match.Groups[1].Value;
-                if (DateTime.TryParseExact(raw, new[] { "dd/MM/yyyy", "d/M/yyyy", "dd-MM-yyyy", "d-M-yyyy" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
-                    return dt.ToString("yyyy-MM-dd");
-                return raw;
+                var val = NormalizeDate(match.Groups[1].Value);
+                if (!string.IsNullOrEmpty(val)) return val;
+            }
+
+            return "";
+        }
+
+        private string NormalizeDate(string raw)
+        {
+            string[] formats = { "dd/MM/yyyy", "d/M/yyyy", "dd-MM-yyyy", "d-M-yyyy", "dd/MM/yy", "d/M/yy", "dd-MM-yy", "d-M-yy" };
+            if (DateTime.TryParseExact(raw, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+            {
+                // Filtrar datas implausíveis (anos muito antigos)
+                int year = dt.Year;
+                int currentYear = DateTime.UtcNow.Year;
+                if (year < 1990 || year > currentYear + 1)
+                    return "";
+                return dt.ToString("yyyy-MM-dd");
             }
             return "";
         }
