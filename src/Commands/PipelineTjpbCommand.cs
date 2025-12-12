@@ -249,8 +249,11 @@ namespace FilterPDF.Commands
                 int end = (i + 1 < bms.Count) ? ((int)bms[i + 1]["page"]) - 1 : analysis.DocumentInfo.TotalPages;
                 if (end < start) end = start;
 
-                // Se o intervalo do bookmark for muito grande, resegmenta internamente com o segmenter heurístico
-                if ((end - start + 1) > maxBookmarkPages)
+                bool isAnexo = Regex.IsMatch(bms[i]["title"].ToString() ?? "", "^anexos?$", RegexOptions.IgnoreCase);
+                bool needsSegment = isAnexo || ((end - start + 1) > maxBookmarkPages);
+
+                // Se o bookmark for Anexo (sempre) ou muito grande, resegmenta internamente com o segmenter heurístico
+                if (needsSegment)
                 {
                     var segmenter = new DocumentSegmenter(new DocumentSegmentationConfig());
                     var subAnalysis = CloneRange(analysis, start, end);
@@ -260,8 +263,27 @@ namespace FilterPDF.Commands
                     {
                         sd.StartPage += (start - 1); // ajustar para páginas originais
                         sd.EndPage += (start - 1);
-                        sd.DetectedType = "bookmark+segment";
+                        sd.DetectedType = isAnexo ? "anexo+segment" : "bookmark+segment";
                         result.Add(sd);
+                    }
+
+                    // Se não encontrou subdocs (caso extremo), registra o próprio bookmark
+                    if (subDocs.Count == 0)
+                    {
+                        var fallback = new DocumentBoundary
+                        {
+                            StartPage = start,
+                            EndPage = end,
+                            DetectedType = isAnexo ? "anexo" : "bookmark",
+                            FirstPageText = analysis.Pages[start - 1].TextInfo.PageText,
+                            LastPageText = analysis.Pages[end - 1].TextInfo.PageText,
+                            FullText = string.Join("\n", Enumerable.Range(start, end - start + 1).Select(p => analysis.Pages[p - 1].TextInfo.PageText)),
+                            Fonts = new HashSet<string>(analysis.Pages.Skip(start - 1).Take(end - start + 1).SelectMany(p => p.TextInfo.Fonts.Select(f => f.Name)), StringComparer.OrdinalIgnoreCase),
+                            PageSize = analysis.Pages.First().Size.GetPaperSize(),
+                            HasSignatureImage = analysis.Pages.Skip(start - 1).Take(end - start + 1).Any(p => p.Resources.Images?.Any(img => img.Width > 100 && img.Height > 30) ?? false),
+                            TotalWords = analysis.Pages.Skip(start - 1).Take(end - start + 1).Sum(p => p.TextInfo.WordCount)
+                        };
+                        result.Add(fallback);
                     }
                 }
                 else
@@ -270,7 +292,7 @@ namespace FilterPDF.Commands
                     {
                         StartPage = start,
                         EndPage = end,
-                        DetectedType = Regex.IsMatch(bms[i]["title"].ToString() ?? "", "^anexos?$", RegexOptions.IgnoreCase) ? "anexo" : "bookmark",
+                        DetectedType = isAnexo ? "anexo" : "bookmark",
                         FirstPageText = analysis.Pages[start - 1].TextInfo.PageText,
                         LastPageText = analysis.Pages[end - 1].TextInfo.PageText,
                         FullText = string.Join("\n", Enumerable.Range(start, end - start + 1).Select(p => analysis.Pages[p - 1].TextInfo.PageText)),
