@@ -230,6 +230,7 @@ namespace FilterPDF.Commands
             string signer = ExtractSigner(lastPageText, footer);
             string signedAt = ExtractSignedAt(lastPageText, footer);
             string template = string.IsNullOrWhiteSpace(d.DetectedType) ? "unknown" : d.DetectedType;
+            string title = ExtractTitle(header, bookmarks, fullText, originMain, originSub);
 
             return new Dictionary<string, object>
             {
@@ -238,6 +239,7 @@ namespace FilterPDF.Commands
                 ["origin_sub"] = originSub,
                 ["signer"] = signer,
                 ["signed_at"] = signedAt,
+                ["title"] = title,
                 ["template"] = template
             };
         }
@@ -287,6 +289,36 @@ namespace FilterPDF.Commands
             // fallback: segunda linha do texto
             var secondLine = (text ?? "").Split('\n').Skip(1).FirstOrDefault() ?? "";
             return secondLine;
+        }
+
+        private string ExtractTitle(string header, List<Dictionary<string, object>> bookmarks, string text, string originMain, string originSub)
+        {
+            // Se o header tiver 3+ linhas, terceira linha costuma ser o título
+            if (!string.IsNullOrWhiteSpace(header))
+            {
+                var lines = header.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 3).ToList();
+                var titleFromHeader = lines.Skip(2).FirstOrDefault(l =>
+                    !string.Equals(l, originMain, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(l, originSub, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrWhiteSpace(titleFromHeader)) return titleFromHeader;
+            }
+
+            // Bookmark de nível 2 ou 3 pode conter o título específico
+            var bm = bookmarks.FirstOrDefault(b =>
+            {
+                if (b.TryGetValue("level", out var lvlObj) && int.TryParse(lvlObj?.ToString(), out var lvl))
+                    return lvl >= 2;
+                return false;
+            });
+            if (bm != null && bm.TryGetValue("title", out var t) && t != null)
+                return t.ToString() ?? "";
+
+            // fallback: primeira linha não vazia do texto (evita repetir origem)
+            var firstLine = (text ?? "").Split('\n').Select(l => l.Trim()).FirstOrDefault(l =>
+                !string.IsNullOrWhiteSpace(l) &&
+                !string.Equals(l, originMain, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(l, originSub, StringComparison.OrdinalIgnoreCase));
+            return firstLine ?? "";
         }
 
         private string ExtractSigner(string lastPageText, string footer)
