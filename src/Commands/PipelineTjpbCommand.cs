@@ -406,13 +406,25 @@ namespace FilterPDF.Commands
 
         private string ExtractSigner(string lastPageText, string footer, List<DigitalSignature> signatures)
         {
-            var source = $"{lastPageText}\n{footer}";
-            var match = Regex.Match(source, @"assinado(?:\s+digitalmente|\s+eletronicamente)?\s+por\s+([\\p{L} .'’-]+)", RegexOptions.IgnoreCase);
-            if (match.Success) return match.Groups[1].Value.Trim();
+            string[] sources =
+            {
+                $"{lastPageText}\n{footer}",
+                ReverseText($"{lastPageText}\n{footer}")
+            };
 
-            // Digital signature block (X.509)
-            var sigMatch = Regex.Match(source, @"Assinatura(?:\s+)?:(.+)", RegexOptions.IgnoreCase);
-            if (sigMatch.Success) return sigMatch.Groups[1].Value.Trim();
+            foreach (var source in sources)
+            {
+                // Formato mais completo do SEI: "Documento assinado eletronicamente por NOME, <cargo>, em 12/03/2024"
+                var docSigned = Regex.Match(source, @"documento\s+assinado\s+eletronicamente\s+por\s+([\\p{L} .'’-]+?)(?:,|\\sem\\s|\\n|$)", RegexOptions.IgnoreCase);
+                if (docSigned.Success) return docSigned.Groups[1].Value.Trim();
+
+                var match = Regex.Match(source, @"assinado(?:\s+digitalmente|\s+eletronicamente)?\s+por\s+([\\p{L} .'’-]+)", RegexOptions.IgnoreCase);
+                if (match.Success) return match.Groups[1].Value.Trim();
+
+                // Digital signature block (X.509)
+                var sigMatch = Regex.Match(source, @"Assinatura(?:\s+)?:(.+)", RegexOptions.IgnoreCase);
+                if (sigMatch.Success) return sigMatch.Groups[1].Value.Trim();
+            }
 
             // Info vinda do objeto de assinatura digital (se existir)
             if (signatures != null && signatures.Count > 0)
@@ -444,6 +456,14 @@ namespace FilterPDF.Commands
                     return line;
             }
             return "";
+        }
+
+        private string ReverseText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            var arr = text.ToCharArray();
+            Array.Reverse(arr);
+            return new string(arr);
         }
 
         private string ExtractSignedAt(string lastPageText, string footer)
