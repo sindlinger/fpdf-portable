@@ -27,8 +27,9 @@
 - `fpdf show-moddate --input file.pdf` — mostra CreationDate/ModDate.
 
 ## Pipeline (TJPB)
-- `fpdf pipeline tjpb --input-dir <dir> --output fpdf.json [--max-bookmark-pages N]`  
+- `fpdf pipeline tjpb --input-dir <dir> --output fpdf.json [--split-anexos] [--pg-uri <postgres://...>]`  
   Segmenta preferencialmente pelos bookmarks (cada bookmark vira um documento). Se não houver bookmarks, usa segmentação heurística.  
+  Opcional: grava a análise completa no Postgres (`--pg-uri`).  
   Campos: `process, pdf_path, doc_label, doc_type (bookmark|anexo|bookmark+segment|anexo+segment|heuristic), start_page, end_page, doc_pages, total_pages, text, fonts, images, page_size, has_signature_image, is_attachment, word_count, char_count, text_density, blank_ratio, words (bbox+fonte+estilo), header, footer, bookmarks`.
 
 ## Geração de teste

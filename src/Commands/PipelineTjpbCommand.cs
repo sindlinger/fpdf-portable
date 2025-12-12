@@ -32,12 +32,14 @@ namespace FilterPDF.Commands
             string output = "fpdf.json";
             bool splitAnexos = false; // backward compat (anexos now covered by bookmark docs)
             int maxBookmarkPages = 30; // agora interno, sem flag na CLI
+            string? pgUri = null;
 
             for (int i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--input-dir" && i + 1 < args.Length) inputDir = args[i + 1];
                 if (args[i] == "--output" && i + 1 < args.Length) output = args[i + 1];
                 if (args[i] == "--split-anexos") splitAnexos = true;
+                if (args[i] == "--pg-uri" && i + 1 < args.Length) pgUri = args[i + 1];
             }
 
             var dir = new DirectoryInfo(inputDir);
@@ -55,6 +57,20 @@ namespace FilterPDF.Commands
                 try
                 {
                     var analysis = new PDFAnalyzer(pdf.FullName).AnalyzeFull();
+
+                    // Opcional: persiste análise completa no Postgres
+                    if (!string.IsNullOrWhiteSpace(pgUri))
+                    {
+                        try
+                        {
+                            var classifier = new BookmarkClassifier();
+                            PgDocStore.UpsertProcess(pgUri, pdf.FullName, analysis, classifier, storeJson: false);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine($"[pipeline-tjpb] WARN PG {pdf.Name}: {ex.Message}");
+                        }
+                    }
                     var bookmarkDocs = BuildBookmarkBoundaries(analysis, maxBookmarkPages);
                     var segmenter = new DocumentSegmenter(new DocumentSegmentationConfig());
                     var docs = bookmarkDocs.Count > 0 ? bookmarkDocs : segmenter.FindDocuments(analysis);
