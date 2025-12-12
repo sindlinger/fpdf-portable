@@ -238,11 +238,17 @@ namespace FilterPDF.Commands
 
             var docLabel = !string.IsNullOrWhiteSpace(d.Title) ? d.Title : ExtractDocumentName(d);
             var docType = docLabel; // não classificar; manter o nome do bookmark
-            // Se houver rodapé com SEI/nome de peça, usar como rótulo preferencial
+
+            // Rodapé preferencial: compacta e usa só a parte antes de "/ pg."
             if (!string.IsNullOrWhiteSpace(footerLabel) && footerLabel.Contains("SEI"))
             {
-                docLabel = footerLabel;
-                docType = footerLabel;
+                var compact = CompactFooter(footerLabel);
+                var cut = compact.Split("/ pg", StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(cut))
+                {
+                    docLabel = cut.Trim();
+                    docType = docLabel;
+                }
             }
 
             var docSummary = BuildDocSummary(d, pdfPath, docText, lastPageText, lastTwoText, header, footer, docBookmarks, analysis.Signatures, docLabel);
@@ -262,8 +268,6 @@ namespace FilterPDF.Commands
                 ["text"] = docText,
                 ["fonts"] = fonts.ToArray(),
                 ["images"] = images,
-                ["embedded_files"] = analysis.Resources?.EmbeddedFiles ?? new List<string>(),
-                ["embedded_file_infos"] = analysis.Resources?.EmbeddedFileInfos ?? new List<EmbeddedFileInfo>(),
                 ["page_size"] = pageSize,
                 ["has_signature_image"] = hasSignature,
                 ["is_attachment"] = false,
@@ -389,6 +393,31 @@ namespace FilterPDF.Commands
             if (mUrl.Success) meta.AuthUrl = mUrl.Value.TrimEnd('.', ',');
 
             return meta;
+        }
+
+        private string CompactFooter(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return text;
+            // remove espaçamento intercalado (ex.: "D e s p a c h o" -> "Despacho")
+            var noSpaces = Regex.Replace(text, @"\s{1}", " ");
+            var collapsed = Regex.Replace(noSpaces, @"\s+", " ").Trim();
+            var chars = collapsed.ToCharArray();
+            var sb = new StringBuilder(chars.Length);
+            int consecutiveSingles = 0;
+            foreach (var c in chars)
+            {
+                if (c == ' ')
+                {
+                    consecutiveSingles++;
+                    if (consecutiveSingles > 1) continue;
+                }
+                else
+                {
+                    consecutiveSingles = 0;
+                }
+                sb.Append(c);
+            }
+            return sb.ToString().Trim();
         }
 
         private readonly string[] GenericOrigins = new[]
