@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using FilterPDF.Services;
 using FilterPDF.Utils;
 
@@ -292,7 +293,9 @@ namespace FilterPDF
             if (string.IsNullOrWhiteSpace(spec)) return false;
             spec = spec.ToLower();
             if (spec == "all" || spec == "0") return true;
-            return spec.Contains("-") || spec.Contains(",") || spec.Contains(":");
+            // Evita capturar nomes de comandos/arquivos com hífen:
+            // só trata como range se contiver SOMENTE dígitos, vírgulas, hífens ou dois-pontos.
+            return Regex.IsMatch(spec, @"^[0-9,:\\-]+$");
         }
 
         private void InitializeLogging()
