@@ -225,8 +225,9 @@ namespace FilterPDF.Commands
         private Dictionary<string, object> BuildDocSummary(DocumentBoundary d, string pdfPath, string fullText, string lastPageText, string header, string footer, List<Dictionary<string, object>> bookmarks)
         {
             string docId = $"{Path.GetFileNameWithoutExtension(pdfPath)}_{d.StartPage}-{d.EndPage}";
-            string originMain = ExtractOrigin(header, bookmarks, fullText);
-            string originSub = ExtractSubOrigin(header, bookmarks, fullText, originMain);
+            string originMain = ExtractOrigin(header, bookmarks, fullText, excludeGeneric: true);
+            string originSub = ExtractSubOrigin(header, bookmarks, fullText, originMain, excludeGeneric: true);
+            string originExtra = ExtractExtraOrigin(header, bookmarks, fullText, originMain, originSub);
             string signer = ExtractSigner(lastPageText, footer);
             string signedAt = ExtractSignedAt(lastPageText, footer);
             string template = string.IsNullOrWhiteSpace(d.DetectedType) ? "unknown" : d.DetectedType;
@@ -237,6 +238,7 @@ namespace FilterPDF.Commands
                 ["doc_id"] = docId,
                 ["origin_main"] = originMain,
                 ["origin_sub"] = originSub,
+                ["origin_extra"] = originExtra,
                 ["signer"] = signer,
                 ["signed_at"] = signedAt,
                 ["title"] = title,
@@ -244,15 +246,46 @@ namespace FilterPDF.Commands
             };
         }
 
-        private string ExtractOrigin(string header, List<Dictionary<string, object>> bookmarks, string text)
+        private readonly string[] GenericOrigins = new[]
+        {
+            "PODER JUDICIÁRIO",
+            "PODER JUDICIARIO",
+            "TRIBUNAL DE JUSTIÇA",
+            "TRIBUNAL DE JUSTICA",
+            "MINISTÉRIO PÚBLICO",
+            "MINISTERIO PUBLICO",
+            "DEFENSORIA PÚBLICA",
+            "DEFENSORIA PUBLICA",
+            "PROCURADORIA",
+            "ESTADO DA PARAÍBA",
+            "ESTADO DA PARAIBA",
+            "GOVERNO DO ESTADO"
+        };
+
+        private bool IsGeneric(string text)
+        {
+            var t = (text ?? "").Trim();
+            return GenericOrigins.Any(g => string.Equals(g, t, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private bool IsCandidateTitle(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line)) return false;
+            var lower = line.ToLowerInvariant();
+            string[] kws = { "despacho", "certidão", "certidao", "sentença", "sentenca", "decisão", "decisao", "ofício", "oficio", "laudo", "nota de empenho", "autorização", "autorizacao", "requisição", "requisicao" };
+            return kws.Any(k => lower.Contains(k));
+        }
+
+        private string ExtractOrigin(string header, List<Dictionary<string, object>> bookmarks, string text, bool excludeGeneric)
         {
             // 1) header em maiúsculas é o melhor candidato
             if (!string.IsNullOrWhiteSpace(header))
             {
                 var lines = header.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 3).ToList();
                 var upper = lines.FirstOrDefault(l => l.All(c => !char.IsLetter(c) || char.IsUpper(c)));
-                if (!string.IsNullOrWhiteSpace(upper)) return upper;
-                if (lines.Count > 0) return lines[0];
+                if (!string.IsNullOrWhiteSpace(upper) && (!excludeGeneric || !IsGeneric(upper))) return upper;
+                var first = lines.FirstOrDefault(l => !excludeGeneric || !IsGeneric(l));
+                if (!string.IsNullOrWhiteSpace(first)) return first;
             }
 
             // 2) bookmark de nível 1
@@ -263,14 +296,18 @@ namespace FilterPDF.Commands
                 return false;
             });
             if (bm != null && bm.TryGetValue("title", out var t) && t != null)
-                return t.ToString() ?? "";
+            {
+                var val = t.ToString() ?? "";
+                if (!excludeGeneric || !IsGeneric(val)) return val;
+            }
 
             // 3) primeira linha do texto
             var firstLine = (text ?? "").Split('\n').FirstOrDefault() ?? "";
+            if (excludeGeneric && IsGeneric(firstLine)) return "";
             return firstLine;
         }
 
-        private string ExtractSubOrigin(string header, List<Dictionary<string, object>> bookmarks, string text, string originMain)
+        private string ExtractSubOrigin(string header, List<Dictionary<string, object>> bookmarks, string text, string originMain, bool excludeGeneric)
         {
             if (!string.IsNullOrWhiteSpace(header))
             {
@@ -278,17 +315,56 @@ namespace FilterPDF.Commands
                 if (lines.Count > 1)
                 {
                     var second = lines.Skip(1).FirstOrDefault(l => !string.Equals(l, originMain, StringComparison.OrdinalIgnoreCase));
-                    if (!string.IsNullOrWhiteSpace(second)) return second;
+                    if (!string.IsNullOrWhiteSpace(second) && (!excludeGeneric || !IsGeneric(second))) return second;
                 }
             }
 
             var bmSub = bookmarks.Skip(1).FirstOrDefault();
             if (bmSub != null && bmSub.TryGetValue("title", out var t) && t != null)
-                return t.ToString() ?? "";
+            {
+                var val = t.ToString() ?? "";
+                if (!excludeGeneric || !IsGeneric(val)) return val;
+            }
 
             // fallback: segunda linha do texto
             var secondLine = (text ?? "").Split('\n').Skip(1).FirstOrDefault() ?? "";
+            if (excludeGeneric && IsGeneric(secondLine)) return "";
             return secondLine;
+        }
+
+        private string ExtractExtraOrigin(string header, List<Dictionary<string, object>> bookmarks, string text, string originMain, string originSub)
+        {
+            // Procura uma terceira linha de header que não seja genérica nem igual às anteriores
+            if (!string.IsNullOrWhiteSpace(header))
+            {
+                var lines = header.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 3).ToList();
+                var extra = lines.Skip(2).FirstOrDefault(l =>
+                    !string.Equals(l, originMain, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(l, originSub, StringComparison.OrdinalIgnoreCase) &&
+                    !IsGeneric(l));
+                if (!string.IsNullOrWhiteSpace(extra)) return extra;
+            }
+
+            // Bookmark de nível 2/3 que não seja genérico
+            var bm = bookmarks.FirstOrDefault(b =>
+            {
+                if (b.TryGetValue("level", out var lvlObj) && int.TryParse(lvlObj?.ToString(), out var lvl))
+                    return lvl >= 2;
+                return false;
+            });
+            if (bm != null && bm.TryGetValue("title", out var t) && t != null)
+            {
+                var val = t.ToString() ?? "";
+                if (!IsGeneric(val)) return val;
+            }
+
+            // fallback: linha do texto com palavras-chave de setor/órgão (ex.: "Diretoria", "Secretaria", etc.)
+            var firstNonGeneric = (text ?? "").Split('\n').Select(l => l.Trim()).FirstOrDefault(l =>
+                !string.IsNullOrWhiteSpace(l) &&
+                !IsGeneric(l) &&
+                !string.Equals(l, originMain, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(l, originSub, StringComparison.OrdinalIgnoreCase));
+            return firstNonGeneric ?? "";
         }
 
         private string ExtractTitle(string header, List<Dictionary<string, object>> bookmarks, string text, string originMain, string originSub)
@@ -299,7 +375,9 @@ namespace FilterPDF.Commands
                 var lines = header.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 3).ToList();
                 var titleFromHeader = lines.Skip(2).FirstOrDefault(l =>
                     !string.Equals(l, originMain, StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(l, originSub, StringComparison.OrdinalIgnoreCase));
+                    !string.Equals(l, originSub, StringComparison.OrdinalIgnoreCase) &&
+                    !IsGeneric(l) &&
+                    IsCandidateTitle(l));
                 if (!string.IsNullOrWhiteSpace(titleFromHeader)) return titleFromHeader;
             }
 
@@ -311,13 +389,18 @@ namespace FilterPDF.Commands
                 return false;
             });
             if (bm != null && bm.TryGetValue("title", out var t) && t != null)
-                return t.ToString() ?? "";
+            {
+                var val = t.ToString() ?? "";
+                if (IsCandidateTitle(val) && !IsGeneric(val)) return val;
+            }
 
             // fallback: primeira linha não vazia do texto (evita repetir origem)
             var firstLine = (text ?? "").Split('\n').Select(l => l.Trim()).FirstOrDefault(l =>
                 !string.IsNullOrWhiteSpace(l) &&
                 !string.Equals(l, originMain, StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(l, originSub, StringComparison.OrdinalIgnoreCase));
+                !string.Equals(l, originSub, StringComparison.OrdinalIgnoreCase) &&
+                !IsGeneric(l) &&
+                IsCandidateTitle(l));
             return firstLine ?? "";
         }
 
