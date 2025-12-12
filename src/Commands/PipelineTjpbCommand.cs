@@ -262,6 +262,8 @@ namespace FilterPDF.Commands
                 ["text"] = docText,
                 ["fonts"] = fonts.ToArray(),
                 ["images"] = images,
+                ["embedded_files"] = analysis.Resources?.EmbeddedFiles ?? new List<string>(),
+                ["embedded_file_infos"] = analysis.Resources?.EmbeddedFileInfos ?? new List<EmbeddedFileInfo>(),
                 ["page_size"] = pageSize,
                 ["has_signature_image"] = hasSignature,
                 ["is_attachment"] = false,

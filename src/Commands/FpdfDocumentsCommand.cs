@@ -264,6 +264,11 @@ namespace FilterPDF
             docObj["has_signature_image"] = d.HasSignatureImage;
             docObj["fonts"] = d.Fonts.ToArray();
             docObj["page_size"] = d.PageSize;
+            if (analysis.Resources != null)
+            {
+                docObj["embedded_files"] = analysis.Resources.EmbeddedFiles;
+                docObj["embedded_file_infos"] = analysis.Resources.EmbeddedFileInfos;
+            }
 
             double totalChars = 0;
             double totalArea = 0;
