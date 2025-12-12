@@ -407,6 +407,22 @@ namespace FilterPDF
                 var procFooter = new PdfCanvasProcessor(footerStrategy);
                 procFooter.ProcessPageContent(doc.GetPage(page.PageNumber));
                 page.Footers = ParseHeaderFooterText(footerStrategy.GetResultantText());
+
+                // Fallback: se nada veio da estratégia, usar as últimas linhas do texto da página
+                if (page.Footers.Count == 0 && !string.IsNullOrWhiteSpace(page.TextInfo.PageText))
+                {
+                    var lines = page.TextInfo.PageText.Split('\n')
+                        .Select(l => l.Trim())
+                        .Where(l => !string.IsNullOrWhiteSpace(l))
+                        .ToList();
+                    var tail = lines.TakeLast(3).ToList();
+                    if (tail.Count > 0)
+                        page.Footers.AddRange(tail);
+                }
+
+                // Espelhar em TextInfo para consumidores que leem por ali
+                page.TextInfo.Headers = page.Headers.ToList();
+                page.TextInfo.Footers = page.Footers.ToList();
             }
             catch (Exception ex)
             {
