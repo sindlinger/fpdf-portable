@@ -40,30 +40,35 @@ ipcMain.handle('run-pipeline', async (event, args) => {
     });
   }
 
-  // Detect fpdf binary
-  const repoRoot = path.join(__dirname, '..');
+  // Detecta binário do fpdf (no repo fpdf-portable)
+  const fpdfRoot = path.join(__dirname, '..');
+  const envBin = process.env.FPDF_BIN;
   const binCandidates = [
-    path.join(repoRoot, 'fpdf-linux'),
-    path.join(repoRoot, 'fpdf-win.exe'),
-    path.join(repoRoot, 'bin', 'publish-linux', 'fpdf'),
-    path.join(repoRoot, 'bin', 'publish-win', 'fpdf.exe'),
+    envBin,
+    path.join(fpdfRoot, 'fpdf-linux'),
+    path.join(fpdfRoot, 'fpdf-win.exe'),
+    path.join(fpdfRoot, 'bin', 'publish-linux', 'fpdf'),
+    path.join(fpdfRoot, 'bin', 'publish-win', 'fpdf.exe'),
+    'dotnet', // fallback para usar DLL
   ];
   const fs = require('fs');
-  const fpdfBin = binCandidates.find((b) => fs.existsSync(b));
-  if (!fpdfBin) {
-    throw new Error('Não encontrei fpdf-linux nem fpdf-win.exe. Faça publish primeiro.');
-  }
+  const fpdfBin = binCandidates.find((b) => b && (b === 'dotnet' || fs.existsSync(b)));
+  if (!fpdfBin) throw new Error('Não encontrei fpdf-linux nem fpdf-win.exe. Faça publish primeiro.');
 
-  const step2 = ['python', 'pipeline/2-fpdf/run.py', '--input-dir', inputDir, '--output', outputStep2];
-  const step3 = ['python', 'pipeline/3-docid-splitter/run.py'];
+  // Base do repositório pipeline (irmão do fpdf-portable)
+  const pipelineRoot = path.join(__dirname, '..', '..', 'pipeline');
+
+  const step2 = ['python', '2-fpdf/run.py', '--input-dir', inputDir, '--output', outputStep2];
+  const step3 = ['python', '3-docid-splitter/run.py'];
 
   // step3 lê step2 padrão; se outputStep2 custom, exportar via env
   process.env.FPDF_STEP2 = outputStep2;
   process.env.FPDF_STEP3 = outputStep3;
+  process.env.FPDF_BIN = fpdfBin;
 
   try {
-    await runCmd(step2, repoRoot);
-    await runCmd(step3, repoRoot);
+    await runCmd(step2, pipelineRoot);
+    await runCmd(step3, pipelineRoot);
     return { ok: true, logs: logs.join('\n') };
   } catch (err) {
     return { ok: false, error: err.message, logs: logs.join('\n') };
