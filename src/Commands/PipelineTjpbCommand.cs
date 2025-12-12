@@ -113,6 +113,7 @@ namespace FilterPDF.Commands
         {
             var docText = string.Join("\n", Enumerable.Range(d.StartPage, d.PageCount)
                                                       .Select(p => analysis.Pages[p - 1].TextInfo.PageText ?? ""));
+            var lastPageText = analysis.Pages[Math.Max(0, Math.Min(analysis.Pages.Count - 1, d.EndPage - 1))].TextInfo.PageText ?? "";
 
             var fonts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int p = d.StartPage; p <= d.EndPage; p++)
@@ -190,7 +191,7 @@ namespace FilterPDF.Commands
             double blankRatio = 1 - textDensity;
 
             var docType = string.IsNullOrEmpty(d.DetectedType) ? "heuristic" : d.DetectedType;
-            var docSummary = BuildDocSummary(d, pdfPath, docText, header, footer, docBookmarks);
+            var docSummary = BuildDocSummary(d, pdfPath, docText, lastPageText, header, footer, docBookmarks);
 
             return new Dictionary<string, object>
             {
@@ -221,13 +222,13 @@ namespace FilterPDF.Commands
             };
         }
 
-        private Dictionary<string, object> BuildDocSummary(DocumentBoundary d, string pdfPath, string fullText, string header, string footer, List<Dictionary<string, object>> bookmarks)
+        private Dictionary<string, object> BuildDocSummary(DocumentBoundary d, string pdfPath, string fullText, string lastPageText, string header, string footer, List<Dictionary<string, object>> bookmarks)
         {
             string docId = $"{Path.GetFileNameWithoutExtension(pdfPath)}_{d.StartPage}-{d.EndPage}";
             string originMain = ExtractOrigin(header, bookmarks, fullText);
             string originSub = ExtractSubOrigin(header, bookmarks, fullText, originMain);
-            string signer = ExtractSigner(fullText, footer);
-            string signedAt = ExtractSignedAt(fullText, footer);
+            string signer = ExtractSigner(lastPageText, footer);
+            string signedAt = ExtractSignedAt(lastPageText, footer);
             string template = string.IsNullOrWhiteSpace(d.DetectedType) ? "unknown" : d.DetectedType;
 
             return new Dictionary<string, object>
@@ -288,9 +289,9 @@ namespace FilterPDF.Commands
             return secondLine;
         }
 
-        private string ExtractSigner(string text, string footer)
+        private string ExtractSigner(string lastPageText, string footer)
         {
-            var source = $"{text}\n{footer}";
+            var source = $"{lastPageText}\n{footer}";
             var match = Regex.Match(source, @"assinado(?:\s+digitalmente|\s+eletronicamente)?\s+por\s+([\\p{L} .'’-]+)", RegexOptions.IgnoreCase);
             if (match.Success) return match.Groups[1].Value.Trim();
 
@@ -300,9 +301,9 @@ namespace FilterPDF.Commands
             return "";
         }
 
-        private string ExtractSignedAt(string text, string footer)
+        private string ExtractSignedAt(string lastPageText, string footer)
         {
-            var source = $"{text}\n{footer}";
+            var source = $"{lastPageText}\n{footer}";
 
             // Prefer datas próximas a termos de assinatura
             var windowMatch = Regex.Match(source, @"assinado[^\\n]{0,120}?(\\d{1,2}[\\/]-?\\d{1,2}[\\/]-?\\d{2,4})", RegexOptions.IgnoreCase);
