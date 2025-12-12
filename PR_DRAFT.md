@@ -11,17 +11,16 @@
 - `fpdf load` grava direto no SQLite (padrão `data/sqlite/sqlite-mcp.db`, opção `--db-path`), sem gerar `_cache.json`; skip por existência no DB.
 - `CacheManager`/`CacheMemoryManager` passam a resolver caches como `db://<db>#<cache>`; listagem não usa mais `index.json`.
 - `fpdf find` consulta somente SQLite (caches + pages).
-- `fpdf ingest-db` importa `_cache.json` para SQLite via `UpsertCacheFromJson`.
+- `fpdf ingest-db` foi removido: use `fpdf load <pdf|dir> --db-path data/sqlite/sqlite-mcp.db` para popular o cache.
 
 ## Como migrar
-1) Rodar ingestão inicial dos caches existentes:
+1) Rodar carga inicial direto com `fpdf load`:
    ```bash
-   fpdf ingest-db .cache --db-path data/sqlite/sqlite-mcp.db
+   fpdf load <pdf|dir> --db-path data/sqlite/sqlite-mcp.db
    ```
 2) Opcional: adicionar `.cache/` ao `.gitignore` e parar de usar/cachear JSON.
 3) Usar normalmente:
    ```bash
-   fpdf load <pdf|dir> --db-path data/sqlite/sqlite-mcp.db
    fpdf find <...> --db-path data/sqlite/sqlite-mcp.db
    ```
 

@@ -158,7 +158,7 @@ namespace FilterPDF
             }
             else
             {
-                Console.WriteLine($"Banco não encontrado em {dbPath}. Rode 'fpdf ingest-db .cache --db-path {dbPath}' primeiro.");
+                Console.WriteLine($"Banco não encontrado em {dbPath}. Rode 'fpdf load <pdf|dir> --db-path {dbPath}' para criar/popular o cache.");
                 return;
             }
         }

@@ -131,7 +131,6 @@ namespace FilterPDF.Services
             RegisterCommand("load", new FpdfLoadCommand());
             RegisterCommand("cache", new FpdfCacheCommand());
             RegisterCommand("stats", new FpdfStatsCommand());
-            RegisterCommand("ingest-db", new FpdfIngestDbCommand());
             RegisterCommand("pipeline-tjpb", new PipelineTjpbCommand());
             
             // Register language commands
