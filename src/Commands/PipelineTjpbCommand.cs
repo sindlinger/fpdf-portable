@@ -31,14 +31,13 @@ namespace FilterPDF.Commands
             string inputDir = ".";
             string output = "fpdf.json";
             bool splitAnexos = false; // backward compat (anexos now covered by bookmark docs)
-            int maxBookmarkPages = 30;
+            int maxBookmarkPages = 30; // agora interno, sem flag na CLI
 
             for (int i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--input-dir" && i + 1 < args.Length) inputDir = args[i + 1];
                 if (args[i] == "--output" && i + 1 < args.Length) output = args[i + 1];
                 if (args[i] == "--split-anexos") splitAnexos = true;
-                if (args[i] == "--max-bookmark-pages" && i + 1 < args.Length && int.TryParse(args[i + 1], out var m)) maxBookmarkPages = m;
             }
 
             var dir = new DirectoryInfo(inputDir);
@@ -88,10 +87,9 @@ namespace FilterPDF.Commands
 
         public override void ShowHelp()
         {
-            Console.WriteLine("fpdf pipeline-tjpb --input-dir <dir> --output fpdf.json [--split-anexos] [--max-bookmark-pages N]");
+            Console.WriteLine("fpdf pipeline-tjpb --input-dir <dir> --output fpdf.json [--split-anexos]");
             Console.WriteLine("Gera JSON compatível com tmp/pipeline/step2/fpdf.json para o CI Dashboard.");
             Console.WriteLine("--split-anexos: cria subdocumentos a partir de bookmarks 'Anexo/Anexos' dentro de cada documento.");
-            Console.WriteLine("--max-bookmark-pages: se um bookmark tiver mais páginas que N, ele é re-segmentado internamente (default 30).");
         }
 
         private Dictionary<string, object> BuildDocObject(DocumentBoundary d, PDFAnalysisResult analysis, string pdfPath)
