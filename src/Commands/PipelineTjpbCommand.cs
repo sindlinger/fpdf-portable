@@ -114,6 +114,12 @@ namespace FilterPDF.Commands
             var docText = string.Join("\n", Enumerable.Range(d.StartPage, d.PageCount)
                                                       .Select(p => analysis.Pages[p - 1].TextInfo.PageText ?? ""));
             var lastPageText = analysis.Pages[Math.Max(0, Math.Min(analysis.Pages.Count - 1, d.EndPage - 1))].TextInfo.PageText ?? "";
+            var lastTwoText = lastPageText;
+            if (d.PageCount >= 2)
+            {
+                var prev = analysis.Pages[Math.Max(0, d.EndPage - 2)].TextInfo.PageText ?? "";
+                lastTwoText = $"{prev}\n{lastPageText}";
+            }
 
             var fonts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int p = d.StartPage; p <= d.EndPage; p++)
@@ -191,7 +197,7 @@ namespace FilterPDF.Commands
             double blankRatio = 1 - textDensity;
 
             var docType = string.IsNullOrEmpty(d.DetectedType) ? "heuristic" : d.DetectedType;
-            var docSummary = BuildDocSummary(d, pdfPath, docText, lastPageText, header, footer, docBookmarks, analysis.Signatures);
+            var docSummary = BuildDocSummary(d, pdfPath, docText, lastPageText, lastTwoText, header, footer, docBookmarks, analysis.Signatures);
 
             return new Dictionary<string, object>
             {
@@ -222,14 +228,14 @@ namespace FilterPDF.Commands
             };
         }
 
-        private Dictionary<string, object> BuildDocSummary(DocumentBoundary d, string pdfPath, string fullText, string lastPageText, string header, string footer, List<Dictionary<string, object>> bookmarks, List<DigitalSignature> signatures)
+        private Dictionary<string, object> BuildDocSummary(DocumentBoundary d, string pdfPath, string fullText, string lastPageText, string lastTwoText, string header, string footer, List<Dictionary<string, object>> bookmarks, List<DigitalSignature> signatures)
         {
             string docId = $"{Path.GetFileNameWithoutExtension(pdfPath)}_{d.StartPage}-{d.EndPage}";
             string originMain = ExtractOrigin(header, bookmarks, fullText, excludeGeneric: true);
             string originSub = ExtractSubOrigin(header, bookmarks, fullText, originMain, excludeGeneric: true);
             string originExtra = ExtractExtraOrigin(header, bookmarks, fullText, originMain, originSub);
-            string signer = ExtractSigner(lastPageText, footer, signatures);
-            string signedAt = ExtractSignedAt(lastPageText, footer);
+            string signer = ExtractSigner(lastTwoText, footer, signatures);
+            string signedAt = ExtractSignedAt(lastTwoText, footer);
             string template = string.IsNullOrWhiteSpace(d.DetectedType) ? "unknown" : d.DetectedType;
             string title = ExtractTitle(header, bookmarks, fullText, originMain, originSub);
 
@@ -415,7 +421,7 @@ namespace FilterPDF.Commands
             foreach (var source in sources)
             {
                 // Formato mais completo do SEI: "Documento assinado eletronicamente por NOME, <cargo>, em 12/03/2024"
-                var docSigned = Regex.Match(source, @"documento\s+assinado\s+eletronicamente\s+por\s+([\\p{L} .'’-]+?)(?:,|\\sem\\s|\\n|$)", RegexOptions.IgnoreCase);
+                var docSigned = Regex.Match(source, @"documento\s+assinado\s+eletronicamente\s+por\s+([\\p{L} .'’-]+?)(?:,|\sem\s|\n|$)", RegexOptions.IgnoreCase);
                 if (docSigned.Success) return docSigned.Groups[1].Value.Trim();
 
                 var match = Regex.Match(source, @"assinado(?:\s+digitalmente|\s+eletronicamente)?\s+por\s+([\\p{L} .'’-]+)", RegexOptions.IgnoreCase);
@@ -466,15 +472,23 @@ namespace FilterPDF.Commands
             return new string(arr);
         }
 
-        private string ExtractSignedAt(string lastPageText, string footer)
+        private string ExtractSignedAt(string lastPagesText, string footer)
         {
-            var source = $"{lastPageText}\n{footer}";
+            var source = $"{lastPagesText}\n{footer}";
 
             // Prefer datas próximas a termos de assinatura
             var windowMatch = Regex.Match(source, @"assinado[^\\n]{0,120}?(\\d{1,2}[\\/]-?\\d{1,2}[\\/]-?\\d{2,4})", RegexOptions.IgnoreCase);
             if (windowMatch.Success)
             {
                 var val = NormalizeDate(windowMatch.Groups[1].Value);
+                if (!string.IsNullOrEmpty(val)) return val;
+            }
+
+            // Datas por extenso: 25 de agosto de 2024
+            var extensoMatch = Regex.Match(source, @"\\b(\\d{1,2})\\s+de\\s+(janeiro|fevereiro|març|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\\s+de\\s+(\\d{4})\\b", RegexOptions.IgnoreCase);
+            if (extensoMatch.Success)
+            {
+                var val = NormalizeDateExtenso(extensoMatch.Groups[1].Value, extensoMatch.Groups[2].Value, extensoMatch.Groups[3].Value);
                 if (!string.IsNullOrEmpty(val)) return val;
             }
 
@@ -502,6 +516,45 @@ namespace FilterPDF.Commands
                 return dt.ToString("yyyy-MM-dd");
             }
             return "";
+        }
+
+        private string NormalizeDateExtenso(string dayStr, string monthStr, string yearStr)
+        {
+            int day, year;
+            if (!int.TryParse(dayStr, out day)) return "";
+            if (!int.TryParse(yearStr, out year)) return "";
+            var month = MonthFromPortuguese(monthStr);
+            if (month == 0) return "";
+            try
+            {
+                var dt = new DateTime(year, month, day);
+                int currentYear = DateTime.UtcNow.Year;
+                if (year < 1990 || year > currentYear + 1) return "";
+                return dt.ToString("yyyy-MM-dd");
+            }
+            catch { return ""; }
+        }
+
+        private int MonthFromPortuguese(string month)
+        {
+            var m = month.ToLowerInvariant();
+            switch (m)
+            {
+                case "janeiro": return 1;
+                case "fevereiro": return 2;
+                case "março":
+                case "marco": return 3;
+                case "abril": return 4;
+                case "maio": return 5;
+                case "junho": return 6;
+                case "julho": return 7;
+                case "agosto": return 8;
+                case "setembro": return 9;
+                case "outubro": return 10;
+                case "novembro": return 11;
+                case "dezembro": return 12;
+                default: return 0;
+            }
         }
 
         private List<Dictionary<string, object>> ExtractBookmarksForRange(PDFAnalysisResult analysis, int startPage, int endPage)
