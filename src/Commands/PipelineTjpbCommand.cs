@@ -250,9 +250,9 @@ namespace FilterPDF.Commands
                 if (end < start) end = start;
 
                 bool isAnexo = Regex.IsMatch(bms[i]["title"].ToString() ?? "", "^anexos?$", RegexOptions.IgnoreCase);
-                bool needsSegment = isAnexo || ((end - start + 1) > maxBookmarkPages);
+                bool needsSegment = (end - start + 1) > maxBookmarkPages;
 
-                // Se o bookmark for Anexo (sempre) ou muito grande, resegmenta internamente com o segmenter heurístico
+                // Se o bookmark for muito grande, resegmenta internamente com o segmenter heurístico
                 if (needsSegment)
                 {
                     var segmenter = new DocumentSegmenter(new DocumentSegmentationConfig());
