@@ -1,0 +1,14 @@
+{
+  "name": "fpdf-gui",
+  "version": "0.1.0",
+  "description": "GUI para pipeline fpdf",
+  "main": "main.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^28.0.0"
+  }
+}

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>FPDF GUI (Pipeline)</title>
+  <style>
+    body { font-family: sans-serif; margin: 16px; }
+    label { display: block; margin-top: 8px; }
+    button { margin-top: 12px; padding: 8px 12px; }
+    textarea { width: 100%; height: 220px; }
+    input { width: 100%; padding: 6px; }
+  </style>
+</head>
+<body>
+  <h1>FPDF Pipeline TJPB</h1>
+  <label>Diretório de entrada
+    <div style="display:flex; gap:8px;">
+      <input id="inputDir" value="tmp/preprocessor_stage" />
+      <button id="pickDir">Escolher…</button>
+    </div>
+  </label>
+  <label>Saída step2 (fpdf.json)
+    <input id="out2" value="tmp/pipeline/step2/fpdf.json" />
+  </label>
+  <label>Saída step3 (documents.json)
+    <input id="out3" value="tmp/pipeline/step3/documents.json" />
+  </label>
+  <button id="runBtn">Rodar pipeline (2 + 3)</button>
+  <pre id="status"></pre>
+  <h2>Logs</h2>
+  <textarea id="logs" readonly></textarea>
+  <script src="renderer.js"></script>
+</body>
+</html>
