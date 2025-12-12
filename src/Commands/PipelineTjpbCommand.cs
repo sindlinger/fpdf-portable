@@ -191,7 +191,7 @@ namespace FilterPDF.Commands
             double blankRatio = 1 - textDensity;
 
             var docType = string.IsNullOrEmpty(d.DetectedType) ? "heuristic" : d.DetectedType;
-            var docSummary = BuildDocSummary(d, pdfPath, docText, lastPageText, header, footer, docBookmarks);
+            var docSummary = BuildDocSummary(d, pdfPath, docText, lastPageText, header, footer, docBookmarks, analysis.Signatures);
 
             return new Dictionary<string, object>
             {
@@ -222,13 +222,13 @@ namespace FilterPDF.Commands
             };
         }
 
-        private Dictionary<string, object> BuildDocSummary(DocumentBoundary d, string pdfPath, string fullText, string lastPageText, string header, string footer, List<Dictionary<string, object>> bookmarks)
+        private Dictionary<string, object> BuildDocSummary(DocumentBoundary d, string pdfPath, string fullText, string lastPageText, string header, string footer, List<Dictionary<string, object>> bookmarks, List<DigitalSignature> signatures)
         {
             string docId = $"{Path.GetFileNameWithoutExtension(pdfPath)}_{d.StartPage}-{d.EndPage}";
             string originMain = ExtractOrigin(header, bookmarks, fullText, excludeGeneric: true);
             string originSub = ExtractSubOrigin(header, bookmarks, fullText, originMain, excludeGeneric: true);
             string originExtra = ExtractExtraOrigin(header, bookmarks, fullText, originMain, originSub);
-            string signer = ExtractSigner(lastPageText, footer);
+            string signer = ExtractSigner(lastPageText, footer, signatures);
             string signedAt = ExtractSignedAt(lastPageText, footer);
             string template = string.IsNullOrWhiteSpace(d.DetectedType) ? "unknown" : d.DetectedType;
             string title = ExtractTitle(header, bookmarks, fullText, originMain, originSub);
@@ -404,7 +404,7 @@ namespace FilterPDF.Commands
             return firstLine ?? "";
         }
 
-        private string ExtractSigner(string lastPageText, string footer)
+        private string ExtractSigner(string lastPageText, string footer, List<DigitalSignature> signatures)
         {
             var source = $"{lastPageText}\n{footer}";
             var match = Regex.Match(source, @"assinado(?:\s+digitalmente|\s+eletronicamente)?\s+por\s+([\\p{L} .'’-]+)", RegexOptions.IgnoreCase);
@@ -413,6 +413,36 @@ namespace FilterPDF.Commands
             // Digital signature block (X.509)
             var sigMatch = Regex.Match(source, @"Assinatura(?:\s+)?:(.+)", RegexOptions.IgnoreCase);
             if (sigMatch.Success) return sigMatch.Groups[1].Value.Trim();
+
+            // Info vinda do objeto de assinatura digital (se existir)
+            if (signatures != null && signatures.Count > 0)
+            {
+                var sigName = signatures.Select(s => s.SignerName).FirstOrDefault(s => !string.IsNullOrWhiteSpace(s));
+                if (!string.IsNullOrWhiteSpace(sigName)) return sigName.Trim();
+                var sigField = signatures.Select(s => s.Name).FirstOrDefault(s => !string.IsNullOrWhiteSpace(s));
+                if (!string.IsNullOrWhiteSpace(sigField)) return sigField.Trim();
+            }
+
+            // Heurística: linha final com nome/cargo em maiúsculas
+            var lines = lastPageText.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+            var cargoKeywords = new[] { "diretor", "diretora", "presidente", "juiz", "juíza", "desembargador", "desembargadora", "secretário", "secretaria", "chefe", "coordenador", "coordenadora", "gerente", "perito", "analista", "assessor", "assessora", "procurador", "procuradora" };
+            var namePattern = new Regex(@"^[A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-Za-zÁÉÍÓÚÂÊÔÃÕÇçãõâêîôûäëïöüàèìòùÿ'`\-]+(\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-Za-zÁÉÍÓÚÂÊÔÃÕÇçãõâêîôûäëïöüàèìòùÿ'`\-]+){1,4}(\s*[,–-]\s*.+)?$", RegexOptions.Compiled);
+            foreach (var line in lines.AsEnumerable().Reverse())
+            {
+                if (line.Length < 8 || line.Length > 120) continue;
+                if (Regex.IsMatch(line, @"\d{2}[\\/]\d{2}[\\/]\d{2,4}")) continue; // data
+                if (line.IndexOf("SEI", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                if (line.IndexOf("pg.", StringComparison.OrdinalIgnoreCase) >= 0 || line.IndexOf("página", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                if (IsGeneric(line)) continue;
+                if (line.ToLowerInvariant() == line) continue; // toda minúscula
+                // evita repetir origens ou título
+                if (line.Equals(lastPageText, StringComparison.OrdinalIgnoreCase)) continue;
+                var tokens = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (tokens.Length < 2) continue;
+                var lower = line.ToLowerInvariant();
+                if (cargoKeywords.Any(k => lower.Contains(k)) || namePattern.IsMatch(line))
+                    return line;
+            }
             return "";
         }
 
