@@ -26,6 +26,11 @@
 - `fpdf find-to-unicode --input file.pdf` — lista fontes com/sem ToUnicode.
 - `fpdf show-moddate --input file.pdf` — mostra CreationDate/ModDate.
 
+## Pipeline (TJPB)
+- `fpdf pipeline tjpb --input-dir <dir> --output fpdf.json [--max-bookmark-pages N]`  
+  Segmenta preferencialmente pelos bookmarks (cada bookmark vira um documento). Se não houver bookmarks, usa segmentação heurística.  
+  Campos: `process, pdf_path, doc_label, doc_type (bookmark|anexo|bookmark+segment|anexo+segment|heuristic), start_page, end_page, doc_pages, total_pages, text, fonts, images, page_size, has_signature_image, is_attachment, word_count, char_count, text_density, blank_ratio, words (bbox+fonte+estilo), header, footer, bookmarks`.
+
 ## Geração de teste
 - `fpdf create-test --output test.pdf` — PDF simples com campos simulados.
 - `fpdf create-modified-test --base base.pdf --modified mod.pdf` — par base/modificado para diffs.
