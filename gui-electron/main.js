@@ -24,9 +24,9 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// IPC: run pipeline step (2-fpdf and 3-docid-splitter)
+// IPC: run pipeline steps (2-fpdf, 3-docid, opcional 4-extract)
 ipcMain.handle('run-pipeline', async (event, args) => {
-  const { inputDir, outputStep2, outputStep3 } = args;
+  const { inputDir, outputStep2, outputStep3, runStep4, outputStep4 } = args;
   const logs = [];
 
   function runCmd(cmd, cwd) {
@@ -60,6 +60,7 @@ ipcMain.handle('run-pipeline', async (event, args) => {
 
   const step2 = ['python', '2-fpdf/run.py', '--input-dir', inputDir, '--output', outputStep2];
   const step3 = ['python', '3-docid-splitter/run.py'];
+  const step4 = ['python', '4-extract/run.py', '--input', outputStep3, '--output', outputStep4];
 
   // step3 lê step2 padrão; se outputStep2 custom, exportar via env
   process.env.FPDF_STEP2 = outputStep2;
@@ -69,9 +70,23 @@ ipcMain.handle('run-pipeline', async (event, args) => {
   try {
     await runCmd(step2, pipelineRoot);
     await runCmd(step3, pipelineRoot);
+    if (runStep4) {
+      await runCmd(step4, pipelineRoot);
+    }
     return { ok: true, logs: logs.join('\n') };
   } catch (err) {
     return { ok: false, error: err.message, logs: logs.join('\n') };
+  }
+});
+
+// Ler JSON de resultado
+ipcMain.handle('read-json', async (event, filePath) => {
+  const fs = require('fs');
+  try {
+    const data = fs.readFileSync(filePath, 'utf-8');
+    return { ok: true, json: JSON.parse(data) };
+  } catch (err) {
+    return { ok: false, error: err.message };
   }
 });
 

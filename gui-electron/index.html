@@ -25,10 +25,22 @@
   <label>Saída step3 (documents.json)
     <input id="out3" value="tmp/pipeline/step3/documents.json" />
   </label>
-  <button id="runBtn">Rodar pipeline (2 + 3)</button>
+  <label>
+    <input type="checkbox" id="runStep4" checked />
+    Rodar step4 (extract fields) → saída:
+    <input id="out4" value="tmp/pipeline/step4/fields.json" />
+  </label>
+  <button id="runBtn">Rodar pipeline (2 + 3 [+4])</button>
   <pre id="status"></pre>
   <h2>Logs</h2>
   <textarea id="logs" readonly></textarea>
+
+  <h2>Resultados</h2>
+  <div style="display:flex; gap:12px; flex-wrap: wrap;">
+    <button id="loadDocs">Ler documents.json</button>
+    <button id="loadFields">Ler fields.json</button>
+  </div>
+  <pre id="results"></pre>
   <script src="renderer.js"></script>
 </body>
 </html>
