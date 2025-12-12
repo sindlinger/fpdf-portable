@@ -198,6 +198,7 @@ namespace FilterPDF.Commands
 
             var docType = string.IsNullOrEmpty(d.DetectedType) ? "heuristic" : d.DetectedType;
             var docSummary = BuildDocSummary(d, pdfPath, docText, lastPageText, lastTwoText, header, footer, docBookmarks, analysis.Signatures);
+            var extractedFields = ExtractFields(docText, wordsWithCoords);
 
             return new Dictionary<string, object>
             {
@@ -224,7 +225,8 @@ namespace FilterPDF.Commands
                 ["footer"] = footer,
                 ["bookmarks"] = docBookmarks,
                 ["anexos_bookmarks"] = anexos,
-                ["doc_summary"] = docSummary
+                ["doc_summary"] = docSummary,
+                ["fields"] = extractedFields
             };
         }
 
@@ -556,6 +558,79 @@ namespace FilterPDF.Commands
                 default: return 0;
             }
         }
+
+        // ------------------ Simple field extraction (first module) ------------------
+
+        private static readonly Regex CnjRegex = new Regex(@"\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b", RegexOptions.Compiled);
+        private static readonly Regex SeiLikeRegex = new Regex(@"\b\d{6,}\b", RegexOptions.Compiled);
+
+        private List<Dictionary<string, object>> ExtractFields(string fullText, List<Dictionary<string, object>> words)
+        {
+            var list = new List<Dictionary<string, object>>();
+
+            // PROCESSO JUDICIAL (CNJ)
+            var cnjMatch = CnjRegex.Match(fullText);
+            if (cnjMatch.Success)
+            {
+                list.Add(new Dictionary<string, object>
+                {
+                    ["name"] = "PROCESSO JUDICIAL",
+                    ["value"] = cnjMatch.Value,
+                    ["page"] = FindPageForText(words, cnjMatch.Value),
+                    ["pattern"] = "cnj_regex"
+                });
+            }
+
+            // PROCESSO ADMINISTRATIVO / SEI
+            // Aceita número SEI ou administrativo longo (>=14 dígitos) que não seja CNJ
+            var seiMatch = SeiLikeRegex.Matches(fullText)
+                .Cast<Match>()
+                .FirstOrDefault(m => m.Value.Length >= 14 && !CnjRegex.IsMatch(m.Value));
+            if (seiMatch != null)
+            {
+                var norm = NormalizeDigits(seiMatch.Value);
+                if (!string.IsNullOrEmpty(norm))
+                {
+                    list.Add(new Dictionary<string, object>
+                    {
+                        ["name"] = "PROCESSO ADMINISTRATIVO",
+                        ["value"] = norm,
+                        ["page"] = FindPageForText(words, seiMatch.Value),
+                        ["pattern"] = "sei_numeric"
+                    });
+                }
+            }
+
+            return list;
+        }
+
+        private int FindPageForText(List<Dictionary<string, object>> words, string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return 0;
+            var tokens = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(t => t.ToLowerInvariant()).ToList();
+            if (tokens.Count == 0) return 0;
+
+            for (int i = 0; i < words.Count; i++)
+            {
+                if (words[i]["text"].ToString()!.ToLowerInvariant() != tokens[0]) continue;
+                bool ok = true;
+                for (int k = 1; k < tokens.Count; k++)
+                {
+                    if (i + k >= words.Count || words[i + k]["text"].ToString()!.ToLowerInvariant() != tokens[k])
+                    {
+                        ok = false; break;
+                    }
+                }
+                if (ok)
+                {
+                    return Convert.ToInt32(words[i]["page"]);
+                }
+            }
+            // fallback: no page found
+            return 0;
+        }
+
+        private string NormalizeDigits(string raw) => new string(raw.Where(char.IsDigit).ToArray());
 
         private List<Dictionary<string, object>> ExtractBookmarksForRange(PDFAnalysisResult analysis, int startPage, int endPage)
         {
