@@ -289,8 +289,9 @@ namespace FilterPDF.Commands
             string originMain = ExtractOrigin(header, bookmarks, fullText, excludeGeneric: true);
             string originSub = ExtractSubOrigin(header, bookmarks, fullText, originMain, excludeGeneric: true);
             string originExtra = ExtractExtraOrigin(header, bookmarks, fullText, originMain, originSub);
-            string signer = ExtractSigner(lastTwoText, footer, signatures);
-            string signedAt = ExtractSignedAt(lastTwoText, footer);
+            var sei = ExtractSeiMetadata(fullText, lastTwoText, footer, docLabel);
+            string signer = sei.Signer ?? ExtractSigner(lastTwoText, footer, signatures);
+            string signedAt = sei.SignedAt ?? ExtractSignedAt(lastTwoText, footer);
             string template = docLabel; // não classificar; manter o nome do bookmark
             string title = ExtractTitle(header, bookmarks, fullText, originMain, originSub);
 
@@ -303,8 +304,91 @@ namespace FilterPDF.Commands
                 ["signer"] = signer,
                 ["signed_at"] = signedAt,
                 ["title"] = title,
-                ["template"] = template
+                ["template"] = template,
+                ["sei_process"] = sei.Process,
+                ["sei_doc"] = sei.DocNumber,
+                ["sei_crc"] = sei.CRC,
+                ["sei_verifier"] = sei.Verifier,
+                ["auth_url"] = sei.AuthUrl
             };
+        }
+
+        private class SeiMeta
+        {
+            public string Process { get; set; }
+            public string DocNumber { get; set; }
+            public string CRC { get; set; }
+            public string Verifier { get; set; }
+            public string SignedAt { get; set; }
+            public string Signer { get; set; }
+            public string AuthUrl { get; set; }
+        }
+
+        private SeiMeta ExtractSeiMetadata(string fullText, string lastTwoText, string footer, string docLabel)
+        {
+            var meta = new SeiMeta();
+            // Usar apenas o texto das duas últimas páginas + footer para evitar capturar datas irrelevantes (ex.: nascimento)
+            string hay = $"{lastTwoText}\n{footer}";
+
+            // Processo SEI (formato com hífens/pontos)
+            var mProc = Regex.Match(hay, @"Processo\s+n[º°]?\s*([\d]{6}-\d{2}\.\d{4}\.\d\.\d{2})", RegexOptions.IgnoreCase);
+            if (!mProc.Success)
+                mProc = Regex.Match(hay, @"SEI\s+([\d]{6}-\d{2}\.\d{4}\.\d\.\d{2})");
+            if (mProc.Success) meta.Process = mProc.Groups[1].Value.Trim();
+
+            // Número da peça SEI (doc)
+            var mDoc = Regex.Match(hay, @"SEI\s*n[º°]?\s*([0-9]{4,})", RegexOptions.IgnoreCase);
+            if (!mDoc.Success)
+                mDoc = Regex.Match(docLabel ?? "", @"\((\d{4,})\)");
+            if (mDoc.Success) meta.DocNumber = mDoc.Groups[1].Value.Trim();
+
+            var mCRC = Regex.Match(hay, @"CRC\s+([A-Z0-9]+)", RegexOptions.IgnoreCase);
+            if (mCRC.Success) meta.CRC = mCRC.Groups[1].Value.Trim();
+
+            var mVer = Regex.Match(hay, @"verificador\s+([0-9]{4,})", RegexOptions.IgnoreCase);
+            if (mVer.Success) meta.Verifier = mVer.Groups[1].Value.Trim();
+
+            var mSigner = Regex.Match(hay, @"Documento assinado eletronicamente por\s+(.+?),\s*(.+?),\s*em", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (mSigner.Success)
+                meta.Signer = $"{mSigner.Groups[1].Value.Trim()} - {mSigner.Groups[2].Value.Trim()}";
+            else
+            {
+                var line = lastTwoText.Split('\n').Select(l => l.Trim()).Reverse().FirstOrDefault(l => l.Contains("–"));
+                if (!string.IsNullOrWhiteSpace(line)) meta.Signer = line;
+            }
+
+            // Data/hora logo após a frase de assinatura
+            var mDate = Regex.Match(hay, @"assinado eletronicamente.*?em\s*([0-9]{2}/[0-9]{2}/[0-9]{4}).*?([0-9]{2}:[0-9]{2})", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (mDate.Success)
+            {
+                var s = $"{mDate.Groups[1].Value} {mDate.Groups[2].Value}";
+                if (DateTime.TryParse(s, new System.Globalization.CultureInfo("pt-BR"), DateTimeStyles.AssumeLocal, out var dt))
+                    meta.SignedAt = dt.ToString("yyyy-MM-dd HH:mm");
+            }
+            else
+            {
+                // Data por extenso (ex.: 22 de julho de 2024)
+                var ext = Regex.Match(hay, @"(\d{1,2})\s+de\s+(janeiro|fevereiro|març|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})", RegexOptions.IgnoreCase);
+                if (ext.Success)
+                {
+                    var dia = ext.Groups[1].Value.PadLeft(2, '0');
+                    var mes = ext.Groups[2].Value.ToLower()
+                        .Replace("març", "marco");
+                    var ano = ext.Groups[3].Value;
+                    var meses = new Dictionary<string, string>
+                    {
+                        ["janeiro"]="01",["fevereiro"]="02",["marco"]="03",["abril"]="04",["maio"]="05",["junho"]="06",
+                        ["julho"]="07",["agosto"]="08",["setembro"]="09",["outubro"]="10",["novembro"]="11",["dezembro"]="12"
+                    };
+                    if (meses.TryGetValue(mes, out var mnum))
+                        meta.SignedAt = $"{ano}-{mnum}-{dia}";
+                }
+            }
+
+            var mUrl = Regex.Match(hay, @"https?://\S+autentica\S*", RegexOptions.IgnoreCase);
+            if (mUrl.Success) meta.AuthUrl = mUrl.Value.TrimEnd('.', ',');
+
+            return meta;
         }
 
         private readonly string[] GenericOrigins = new[]
