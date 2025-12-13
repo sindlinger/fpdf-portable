@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Globalization;
 using Npgsql;
+using NpgsqlTypes;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.Text.RegularExpressions;
 
 namespace FilterPDF.Utils
@@ -15,12 +18,123 @@ namespace FilterPDF.Utils
     {
         public static string DefaultPgUri = "postgres://fpdf:fpdf@localhost:5432/fpdf";
 
-        public static long UpsertProcess(string pgUri, string sourcePath, PDFAnalysisResult analysis, BookmarkClassifier classifier, bool storeJson = false)
+        private static string Clean(string? s)
+        {
+            if (string.IsNullOrEmpty(s)) return s ?? "";
+            return s.Replace("\0", " ");
+        }
+
+        private static object? SanitizeJson(object? value)
+        {
+            if (value == null) return null;
+            if (value is string s) return Clean(s);
+            if (value is Dictionary<string, object> dict)
+            {
+                var cleanDict = new Dictionary<string, object>(dict.Count, dict.Comparer);
+                foreach (var kv in dict)
+                    cleanDict[kv.Key] = SanitizeJson(kv.Value) ?? "";
+                return cleanDict;
+            }
+            if (value is IList<object> list)
+            {
+                var cleanList = new List<object>(list.Count);
+                foreach (var item in list)
+                    cleanList.Add(SanitizeJson(item) ?? "");
+                return cleanList;
+            }
+            if (value is IEnumerable<string> strEnum)
+                return strEnum.Select(Clean).ToList();
+            return value;
+        }
+
+        public static void UpsertRawProcess(string pgUri, string processNumber, string sourcePath, string rawJson)
+        {
+            pgUri = NormalizePgUri(pgUri);
+            processNumber = Clean(processNumber);
+            rawJson = rawJson ?? "";
+            rawJson = Regex.Replace(rawJson, @"\p{C}+", " ");
+
+            using var conn = new NpgsqlConnection(pgUri);
+            conn.Open();
+
+            // ensure table
+            using (var ensure = new NpgsqlCommand(@"
+                CREATE TABLE IF NOT EXISTS raw_processes(
+                    process_number text PRIMARY KEY,
+                    source text,
+                    created_at timestamptz default now(),
+                    raw_json jsonb
+                );
+            ", conn))
+            {
+                ensure.ExecuteNonQuery();
+            }
+
+            using (var cmd = new NpgsqlCommand(@"
+                INSERT INTO raw_processes(process_number, source, raw_json)
+                VALUES (@p,@s,@j)
+                ON CONFLICT (process_number) DO UPDATE
+                   SET source = EXCLUDED.source,
+                       raw_json = EXCLUDED.raw_json,
+                       created_at = now();
+            ", conn))
+            {
+                cmd.Parameters.AddWithValue("@p", processNumber);
+                cmd.Parameters.AddWithValue("@s", sourcePath ?? "");
+                cmd.Parameters.Add("@j", NpgsqlDbType.Jsonb).Value = rawJson;
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        public static string? FetchRawProcess(string pgUri, string processNumber)
+        {
+            pgUri = NormalizePgUri(pgUri);
+            processNumber = Clean(processNumber);
+            using var conn = new NpgsqlConnection(pgUri);
+            conn.Open();
+            using var cmd = new NpgsqlCommand("SELECT raw_json FROM raw_processes WHERE process_number=@p", conn);
+            cmd.Parameters.AddWithValue("@p", processNumber);
+            var obj = cmd.ExecuteScalar();
+            return obj == null || obj == DBNull.Value ? null : obj.ToString();
+        }
+
+        private static string NormalizePgUri(string uri)
+        {
+            if (string.IsNullOrWhiteSpace(uri)) throw new ArgumentNullException(nameof(uri));
+            if (uri.StartsWith("Host=", StringComparison.OrdinalIgnoreCase) ||
+                uri.StartsWith("Server=", StringComparison.OrdinalIgnoreCase) ||
+                uri.StartsWith("User Id=", StringComparison.OrdinalIgnoreCase))
+                return uri; // already connection string format
+
+            if (uri.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
+                uri.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+            {
+                var u = new Uri(uri);
+                var userInfo = u.UserInfo.Split(':');
+                var user = userInfo.Length > 0 ? userInfo[0] : "";
+                var pass = userInfo.Length > 1 ? userInfo[1] : "";
+                var builder = new NpgsqlConnectionStringBuilder
+                {
+                    Host = u.Host,
+                    Port = u.IsDefaultPort ? 5432 : u.Port,
+                    Username = user,
+                    Password = pass,
+                    Database = u.AbsolutePath.TrimStart('/')
+                };
+                return builder.ToString();
+            }
+
+            throw new ArgumentException("Invalid Postgres URI format", nameof(uri));
+        }
+
+        public static long UpsertProcess(string pgUri, string sourcePath, PDFAnalysisResult analysis, BookmarkClassifier classifier, bool storeJson = false, bool storeDocuments = false, string jsonPayload = null)
         {
             if (analysis == null) throw new ArgumentNullException(nameof(analysis));
             if (classifier == null) throw new ArgumentNullException(nameof(classifier));
 
-            var processNumber = InferProcessFromName(sourcePath) ?? InferProcessFromMetadata(analysis) ?? "sem_processo";
+            pgUri = NormalizePgUri(pgUri);
+
+            var processNumber = Clean(InferProcessFromName(sourcePath) ?? InferProcessFromMetadata(analysis) ?? "sem_processo");
             var headerFooter = ExtractHeaderFooter(analysis?.Pages);
             var totalPages = analysis?.DocumentInfo?.TotalPages ?? analysis?.Pages?.Count ?? 0;
 
@@ -29,7 +143,18 @@ namespace FilterPDF.Utils
             using var tx = conn.BeginTransaction();
 
             long processId;
-            var analysisJson = storeJson ? JsonConvert.SerializeObject(analysis) : null;
+            string? analysisJson = null;
+            if (storeJson)
+            {
+                if (!string.IsNullOrEmpty(jsonPayload))
+                {
+                    analysisJson = jsonPayload;
+                }
+                else
+                {
+                    analysisJson = JsonConvert.SerializeObject(analysis);
+                }
+            }
 
             using (var cmd = new NpgsqlCommand(@"
                 INSERT INTO processes(process_number, source, json,
@@ -87,11 +212,14 @@ namespace FilterPDF.Utils
             {
                 cmd.Parameters.AddWithValue("@p", processNumber);
                 cmd.Parameters.AddWithValue("@s", sourcePath ?? "");
-                cmd.Parameters.AddWithValue("@j", (object?)analysisJson ?? DBNull.Value);
+                if (analysisJson != null)
+                    cmd.Parameters.Add("@j", NpgsqlDbType.Jsonb).Value = analysisJson;
+                else
+                    cmd.Parameters.AddWithValue("@j", DBNull.Value);
                 var agg = AggregateProcess(analysis);
                 cmd.Parameters.AddWithValue("@tp", agg.TotalPages);
-                cmd.Parameters.AddWithValue("@tw", agg.TotalWords);
-                cmd.Parameters.AddWithValue("@tc", agg.TotalChars);
+                cmd.Parameters.Add("@tw", NpgsqlDbType.Bigint).Value = (long)agg.TotalWords;
+                cmd.Parameters.Add("@tc", NpgsqlDbType.Bigint).Value = (long)agg.TotalChars;
                 cmd.Parameters.AddWithValue("@ti", agg.TotalImages);
                 cmd.Parameters.AddWithValue("@tf", agg.TotalFonts);
                 cmd.Parameters.AddWithValue("@sr", agg.ScanRatio);
@@ -109,124 +237,164 @@ namespace FilterPDF.Utils
                 cmd.Parameters.AddWithValue("@hatt", agg.HasAttachments);
                 cmd.Parameters.AddWithValue("@hmult", agg.HasMultimedia);
                 cmd.Parameters.AddWithValue("@hforms", agg.HasForms);
-                cmd.Parameters.AddWithValue("@mt", (object?)agg.MetaTitle ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@ma", (object?)agg.MetaAuthor ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@ms", (object?)agg.MetaSubject ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@mk", (object?)agg.MetaKeywords ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@mc", (object?)agg.MetaCreator ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@mpr", (object?)agg.MetaProducer ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@mt", (object?)Clean(agg.MetaTitle) ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@ma", (object?)Clean(agg.MetaAuthor) ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@ms", (object?)Clean(agg.MetaSubject) ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@mk", (object?)Clean(agg.MetaKeywords) ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@mc", (object?)Clean(agg.MetaCreator) ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@mpr", (object?)Clean(agg.MetaProducer) ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@cpdf", agg.CreatedPdf.HasValue ? agg.CreatedPdf.Value : (object)DBNull.Value);
                 cmd.Parameters.AddWithValue("@mpdf", agg.ModifiedPdf.HasValue ? agg.ModifiedPdf.Value : (object)DBNull.Value);
-                cmd.Parameters.AddWithValue("@dtypes", JsonConvert.SerializeObject(agg.DocTypes ?? new List<string>()));
-                cmd.Parameters.AddWithValue("@ho", (object?)headerFooter.HeaderOrigin ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@ht", (object?)headerFooter.HeaderTitle ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@hs", (object?)headerFooter.HeaderSubtitle ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@fs", headerFooter.FooterSigners?.ToArray() ?? Array.Empty<string>());
+                cmd.Parameters.Add("@dtypes", NpgsqlDbType.Jsonb).Value = (agg.DocTypes ?? new List<string>()).Select(Clean).ToList();
+                cmd.Parameters.AddWithValue("@ho", (object?)Clean(headerFooter.HeaderOrigin) ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@ht", (object?)Clean(headerFooter.HeaderTitle) ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@hs", (object?)Clean(headerFooter.HeaderSubtitle) ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@fs", headerFooter.FooterSigners?.Select(Clean).ToArray() ?? Array.Empty<string>());
                 cmd.Parameters.AddWithValue("@fsa", headerFooter.FooterSignedAt.HasValue ? headerFooter.FooterSignedAt.Value : (object)DBNull.Value);
-                cmd.Parameters.AddWithValue("@fsr", (object?)headerFooter.FooterSignatureRaw ?? DBNull.Value);
-                processId = (long)cmd.ExecuteScalar();
+                cmd.Parameters.AddWithValue("@fsr", (object?)Clean(headerFooter.FooterSignatureRaw) ?? DBNull.Value);
+                processId = Convert.ToInt64(cmd.ExecuteScalar());
             }
 
-            // Apaga documentos/páginas anteriores desse processo (idempotente)
-            using (var del = new NpgsqlCommand("DELETE FROM documents WHERE process_id=@pid", conn, tx))
+            if (storeDocuments)
             {
-                del.Parameters.AddWithValue("@pid", processId);
-                del.ExecuteNonQuery();
-            }
-
-            var allDocs = BuildDocuments(analysis, classifier, out var flatBookmarks);
-
-            foreach (var doc in allDocs)
-            {
-                long docId;
-                using (var cmd = new NpgsqlCommand(@"
-                    INSERT INTO documents(process_id, doc_key, doc_label_raw, doc_type, subtype, start_page, end_page, meta,
-                                          header_origin, header_title, header_subtitle, footer_signers, footer_signed_at, footer_signature_raw,
-                                          total_pages, total_words, total_chars, total_images, total_fonts, scan_ratio, has_forms, has_annotations)
-                    VALUES (@pid,@key,@label,@type,@sub,@sp,@ep,@meta,@ho,@ht,@hs,@fs,@fsa,@fsr,
-                            @tp,@tw,@tc,@ti,@tf,@sr,@hf,@ha)
-                    RETURNING id;
-                ", conn, tx))
+                // Apaga documentos/páginas anteriores desse processo (idempotente)
+                using (var del = new NpgsqlCommand("DELETE FROM documents WHERE process_id=@pid", conn, tx))
                 {
-                    cmd.Parameters.AddWithValue("@pid", processId);
-                    cmd.Parameters.AddWithValue("@key", doc.DocKey);
-                    cmd.Parameters.AddWithValue("@label", doc.RawLabel ?? "");
-                    cmd.Parameters.AddWithValue("@type", doc.Macro ?? "outros");
-                    cmd.Parameters.AddWithValue("@sub", doc.Subcat ?? "outros");
-                    cmd.Parameters.AddWithValue("@sp", doc.StartPage);
-                    cmd.Parameters.AddWithValue("@ep", doc.EndPage);
-                    cmd.Parameters.AddWithValue("@meta", JsonConvert.SerializeObject(doc.Meta ?? new Dictionary<string, object>()));
-                    cmd.Parameters.AddWithValue("@ho", (object?)doc.HeaderOrigin ?? DBNull.Value);
-                    cmd.Parameters.AddWithValue("@ht", (object?)doc.HeaderTitle ?? DBNull.Value);
-                    cmd.Parameters.AddWithValue("@hs", (object?)doc.HeaderSubtitle ?? DBNull.Value);
-                    cmd.Parameters.AddWithValue("@fs", doc.FooterSigners?.ToArray() ?? Array.Empty<string>());
-                    cmd.Parameters.AddWithValue("@fsa", doc.FooterSignedAt.HasValue ? doc.FooterSignedAt.Value : (object)DBNull.Value);
-                    cmd.Parameters.AddWithValue("@fsr", (object?)doc.FooterSignatureRaw ?? DBNull.Value);
-                    cmd.Parameters.AddWithValue("@tp", doc.TotalPages);
-                    cmd.Parameters.AddWithValue("@tw", doc.TotalWords);
-                    cmd.Parameters.AddWithValue("@tc", doc.TotalChars);
-                    cmd.Parameters.AddWithValue("@ti", doc.TotalImages);
-                    cmd.Parameters.AddWithValue("@tf", doc.TotalFonts);
-                    cmd.Parameters.AddWithValue("@sr", doc.ScanRatio);
-                    cmd.Parameters.AddWithValue("@hf", doc.HasForms);
-                    cmd.Parameters.AddWithValue("@ha", doc.HasAnnotations);
-                    docId = (long)cmd.ExecuteScalar();
+                    del.Parameters.AddWithValue("@pid", processId);
+                    del.ExecuteNonQuery();
                 }
 
-                // Páginas
-                foreach (var page in doc.Pages)
+                var allDocs = BuildDocuments(analysis, classifier, out var flatBookmarks);
+
+                foreach (var doc in allDocs)
                 {
-                    using var pCmd = new NpgsqlCommand(@"
-                        INSERT INTO pages(document_id, page_number, text, header_virtual, footer_virtual, has_money, has_cpf, fonts,
-                                           words, chars, is_scanned, has_text, image_count, annotation_count, has_form, has_js, font_count)
-                        VALUES (@d,@n,@t,@h,@f,@m,@cpf,@fonts,@w,@ch,@isc,@htxt,@img,@ann,@hform,@hjs,@fc)
+                    long docId;
+                    using (var cmd = new NpgsqlCommand(@"
+                        INSERT INTO documents(process_id, doc_key, doc_label_raw, doc_type, subtype, start_page, end_page, meta,
+                                              header_origin, header_title, header_subtitle, footer_signers, footer_signed_at, footer_signature_raw,
+                                              total_pages, total_words, total_chars, total_images, total_fonts, scan_ratio, has_forms, has_annotations)
+                        VALUES (@pid,@key,@label,@type,@sub,@sp,@ep,@meta,@ho,@ht,@hs,@fs,@fsa,@fsr,
+                                @tp,@tw,@tc,@ti,@tf,@sr,@hf,@ha)
                         RETURNING id;
-                    ", conn, tx);
-                    pCmd.Parameters.AddWithValue("@d", docId);
-                    pCmd.Parameters.AddWithValue("@n", page.PageNumber);
-                    pCmd.Parameters.AddWithValue("@t", page.Text ?? "");
-                    pCmd.Parameters.AddWithValue("@h", page.Header ?? "");
-                    pCmd.Parameters.AddWithValue("@f", page.Footer ?? "");
-                    pCmd.Parameters.AddWithValue("@m", page.HasMoney);
-                    pCmd.Parameters.AddWithValue("@cpf", page.HasCpf);
-                    pCmd.Parameters.AddWithValue("@fonts", page.FontList?.ToArray() ?? Array.Empty<string>());
-                    pCmd.Parameters.AddWithValue("@w", page.WordCount);
-                    pCmd.Parameters.AddWithValue("@ch", page.CharCount);
-                    pCmd.Parameters.AddWithValue("@isc", page.IsScanned);
-                    pCmd.Parameters.AddWithValue("@htxt", page.WordCount > 0);
-                    pCmd.Parameters.AddWithValue("@img", page.ImageCount);
-                    pCmd.Parameters.AddWithValue("@ann", page.AnnotationCount);
-                    pCmd.Parameters.AddWithValue("@hform", page.HasForm);
-                    pCmd.Parameters.AddWithValue("@hjs", page.HasJs);
-                    pCmd.Parameters.AddWithValue("@fc", page.FontCount);
-                    var pageId = (long)pCmd.ExecuteScalar();
-
-                    InsertPageImages(conn, tx, pageId, page);
-                    InsertPageAnnotations(conn, tx, pageId, page);
-                    InsertPageFonts(conn, tx, pageId, page);
+                    ", conn, tx))
+                    {
+                        cmd.Parameters.AddWithValue("@pid", processId);
+                        cmd.Parameters.AddWithValue("@key", Clean(doc.DocKey));
+                        cmd.Parameters.AddWithValue("@label", Clean(doc.RawLabel) ?? "");
+                        cmd.Parameters.AddWithValue("@type", Clean(doc.Macro) ?? "outros");
+                        cmd.Parameters.AddWithValue("@sub", Clean(doc.Subcat) ?? "outros");
+                        cmd.Parameters.AddWithValue("@sp", doc.StartPage);
+                        cmd.Parameters.AddWithValue("@ep", doc.EndPage);
+                        var metaSan = SanitizeJson(doc.Meta ?? new Dictionary<string, object>());
+                        cmd.Parameters.Add("@meta", NpgsqlDbType.Jsonb).Value = metaSan ?? new Dictionary<string, object>();
+                        cmd.Parameters.AddWithValue("@ho", (object?)Clean(doc.HeaderOrigin) ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@ht", (object?)Clean(doc.HeaderTitle) ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@hs", (object?)Clean(doc.HeaderSubtitle) ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@fs", doc.FooterSigners?.Select(Clean).ToArray() ?? Array.Empty<string>());
+                        cmd.Parameters.AddWithValue("@fsa", doc.FooterSignedAt.HasValue ? doc.FooterSignedAt.Value : (object)DBNull.Value);
+                        cmd.Parameters.AddWithValue("@fsr", (object?)Clean(doc.FooterSignatureRaw) ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@tp", doc.TotalPages);
+                        cmd.Parameters.Add("@tw", NpgsqlDbType.Bigint).Value = (long)doc.TotalWords;
+                        cmd.Parameters.Add("@tc", NpgsqlDbType.Bigint).Value = (long)doc.TotalChars;
+                        cmd.Parameters.AddWithValue("@ti", doc.TotalImages);
+                        cmd.Parameters.AddWithValue("@tf", doc.TotalFonts);
+                        cmd.Parameters.AddWithValue("@sr", doc.ScanRatio);
+                        cmd.Parameters.AddWithValue("@hf", doc.HasForms);
+                        cmd.Parameters.AddWithValue("@ha", doc.HasAnnotations);
+                    docId = Convert.ToInt64(cmd.ExecuteScalar());
                 }
-            }
 
-            // bookmarks (flat)
-            using (var delBk = new NpgsqlCommand("DELETE FROM bookmarks WHERE process_id=@pid", conn, tx))
-            {
-                delBk.Parameters.AddWithValue("@pid", processId);
-                delBk.ExecuteNonQuery();
-            }
-            foreach (var bk in flatBookmarks)
-            {
-                using var insBk = new NpgsqlCommand("INSERT INTO bookmarks(process_id,title,page_number,level) VALUES (@p,@t,@pg,@lvl)", conn, tx);
-                insBk.Parameters.AddWithValue("@p", processId);
-                insBk.Parameters.AddWithValue("@t", bk.Title ?? "");
-                insBk.Parameters.AddWithValue("@pg", bk.StartPage);
-                insBk.Parameters.AddWithValue("@lvl", bk.Level);
-                insBk.ExecuteNonQuery();
+                    // Páginas e bookmarks não são mais gravados (dados completos ficam no JSON bruto)
+                }
+
+                // Removido: persistência de bookmarks. Informação completa continua acessível no JSON bruto.
             }
 
             tx.Commit();
             return processId;
         }
 
+        /// <summary>
+        /// Insere documentos já segmentados (dicts vindos do pipeline) vinculados a um processo.
+        /// Remove documentos anteriores para manter idempotência.
+        /// </summary>
+        public static void UpsertDocuments(string pgUri, long processId, IEnumerable<Dictionary<string, object>> docs)
+        {
+            pgUri = NormalizePgUri(pgUri);
+            using var conn = new NpgsqlConnection(pgUri);
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+
+            using (var del = new NpgsqlCommand("DELETE FROM documents WHERE process_id=@pid", conn, tx))
+            {
+                del.Parameters.AddWithValue("@pid", processId);
+                del.ExecuteNonQuery();
+            }
+
+            int seq = 0;
+            foreach (var doc in docs)
+            {
+                seq++;
+                string label = Clean(GetStr(doc, "doc_label"));
+                string docType = Clean(GetStr(doc, "doc_type"));
+                string docKey = BuildDocKeySafe(label, seq, GetInt(doc, "start_page", 1));
+
+                var summary = GetDict(doc, "doc_summary");
+                string headerOrigin = Clean(GetStr(summary, "origin_main"));
+                string headerTitle = Clean(GetStr(summary, "origin_sub"));
+                string headerSubtitle = Clean(GetStr(summary, "origin_extra"));
+                var signer = GetStr(summary, "signer");
+                DateTime? signedAt = ParseDate(GetStr(summary, "signed_at"));
+                string footerRaw = GetStr(doc, "footer");
+
+                int startPage = GetInt(doc, "start_page", 1);
+                int endPage = GetInt(doc, "end_page", startPage);
+                int docPages = GetInt(doc, "doc_pages", endPage - startPage + 1);
+                long wordCount = GetLong(doc, "word_count");
+                long charCount = GetLong(doc, "char_count");
+                int images = GetInt(doc, "images");
+                int fonts = (doc.TryGetValue("fonts", out var f) && f is IEnumerable<object> farr) ? farr.Count() : 0;
+                decimal scanRatio = (decimal)Math.Max(0, Math.Min(100, GetDouble(doc, "blank_ratio") * 100));
+
+                var meta = SanitizeJson(doc) ?? new Dictionary<string, object>();
+
+                using var cmd = new NpgsqlCommand(@"
+                    INSERT INTO documents(process_id, doc_key, doc_label_raw, doc_type, subtype, start_page, end_page, meta,
+                                          header_origin, header_title, header_subtitle, footer_signers, footer_signed_at, footer_signature_raw,
+                                          total_pages, total_words, total_chars, total_images, total_fonts, scan_ratio, has_forms, has_annotations)
+                    VALUES (@pid,@key,@label,@type,@sub,@sp,@ep,@meta,
+                            @ho,@ht,@hs,@fs,@fsa,@fsr,
+                            @tp,@tw,@tc,@ti,@tf,@sr,@hf,@ha);
+                ", conn, tx);
+
+                cmd.Parameters.AddWithValue("@pid", processId);
+                cmd.Parameters.AddWithValue("@key", docKey);
+                cmd.Parameters.AddWithValue("@label", label ?? "");
+                cmd.Parameters.AddWithValue("@type", string.IsNullOrWhiteSpace(docType) ? "outros" : docType);
+                cmd.Parameters.AddWithValue("@sub", GetStr(summary, "template") ?? "outros");
+                cmd.Parameters.AddWithValue("@sp", startPage);
+                cmd.Parameters.AddWithValue("@ep", endPage);
+                cmd.Parameters.Add("@meta", NpgsqlDbType.Jsonb).Value = meta;
+                cmd.Parameters.AddWithValue("@ho", (object?)headerOrigin ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@ht", (object?)headerTitle ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@hs", (object?)headerSubtitle ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@fs", string.IsNullOrWhiteSpace(signer) ? Array.Empty<string>() : new[] { signer });
+                cmd.Parameters.AddWithValue("@fsa", signedAt.HasValue ? signedAt.Value : (object)DBNull.Value);
+                cmd.Parameters.AddWithValue("@fsr", (object?)footerRaw ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@tp", docPages);
+                cmd.Parameters.Add("@tw", NpgsqlDbType.Bigint).Value = wordCount;
+                cmd.Parameters.Add("@tc", NpgsqlDbType.Bigint).Value = charCount;
+                cmd.Parameters.AddWithValue("@ti", images);
+                cmd.Parameters.AddWithValue("@tf", fonts);
+                cmd.Parameters.AddWithValue("@sr", scanRatio);
+                cmd.Parameters.AddWithValue("@hf", false);
+                cmd.Parameters.AddWithValue("@ha", false);
+
+                cmd.ExecuteNonQuery();
+            }
+
+            tx.Commit();
+        }
         private static List<DocumentRecord> BuildDocuments(PDFAnalysisResult analysis, BookmarkClassifier classifier, out List<BookmarkFlat> flatOut)
         {
             var totalPages = analysis.DocumentInfo?.TotalPages ?? analysis.Pages.Count;
@@ -319,6 +487,14 @@ namespace FilterPDF.Utils
         private static string BuildDocKey(string canon, int seq, int startPage)
         {
             var baseKey = string.IsNullOrWhiteSpace(canon) ? "doc" : canon.Replace(' ', '_').ToLower();
+            return $"{baseKey}_{seq:000}_{startPage:0000}";
+        }
+
+        private static string BuildDocKeySafe(string label, int seq, int startPage)
+        {
+            var baseKey = string.IsNullOrWhiteSpace(label) ? "doc" : Regex.Replace(label.ToLower(), @"\s+", "_");
+            baseKey = Regex.Replace(baseKey, @"[^a-z0-9_]+", "");
+            if (string.IsNullOrWhiteSpace(baseKey)) baseKey = "doc";
             return $"{baseKey}_{seq:000}_{startPage:0000}";
         }
 
@@ -501,6 +677,51 @@ namespace FilterPDF.Utils
             }
             ranges.Add((start, prev));
             return ranges;
+        }
+
+        private static string GetStr(Dictionary<string, object>? dict, string key)
+        {
+            if (dict == null || !dict.TryGetValue(key, out var v) || v == null) return "";
+            return v.ToString();
+        }
+
+        private static Dictionary<string, object>? GetDict(Dictionary<string, object> dict, string key)
+        {
+            if (dict.TryGetValue(key, out var v) && v is Dictionary<string, object> d) return d;
+            if (dict.TryGetValue(key, out var j) && j is JObject jo) return jo.ToObject<Dictionary<string, object>>();
+            return null;
+        }
+
+        private static int GetInt(Dictionary<string, object> dict, string key, int def = 0)
+        {
+            if (!dict.TryGetValue(key, out var v) || v == null) return def;
+            if (v is int i) return i;
+            if (int.TryParse(v.ToString(), out var parsed)) return parsed;
+            return def;
+        }
+
+        private static long GetLong(Dictionary<string, object> dict, string key, long def = 0)
+        {
+            if (!dict.TryGetValue(key, out var v) || v == null) return def;
+            if (v is long l) return l;
+            if (long.TryParse(v.ToString(), out var parsed)) return parsed;
+            return def;
+        }
+
+        private static double GetDouble(Dictionary<string, object> dict, string key, double def = 0)
+        {
+            if (!dict.TryGetValue(key, out var v) || v == null) return def;
+            if (v is double d) return d;
+            if (double.TryParse(v.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)) return parsed;
+            return def;
+        }
+
+        private static DateTime? ParseDate(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            if (DateTime.TryParse(s, CultureInfo.GetCultureInfo("pt-BR"), DateTimeStyles.AssumeLocal, out var dt)) return dt;
+            if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dtu)) return dtu;
+            return null;
         }
 
         private static string? InferProcessFromName(string path)

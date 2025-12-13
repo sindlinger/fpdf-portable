@@ -5,6 +5,7 @@ using System.Linq;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using FilterPDF.Utils;
 using System.Text;
 
@@ -31,11 +32,14 @@ namespace FilterPDF.Commands
         public override void Execute(string[] args)
         {
             string inputDir = ".";
-            string output = "fpdf.json";
+            string output = ""; // por padrão não gera arquivo; apenas Postgres
             bool splitAnexos = false; // backward compat (anexos now covered by bookmark docs)
             int maxBookmarkPages = 30; // agora interno, sem flag na CLI
-            string? pgUri = null;
-            bool pgStoreJson = false;
+            bool onlyDespachos = false;
+            string? signerContains = null;
+            string pgUri = FilterPDF.Utils.PgDocStore.DefaultPgUri;
+            var analysesByProcess = new Dictionary<string, PDFAnalysisResult>();
+            string cacheDir = Path.Combine(Directory.GetCurrentDirectory(), "tmp", "cache");
             // Localiza configs/fields e docid/layout_hashes.csv respeitando cwd ou pasta do binário.
             string cwd = Directory.GetCurrentDirectory();
             string exeBase = AppContext.BaseDirectory;
@@ -67,8 +71,8 @@ namespace FilterPDF.Commands
                 if (args[i] == "--input-dir" && i + 1 < args.Length) inputDir = args[i + 1];
                 if (args[i] == "--output" && i + 1 < args.Length) output = args[i + 1];
                 if (args[i] == "--split-anexos") splitAnexos = true;
-                if (args[i] == "--pg-uri" && i + 1 < args.Length) pgUri = args[i + 1];
-                if (args[i] == "--pg-store-json") pgStoreJson = true;
+                if (args[i] == "--only-despachos") onlyDespachos = true;
+                if (args[i] == "--signer-contains" && i + 1 < args.Length) signerContains = args[i + 1];
             }
 
             var dir = new DirectoryInfo(inputDir);
@@ -78,65 +82,152 @@ namespace FilterPDF.Commands
                 return;
             }
 
+            // Detecta se estamos lendo de cache (json) ou de PDFs
+            var jsonCaches = dir.GetFiles("*.json").OrderBy(f => f.Name).ToList();
             var pdfs = dir.GetFiles("*.pdf").OrderBy(f => f.Name).ToList();
-            var allDocs = new List<Dictionary<string, object>>();
+            bool useCache = jsonCaches.Count > 0 && pdfs.Count == 0;
 
-            foreach (var pdf in pdfs)
+            var allDocs = new List<Dictionary<string, object>>();
+            var allDocsWords = new List<List<Dictionary<string, object>>>();
+
+            var sources = useCache ? jsonCaches.Cast<FileInfo>() : pdfs.Cast<FileInfo>();
+
+            foreach (var file in sources)
             {
                 try
                 {
-                    var analysis = new PDFAnalyzer(pdf.FullName).AnalyzeFull();
+                    PDFAnalysisResult analysis;
+                    string pdfPath;
 
-                    // Opcional: persiste análise completa no Postgres
-                    if (!string.IsNullOrWhiteSpace(pgUri))
+                    if (useCache)
                     {
-                        try
-                        {
-                            var classifier = new BookmarkClassifier();
-                            PgDocStore.UpsertProcess(pgUri, pdf.FullName, analysis, classifier, storeJson: pgStoreJson);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.Error.WriteLine($"[pipeline-tjpb] WARN PG {pdf.Name}: {ex.Message}");
-                        }
+                        var text = File.ReadAllText(file.FullName);
+                        analysis = JsonConvert.DeserializeObject<PDFAnalysisResult>(text)
+                                   ?? throw new Exception("Cache inválido");
+                        pdfPath = file.FullName;
                     }
+                    else
+                    {
+                        analysis = new PDFAnalyzer(file.FullName).AnalyzeFull();
+                        pdfPath = file.FullName;
+                    }
+
+                    var procName = DeriveProcessName(pdfPath);
+                    analysesByProcess[procName] = analysis;
                     var bookmarkDocs = BuildBookmarkBoundaries(analysis, maxBookmarkPages);
                     var segmenter = new DocumentSegmenter(new DocumentSegmentationConfig());
                     var docs = bookmarkDocs.Count > 0 ? bookmarkDocs : segmenter.FindDocuments(analysis);
 
                     foreach (var d in docs)
                     {
-                        var obj = BuildDocObject(d, analysis, pdf.FullName, fieldScripts);
+                        var obj = BuildDocObject(d, analysis, pdfPath, fieldScripts);
                         allDocs.Add(obj);
+                        if (obj.ContainsKey("words"))
+                        {
+                            var w = obj["words"] as List<Dictionary<string, object>>;
+                            if (w != null) allDocsWords.Add(w);
+                        }
 
                         // Legacy split-anexos now redundant; kept for compatibility
                         if (splitAnexos && d.DetectedType == "anexo")
                         {
-                        var anexosChildren = SplitAnexos(d, analysis, pdf.FullName, fieldScripts);
+                        var anexosChildren = SplitAnexos(d, analysis, pdfPath, fieldScripts);
                             allDocs.AddRange(anexosChildren);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"[pipeline-tjpb] WARN {pdf.Name}: {ex.Message}");
+                    Console.Error.WriteLine($"[pipeline-tjpb] WARN {file.Name}: {ex.Message}");
                 }
             }
 
-            var result = new { documents = allDocs };
-            var json = JsonConvert.SerializeObject(result, Formatting.Indented);
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output)) ?? ".");
-            File.WriteAllText(output, json);
-            Console.WriteLine($"[pipeline-tjpb] {allDocs.Count} documentos -> {output}");
+            // Filtros opcionais (CLI) aplicados em C# para evitar pós-processamento externo
+            var filteredDocs = new List<Dictionary<string, object>>();
+            var filteredWords = new List<List<Dictionary<string, object>>>();
+            foreach (var doc in allDocs)
+            {
+                string label = doc.TryGetValue("doc_label", out var dl) ? dl?.ToString() ?? "" : "";
+                string docType = doc.TryGetValue("doc_type", out var dt) ? dt?.ToString() ?? "" : "";
+                string signer = "";
+                if (doc.TryGetValue("doc_summary", out var dsObj) && dsObj is Dictionary<string, object> ds)
+                    signer = ds.TryGetValue("signer", out var s) ? s?.ToString() ?? "" : "";
+
+                bool pass = true;
+                if (onlyDespachos)
+                    pass &= label.Contains("despacho", StringComparison.OrdinalIgnoreCase) ||
+                            docType.Contains("despacho", StringComparison.OrdinalIgnoreCase);
+                if (!string.IsNullOrWhiteSpace(signerContains))
+                    pass &= signer.Contains(signerContains, StringComparison.OrdinalIgnoreCase);
+                if (!pass) continue;
+
+                filteredDocs.Add(doc);
+                if (doc.TryGetValue("words", out var wobj) && wobj is List<Dictionary<string, object>> wlist)
+                    filteredWords.Add(wlist);
+            }
+
+            var docsForStats = filteredWords.Count > 0 ? filteredWords : allDocsWords;
+            var paragraphStats = BuildParagraphStats(docsForStats);
+            var grouped = (filteredDocs.Count > 0 ? filteredDocs : allDocs)
+                          .GroupBy(d => d.TryGetValue("process", out var p) ? p?.ToString() ?? "sem_processo" : "sem_processo")
+                          .Select(g => new { process = g.Key, documents = g.ToList() })
+                          .ToList();
+
+            // Persistir por processo no Postgres (tabelas processes + documents)
+            foreach (var grp in grouped)
+            {
+                var procName = grp.process;
+                var firstDoc = grp.documents.FirstOrDefault();
+                var sourcePath = firstDoc != null && firstDoc.TryGetValue("pdf_path", out var pp) ? pp?.ToString() ?? procName : procName;
+                var analysis = analysesByProcess.TryGetValue(procName, out var an) ? an : new PDFAnalysisResult();
+                long procId = 0;
+                try
+                {
+                    procId = PgDocStore.UpsertProcess(pgUri, sourcePath, analysis, new BookmarkClassifier(), storeJson: false, storeDocuments: false, jsonPayload: null);
+                    PgDocStore.UpsertDocuments(pgUri, procId, grp.documents);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[pipeline-tjpb] WARN PG save {procName}: {ex.Message}");
+                }
+            }
+
+            // Export opcional para arquivo (global)
+            if (!string.IsNullOrWhiteSpace(output))
+            {
+                var exportObj = new { processes = grouped, paragraph_stats = paragraphStats };
+                var tokenExp = JToken.FromObject(exportObj);
+                foreach (var v in tokenExp.SelectTokens("$..*").OfType<JValue>())
+                {
+                    if (v.Type == JTokenType.String && v.Value != null)
+                    {
+                        var s = v.Value.ToString();
+                        s = Regex.Replace(s, @"\p{C}+", " ");
+                        v.Value = s;
+                    }
+                }
+                var jsonResult = tokenExp.ToString(Formatting.Indented);
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output)) ?? ".");
+                File.WriteAllText(output, jsonResult);
+                Console.WriteLine($"[pipeline-tjpb] {(filteredDocs.Count > 0 ? filteredDocs.Count : allDocs.Count)} documentos -> {output}");
+            }
         }
 
         public override void ShowHelp()
         {
-            Console.WriteLine("fpdf pipeline-tjpb --input-dir <dir> --output fpdf.json [--split-anexos] [--pg-uri <uri>] [--pg-store-json]");
-            Console.WriteLine("Gera JSON compatível com tmp/pipeline/step2/fpdf.json para o CI Dashboard.");
+            Console.WriteLine("fpdf pipeline-tjpb --input-dir <dir> [--output fpdf.json] [--split-anexos] [--only-despachos] [--signer-contains <texto>]");
+            Console.WriteLine("Lê caches (tmp/cache/*.json) ou PDFs; grava no Postgres e, opcionalmente, exporta JSON.");
             Console.WriteLine("--split-anexos: cria subdocumentos a partir de bookmarks 'Anexo/Anexos' dentro de cada documento.");
-            Console.WriteLine("--pg-uri: salva processo/documentos/páginas no Postgres (usa schema tools/pg_ddl_new.sql).");
-            Console.WriteLine("--pg-store-json: além dos agregados, persiste o JSON completo da análise (pode ser grande).");
+            Console.WriteLine("--only-despachos: filtra apenas documentos cujo doc_label/doc_type contenha 'Despacho'.");
+            Console.WriteLine("--signer-contains: filtra documentos cujo signer contenha o texto informado (case-insensitive).");
+        }
+
+        private string DeriveProcessName(string path)
+        {
+            var name = Path.GetFileNameWithoutExtension(path);
+            var m = Regex.Match(name, @"\d+");
+            if (m.Success) return m.Value;
+            return name;
         }
 
         private Dictionary<string, object> BuildDocObject(DocumentBoundary d, PDFAnalysisResult analysis, string pdfPath, List<FieldScript> scripts)
@@ -253,10 +344,11 @@ namespace FilterPDF.Commands
 
             var docSummary = BuildDocSummary(d, pdfPath, docText, lastPageText, lastTwoText, header, footer, docBookmarks, analysis.Signatures, docLabel);
             var extractedFields = ExtractFields(docText, wordsWithCoords, d, pdfPath, scripts);
+            var forensics = BuildForensics(d, analysis, docText, wordsWithCoords);
 
             return new Dictionary<string, object>
             {
-                ["process"] = Path.GetFileNameWithoutExtension(pdfPath),
+                ["process"] = DeriveProcessName(pdfPath),
                 ["pdf_path"] = pdfPath,
                 ["doc_label"] = docLabel,
                 ["doc_type"] = docType,
@@ -281,7 +373,8 @@ namespace FilterPDF.Commands
                 ["bookmarks"] = docBookmarks,
                 ["anexos_bookmarks"] = anexos,
                 ["doc_summary"] = docSummary,
-                ["fields"] = extractedFields
+                ["fields"] = extractedFields,
+                ["forensics"] = forensics
             };
         }
 
@@ -352,40 +445,43 @@ namespace FilterPDF.Commands
             var mVer = Regex.Match(hay, @"verificador\s+([0-9]{4,})", RegexOptions.IgnoreCase);
             if (mVer.Success) meta.Verifier = mVer.Groups[1].Value.Trim();
 
-            var mSigner = Regex.Match(hay, @"Documento assinado eletronicamente por\s+(.+?),\s*(.+?),\s*em", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            if (mSigner.Success)
-                meta.Signer = $"{mSigner.Groups[1].Value.Trim()} - {mSigner.Groups[2].Value.Trim()}";
-            else
+            if (hay.Contains("assinado eletronicamente", StringComparison.OrdinalIgnoreCase))
             {
-                var line = lastTwoText.Split('\n').Select(l => l.Trim()).Reverse().FirstOrDefault(l => l.Contains("–"));
-                if (!string.IsNullOrWhiteSpace(line)) meta.Signer = line;
-            }
-
-            // Data/hora logo após a frase de assinatura
-            var mDate = Regex.Match(hay, @"assinado eletronicamente.*?em\s*([0-9]{2}/[0-9]{2}/[0-9]{4}).*?([0-9]{2}:[0-9]{2})", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            if (mDate.Success)
-            {
-                var s = $"{mDate.Groups[1].Value} {mDate.Groups[2].Value}";
-                if (DateTime.TryParse(s, new System.Globalization.CultureInfo("pt-BR"), DateTimeStyles.AssumeLocal, out var dt))
-                    meta.SignedAt = dt.ToString("yyyy-MM-dd HH:mm");
-            }
-            else
-            {
-                // Data por extenso (ex.: 22 de julho de 2024)
-                var ext = Regex.Match(hay, @"(\d{1,2})\s+de\s+(janeiro|fevereiro|març|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})", RegexOptions.IgnoreCase);
-                if (ext.Success)
+                var mSigner = Regex.Match(hay, @"Documento assinado eletronicamente por\s+(.+?),\s*(.+?),\s*em", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                if (mSigner.Success)
+                    meta.Signer = $"{mSigner.Groups[1].Value.Trim()} - {mSigner.Groups[2].Value.Trim()}";
+                else
                 {
-                    var dia = ext.Groups[1].Value.PadLeft(2, '0');
-                    var mes = ext.Groups[2].Value.ToLower()
-                        .Replace("març", "marco");
-                    var ano = ext.Groups[3].Value;
-                    var meses = new Dictionary<string, string>
+                    var line = lastTwoText.Split('\n').Select(l => l.Trim()).Reverse().FirstOrDefault(l => l.Contains("–"));
+                    if (!string.IsNullOrWhiteSpace(line)) meta.Signer = line;
+                }
+
+                // Data/hora logo após a frase de assinatura
+                var mDate = Regex.Match(hay, @"assinado eletronicamente.*?em\s*([0-9]{2}/[0-9]{2}/[0-9]{4}).*?([0-9]{2}:[0-9]{2})", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                if (mDate.Success)
+                {
+                    var s = $"{mDate.Groups[1].Value} {mDate.Groups[2].Value}";
+                    if (DateTime.TryParse(s, new System.Globalization.CultureInfo("pt-BR"), DateTimeStyles.AssumeLocal, out var dt))
+                        meta.SignedAt = dt.ToString("yyyy-MM-dd HH:mm");
+                }
+                else
+                {
+                    // Data por extenso (ex.: 22 de julho de 2024)
+                    var ext = Regex.Match(hay, @"(\d{1,2})\s+de\s+(janeiro|fevereiro|març|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})", RegexOptions.IgnoreCase);
+                    if (ext.Success)
                     {
-                        ["janeiro"]="01",["fevereiro"]="02",["marco"]="03",["abril"]="04",["maio"]="05",["junho"]="06",
-                        ["julho"]="07",["agosto"]="08",["setembro"]="09",["outubro"]="10",["novembro"]="11",["dezembro"]="12"
-                    };
-                    if (meses.TryGetValue(mes, out var mnum))
-                        meta.SignedAt = $"{ano}-{mnum}-{dia}";
+                        var dia = ext.Groups[1].Value.PadLeft(2, '0');
+                        var mes = ext.Groups[2].Value.ToLower()
+                            .Replace("març", "marco");
+                        var ano = ext.Groups[3].Value;
+                        var meses = new Dictionary<string, string>
+                        {
+                            ["janeiro"]="01",["fevereiro"]="02",["marco"]="03",["abril"]="04",["maio"]="05",["junho"]="06",
+                            ["julho"]="07",["agosto"]="08",["setembro"]="09",["outubro"]="10",["novembro"]="11",["dezembro"]="12"
+                        };
+                        if (meses.TryGetValue(mes, out var mnum))
+                            meta.SignedAt = $"{ano}-{mnum}-{dia}";
+                    }
                 }
             }
 
@@ -393,6 +489,430 @@ namespace FilterPDF.Commands
             if (mUrl.Success) meta.AuthUrl = mUrl.Value.TrimEnd('.', ',');
 
             return meta;
+        }
+
+        // FORÊNSE
+        private Dictionary<string, object> BuildForensics(DocumentBoundary d, PDFAnalysisResult analysis, string docText, List<Dictionary<string, object>> words)
+        {
+            var result = new Dictionary<string, object>();
+
+            // clusterizar linhas (y) por página
+            var lineObjs = BuildLines(words);
+
+            // fontes/tamanhos dominantes
+            var fontNames = words.Select(w => w["font"]?.ToString() ?? "").Where(f => f != "").ToList();
+            var fontSizes = words.Select(w => Convert.ToDouble(w["size"])).Where(s => s > 0).ToList();
+            string dominantFont = Mode(fontNames);
+            double dominantSize = Median(fontSizes);
+
+            // outliers: linha cujo tamanho médio difere >20% ou fonte não dominante
+            var outliers = lineObjs.Where(l =>
+            {
+                double sz = l.FontSizeAvg;
+                bool sizeOut = dominantSize > 0 && Math.Abs(sz - dominantSize) / dominantSize > 0.2;
+                bool fontOut = !string.IsNullOrEmpty(dominantFont) && !string.Equals(l.Font, dominantFont, StringComparison.OrdinalIgnoreCase);
+                return sizeOut || fontOut;
+            }).Take(10).ToList();
+
+            // linhas repetidas (hash texto)
+            var repeats = lineObjs.GroupBy(l => l.TextNorm)
+                                  .Where(g => g.Count() > 1)
+                                  .Select(g => new { text = g.Key, count = g.Count() })
+                                  .OrderByDescending(x => x.count)
+                                  .Take(10)
+                                  .ToList();
+
+            // anchors: assinatura, verificador, crc, rodapé SEI
+            var anchors = DetectAnchors(lineObjs);
+
+            // bandas header/subheader/body1/body2/footer
+            var bands = SummarizeBands(lineObjs);
+
+            // anotações agregadas
+            var ann = SummarizeAnnotations(analysis);
+
+            result["font_dominant"] = dominantFont;
+            result["size_dominant"] = dominantSize;
+            result["outlier_lines"] = outliers.Select(l => l.ToDict()).ToList();
+            result["repeat_lines"] = repeats;
+            result["anchors"] = anchors;
+            result["bands"] = bands;
+            result["annotations"] = ann;
+
+            return result;
+        }
+
+        private List<LineObj> BuildLines(List<Dictionary<string, object>> words)
+        {
+            var lines = new List<LineObj>();
+            var byPage = words.GroupBy(w => Convert.ToInt32(w["page"]));
+            foreach (var pg in byPage)
+            {
+                var clusters = ClusterLines(pg.ToList());
+                foreach (var c in clusters)
+                {
+                    var ordered = c.OrderBy(w => Convert.ToDouble(w["x0"])).ToList();
+                    string text = string.Join(" ", ordered.Select(w => w["text"].ToString()));
+                    if (string.IsNullOrWhiteSpace(text)) continue;
+
+                    double nx0 = ordered.Min(w => Convert.ToDouble(w["nx0"]));
+                    double ny0 = ordered.Min(w => Convert.ToDouble(w["ny0"]));
+                    double nx1 = ordered.Max(w => Convert.ToDouble(w["nx1"]));
+                    double ny1 = ordered.Max(w => Convert.ToDouble(w["ny1"]));
+                    var fonts = ordered.Select(w => w["font"]?.ToString() ?? "").Where(f => f != "").ToList();
+                    var sizes = ordered.Select(w => Convert.ToDouble(w["size"])).Where(s => s > 0).ToList();
+
+                    lines.Add(new LineObj
+                    {
+                        Page = pg.Key,
+                        Text = text.Trim(),
+                        TextNorm = Regex.Replace(text.ToLowerInvariant(), @"\\s+", " ").Trim(),
+                        NX0 = nx0, NX1 = nx1, NY0 = ny0, NY1 = ny1,
+                        Font = Mode(fonts),
+                        FontSizeAvg = sizes.Count > 0 ? sizes.Average() : 0
+                    });
+                }
+            }
+            return lines;
+        }
+
+        private List<List<Dictionary<string, object>>> ClusterLines(List<Dictionary<string, object>> words, double tol = 1.5)
+        {
+            var groups = new List<List<Dictionary<string, object>>>();
+            foreach (var w in words.OrderByDescending(w => Convert.ToDouble(w["y0"])))
+            {
+                double y = Convert.ToDouble(w["y0"]);
+                bool placed = false;
+                foreach (var g in groups)
+                {
+                    double gy = g.Average(x => Convert.ToDouble(x["y0"]));
+                    if (Math.Abs(gy - y) <= tol)
+                    {
+                        g.Add(w);
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) groups.Add(new List<Dictionary<string, object>> { w });
+            }
+            return groups;
+        }
+
+        private Dictionary<string, object> DetectAnchors(List<LineObj> lines)
+        {
+            var anchors = new Dictionary<string, object>();
+            anchors["signature"] = FindAnchor(lines, "documento assinado eletronicamente");
+            anchors["verifier"] = FindAnchor(lines, "código verificador");
+            anchors["crc"] = FindAnchor(lines, "crc");
+            anchors["sei_footer"] = FindAnchor(lines, " / pg");
+            return anchors;
+        }
+
+        // -------- Paragraph stats across all docs --------
+
+        private List<object> BuildParagraphStats(List<List<Dictionary<string, object>>> allDocsWords)
+        {
+            var paragraphsPerDoc = allDocsWords.Select(BuildParagraphsFromWords).ToList();
+            int maxPars = paragraphsPerDoc.Max(p => p.Length);
+            var stats = new List<object>();
+
+            for (int idx = 0; idx < maxPars; idx++)
+            {
+                int docn = 0;
+                var df2 = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                var tf2 = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                var df3 = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                var tf3 = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var pars in paragraphsPerDoc)
+                {
+                    if (idx >= pars.Length) continue;
+                    docn++;
+                    var tokens = pars[idx].Tokens;
+                    var seen2 = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var seen3 = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var bg in Ngrams(tokens, 2))
+                    {
+                        tf2[bg] = tf2.TryGetValue(bg, out var v) ? v + 1 : 1;
+                        seen2.Add(bg);
+                    }
+                    foreach (var tr in Ngrams(tokens, 3))
+                    {
+                        tf3[tr] = tf3.TryGetValue(tr, out var v) ? v + 1 : 1;
+                        seen3.Add(tr);
+                    }
+                    foreach (var bg in seen2)
+                        df2[bg] = df2.TryGetValue(bg, out var v) ? v + 1 : 1;
+                    foreach (var tr in seen3)
+                        df3[tr] = df3.TryGetValue(tr, out var v) ? v + 1 : 1;
+                }
+
+                int thresholdStable = (int)Math.Ceiling(docn * 0.6);
+                int thresholdVariable = (int)Math.Floor(docn * 0.2);
+
+                var stable2 = df2.Where(kv => kv.Value >= thresholdStable)
+                                 .OrderByDescending(kv => kv.Value)
+                                 .ThenByDescending(kv => tf2[kv.Key])
+                                 .ThenBy(kv => kv.Key)
+                                 .Take(20)
+                                 .Select(kv => new { ngram = kv.Key, docfreq = kv.Value, tf = tf2[kv.Key] });
+
+                var stable3 = df3.Where(kv => kv.Value >= thresholdStable)
+                                 .OrderByDescending(kv => kv.Value)
+                                 .ThenByDescending(kv => tf3[kv.Key])
+                                 .ThenBy(kv => kv.Key)
+                                 .Take(20)
+                                 .Select(kv => new { ngram = kv.Key, docfreq = kv.Value, tf = tf3[kv.Key] });
+
+                var variable2 = df2.Where(kv => kv.Value <= thresholdVariable)
+                                   .OrderBy(kv => kv.Value)
+                                   .ThenByDescending(kv => tf2[kv.Key])
+                                   .ThenBy(kv => kv.Key)
+                                   .Take(20)
+                                   .Select(kv => new { ngram = kv.Key, docfreq = kv.Value, tf = tf2[kv.Key] });
+
+                var variable3 = df3.Where(kv => kv.Value <= thresholdVariable)
+                                   .OrderBy(kv => kv.Value)
+                                   .ThenByDescending(kv => tf3[kv.Key])
+                                   .ThenBy(kv => kv.Key)
+                                   .Take(20)
+                                   .Select(kv => new { ngram = kv.Key, docfreq = kv.Value, tf = tf3[kv.Key] });
+
+                stats.Add(new
+                {
+                    paragraph = idx + 1,
+                    docs_with_par = docn,
+                    stable_bigrams = stable2,
+                    stable_trigrams = stable3,
+                    variable_bigrams = variable2,
+                    variable_trigrams = variable3
+                });
+            }
+
+            return stats;
+        }
+
+        private class ParagraphObj
+        {
+            public int Page { get; set; }
+            public double Ny0 { get; set; }
+            public string Text { get; set; } = "";
+            public List<string> Tokens { get; set; } = new List<string>();
+        }
+
+        private ParagraphObj[] BuildParagraphsFromWords(List<Dictionary<string, object>> words)
+        {
+            var stopWords = new HashSet<string>(new[] { "", "-", "/", "pg", "se", "em", "de", "da", "do", "das", "dos", "a", "o", "e", "que", "para", "com", "no", "na", "as", "os", "ao", "à", "até", "por", "uma", "um", "§", "art", "artigo" });
+            var pages = new Dictionary<int, List<Dictionary<string, object>>>();
+            foreach (var w in words)
+            {
+                int p = Convert.ToInt32(w["page"]);
+                if (!pages.ContainsKey(p)) pages[p] = new List<Dictionary<string, object>>();
+                pages[p].Add(w);
+            }
+
+            var paras = new List<ParagraphObj>();
+            foreach (var kv in pages.OrderBy(k => k.Key))
+            {
+                var clusters = new List<List<Dictionary<string, object>>>();
+                foreach (var w in kv.Value.OrderByDescending(w => Convert.ToDouble(w["y0"])))
+                {
+                    double y = Convert.ToDouble(w["y0"]);
+                    bool placed = false;
+                    foreach (var c in clusters)
+                    {
+                        double gy = c.Average(x => Convert.ToDouble(x["y0"]));
+                        if (Math.Abs(gy - y) <= 1.5)
+                        {
+                            c.Add(w); placed = true; break;
+                        }
+                    }
+                    if (!placed) clusters.Add(new List<Dictionary<string, object>> { w });
+                }
+
+                foreach (var cl in clusters)
+                {
+                    var line = cl.OrderBy(w => Convert.ToDouble(w["x0"])).ToList();
+                    string text = RebuildLine(line);
+                    text = DespaceIfNeeded(text);
+                    var tokens = text.Split(' ')
+                                     .Select(t => Regex.Replace(t, @"[^\w\d]+", "", RegexOptions.None).ToLowerInvariant())
+                                     .Where(t => t.Length > 0 && !stopWords.Contains(t))
+                                     .ToList();
+                    paras.Add(new ParagraphObj
+                    {
+                        Page = kv.Key,
+                        Ny0 = cl.Min(w => Convert.ToDouble(w["ny0"])),
+                        Text = text,
+                        Tokens = tokens
+                    });
+                }
+            }
+
+            return paras.OrderByDescending(p => p.Page)
+                        .ThenByDescending(p => p.Ny0)
+                        .ToArray();
+        }
+
+        private string RebuildLine(List<Dictionary<string, object>> ws, double spaceFactor = 0.6)
+        {
+            if (ws == null || ws.Count == 0) return "";
+            var sorted = ws.OrderBy(w => Convert.ToDouble(w["x0"])).ToList();
+            string result = sorted[0]["text"].ToString();
+            double avgW = sorted.Average(w => Convert.ToDouble(w["x1"]) - Convert.ToDouble(w["x0"]));
+            for (int i = 1; i < sorted.Count; i++)
+            {
+                double gap = Convert.ToDouble(sorted[i]["x0"]) - Convert.ToDouble(sorted[i - 1]["x1"]);
+                int spaces = (gap > avgW * 0.2) ? Math.Max(1, (int)(gap / (avgW * spaceFactor))) : 0;
+                result += new string(' ', spaces) + sorted[i]["text"];
+            }
+            return result;
+        }
+
+        private string DespaceIfNeeded(string text)
+        {
+            var tokens = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (tokens.Length == 0) return text;
+            int single = tokens.Count(t => t.Length == 1);
+            if ((double)single / tokens.Length > 0.5)
+                return Regex.Replace(text, @"\s+", "");
+            return text;
+        }
+
+        private IEnumerable<string> Ngrams(List<string> tokens, int n)
+        {
+            if (tokens == null || tokens.Count < n) yield break;
+            for (int i = 0; i <= tokens.Count - n; i++)
+                yield return string.Join(" ", tokens.GetRange(i, n));
+        }
+
+        private object SummarizeBands(List<LineObj> lines)
+        {
+            var bands = new Dictionary<string, object>();
+            bands["header"] = SummarizeBand(lines.Where(l => l.NY0 >= 0.85).ToList());
+            bands["subheader"] = SummarizeBand(lines.Where(l => l.NY0 >= 0.78 && l.NY0 < 0.85).ToList());
+            bands["body1"] = SummarizeBand(lines.Where(l => l.NY0 >= 0.55 && l.NY0 < 0.78).ToList());
+            bands["body2"] = SummarizeBand(lines.Where(l => l.NY0 >= 0.30 && l.NY0 < 0.55).ToList());
+            bands["footer_band"] = SummarizeBand(lines.Where(l => l.NY0 < 0.30).ToList());
+            return bands;
+        }
+
+        private object SummarizeBand(List<LineObj> lines)
+        {
+            if (lines == null || lines.Count == 0) return new { count = 0 };
+            var nx0 = lines.Select(l => l.NX0).ToList();
+            var ny0 = lines.Select(l => l.NY0).ToList();
+            var nx1 = lines.Select(l => l.NX1).ToList();
+            var ny1 = lines.Select(l => l.NY1).ToList();
+            var fonts = lines.Select(l => l.Font ?? "").Where(f => f != "").ToList();
+            var sizes = lines.Select(l => l.FontSizeAvg).Where(s => s > 0).ToList();
+
+            return new
+            {
+                count = lines.Count,
+                bbox = new
+                {
+                    nx0 = Median(nx0),
+                    ny0 = Median(ny0),
+                    nx1 = Median(nx1),
+                    ny1 = Median(ny1),
+                    p25 = new { nx0 = Quantile(nx0, 0.25), ny0 = Quantile(ny0, 0.25), nx1 = Quantile(nx1, 0.25), ny1 = Quantile(ny1, 0.25) },
+                    p75 = new { nx0 = Quantile(nx0, 0.75), ny0 = Quantile(ny0, 0.75), nx1 = Quantile(nx1, 0.75), ny1 = Quantile(ny1, 0.75) }
+                },
+                font = Mode(fonts),
+                size = Median(sizes),
+                samples = lines.Take(5).Select(l => l.Text).ToList()
+            };
+        }
+
+        private object FindAnchor(List<LineObj> lines, string needle)
+        {
+            var hits = lines.Where(l => l.TextNorm.Contains(needle.ToLowerInvariant())).ToList();
+            if (!hits.Any()) return new { found = false };
+            return new
+            {
+                found = true,
+                count = hits.Count,
+                bbox = new
+                {
+                    nx0 = Median(hits.Select(h => h.NX0).ToList()),
+                    ny0 = Median(hits.Select(h => h.NY0).ToList()),
+                    nx1 = Median(hits.Select(h => h.NX1).ToList()),
+                    ny1 = Median(hits.Select(h => h.NY1).ToList())
+                },
+                samples = hits.Take(3).Select(h => h.Text).ToList()
+            };
+        }
+
+        private object SummarizeAnnotations(PDFAnalysisResult analysis)
+        {
+            var anns = analysis.Pages.SelectMany(p => p.Annotations ?? new List<Annotation>()).ToList();
+            var byType = anns.GroupBy(a => a.Type ?? "").ToDictionary(g => g.Key, g => g.Count());
+            DateTime? min = anns.Where(a => a.ModificationDate.HasValue).Select(a => a.ModificationDate).DefaultIfEmpty(null).Min();
+            DateTime? max = anns.Where(a => a.ModificationDate.HasValue).Select(a => a.ModificationDate).DefaultIfEmpty(null).Max();
+            return new
+            {
+                count = anns.Count,
+                by_type = byType,
+                date_min = min,
+                date_max = max
+            };
+        }
+
+        private string Mode(List<string> items)
+        {
+            var clean = items?.Where(x => !string.IsNullOrWhiteSpace(x)).ToList() ?? new List<string>();
+            if (clean.Count == 0) return "";
+            return clean.GroupBy(x => x.ToLowerInvariant())
+                        .OrderByDescending(g => g.Count())
+                        .Select(g => g.Key)
+                        .FirstOrDefault();
+        }
+
+        private double Median(List<double> items)
+        {
+            if (items == null || items.Count == 0) return 0;
+            items = items.OrderBy(x => x).ToList();
+            int n = items.Count;
+            if (n % 2 == 1) return items[n / 2];
+            return (items[n / 2 - 1] + items[n / 2]) / 2.0;
+        }
+
+        private double Quantile(List<double> items, double q)
+        {
+            if (items == null || items.Count == 0) return 0;
+            items = items.OrderBy(x => x).ToList();
+            double pos = (items.Count - 1) * q;
+            int idx = (int)pos;
+            double frac = pos - idx;
+            if (idx + 1 < items.Count)
+                return items[idx] * (1 - frac) + items[idx + 1] * frac;
+            return items[idx];
+        }
+
+        private class LineObj
+        {
+            public int Page { get; set; }
+            public string Text { get; set; }
+            public string TextNorm { get; set; }
+            public double NX0 { get; set; }
+            public double NX1 { get; set; }
+            public double NY0 { get; set; }
+            public double NY1 { get; set; }
+            public string Font { get; set; }
+            public double FontSizeAvg { get; set; }
+
+            public Dictionary<string, object> ToDict() => new Dictionary<string, object>
+            {
+                ["page"] = Page,
+                ["text"] = Text,
+                ["nx0"] = NX0,
+                ["ny0"] = NY0,
+                ["nx1"] = NX1,
+                ["ny1"] = NY1,
+                ["font"] = Font,
+                ["size_avg"] = FontSizeAvg
+            };
         }
 
         private string CompactFooter(string text)

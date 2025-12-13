@@ -27,10 +27,11 @@
 - `fpdf show-moddate --input file.pdf` — mostra CreationDate/ModDate.
 
 ## Pipeline (TJPB)
-- `fpdf pipeline tjpb --input-dir <dir> --output fpdf.json [--split-anexos] [--pg-uri <postgres://...>]`  
-  Segmenta preferencialmente pelos bookmarks (cada bookmark vira um documento). Se não houver bookmarks, usa segmentação heurística.  
-  Opcional: grava a análise completa no Postgres (`--pg-uri`).  
-  Campos: `process, pdf_path, doc_label, doc_type (bookmark|anexo|bookmark+segment|anexo+segment|heuristic), start_page, end_page, doc_pages, total_pages, text, fonts, images, page_size, has_signature_image, is_attachment, word_count, char_count, text_density, blank_ratio, words (bbox+fonte+estilo), header, footer, bookmarks`.
+- `fpdf pipeline-tjpb --input-dir <dir> [--output fpdf.json] [--split-anexos] [--only-despachos] [--signer-contains <texto>]`  
+  - Lê PDFs (ou caches *.json) do diretório, segmenta por bookmarks (fallback heurístico) e grava tudo no Postgres (tabelas `processes` e `documents` – nunca mistura documentos de processos diferentes).  
+  - Armazenamento: raw completo fica em `raw_processes` (via `fpdf load`); resultado parseado (metadados, campos, palavras com bbox, rodapés, etc.) vai para `documents.meta`.  
+  - Exportação para arquivo JSON é opcional (`--output`); por padrão não gera arquivo.  
+  - Campos principais por documento: `process, pdf_path, doc_label, doc_type, start_page, end_page, doc_pages, total_pages, text, fonts, images, page_size, has_signature_image, word_count, char_count, text_density, blank_ratio, words (bbox+fonte+estilo), header, footer, bookmarks, anexos_bookmarks, doc_summary (origens, signer, datas, SEI), fields (regex/YAML), forensics`.
 
 ## Geração de teste
 - `fpdf create-test --output test.pdf` — PDF simples com campos simulados.
