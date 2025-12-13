@@ -73,16 +73,24 @@ namespace FilterPDF.Utils
             using (var cmd = new NpgsqlCommand(@"
                 INSERT INTO raw_processes(process_number, source, raw_json)
                 VALUES (@p,@s,@j)
-                ON CONFLICT (process_number) DO UPDATE
-                   SET source = EXCLUDED.source,
-                       raw_json = EXCLUDED.raw_json,
-                       created_at = now();
+                ON CONFLICT (process_number) DO NOTHING;
             ", conn))
             {
                 cmd.Parameters.AddWithValue("@p", processNumber);
                 cmd.Parameters.AddWithValue("@s", sourcePath ?? "");
                 cmd.Parameters.Add("@j", NpgsqlDbType.Jsonb).Value = rawJson;
                 cmd.ExecuteNonQuery();
+            }
+
+            // Se já existir, deixamos intocado (read-only); opcional: avisar
+            using (var check = new NpgsqlCommand("SELECT 1 FROM raw_processes WHERE process_number=@p", conn))
+            {
+                check.Parameters.AddWithValue("@p", processNumber);
+                using var r = check.ExecuteReader();
+                if (!r.Read())
+                {
+                    Console.WriteLine($"[PgDocStore] raw salvo (novo) {processNumber}");
+                }
             }
         }
 
