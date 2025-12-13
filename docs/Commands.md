@@ -28,8 +28,8 @@
 
 ## Pipeline (TJPB)
 - `fpdf pipeline-tjpb --input-dir <dir> [--split-anexos] [--only-despachos] [--signer-contains <texto>]`  
-  - Lê PDFs (ou caches *.json) do diretório, segmenta por bookmarks (fallback heurístico) e grava tudo no Postgres (tabelas `processes` e `documents` – nunca mistura documentos de processos diferentes).  
-  - Armazenamento: raw completo fica em `raw_processes` (via `fpdf load`); resultado parseado (metadados, campos, palavras com bbox, rodapés, etc.) vai para `documents.meta`.  
+  - Lê PDFs (ou caches *.json) do diretório, segmenta por bookmarks (fallback heurístico) e grava tudo no Postgres em **uma única tabela (`processes`)**: os documentos ficam aninhados no campo JSON do processo; não usamos tabela `documents`.  
+  - Armazenamento: raw completo fica em `raw_processes` (via `fpdf load`); resultado parseado (metadados, campos, palavras com bbox, rodapés, etc.) fica no `processes.json` daquele processo.  
   - Não gera arquivo de saída; consulta sempre pelo Postgres.  
   - Campos principais por documento: `process, pdf_path, doc_label, doc_type, start_page, end_page, doc_pages, total_pages, text, fonts, images, page_size, has_signature_image, word_count, char_count, text_density, blank_ratio, words (bbox+fonte+estilo), header, footer, bookmarks, anexos_bookmarks, doc_summary (origens, signer, datas, SEI), fields (regex/YAML), forensics`.
 

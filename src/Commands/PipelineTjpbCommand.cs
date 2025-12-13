@@ -178,11 +178,22 @@ namespace FilterPDF.Commands
                 var firstDoc = grp.documents.FirstOrDefault();
                 var sourcePath = firstDoc != null && firstDoc.TryGetValue("pdf_path", out var pp) ? pp?.ToString() ?? procName : procName;
                 var analysis = analysesByProcess.TryGetValue(procName, out var an) ? an : new PDFAnalysisResult();
-                long procId = 0;
+                var payload = new { process = procName, documents = grp.documents, paragraph_stats = paragraphStats };
+                var tokenProc = JToken.FromObject(payload);
+                foreach (var v in tokenProc.SelectTokens("$..*").OfType<JValue>())
+                {
+                    if (v.Type == JTokenType.String && v.Value != null)
+                    {
+                        var s = v.Value.ToString();
+                        s = Regex.Replace(s, @"\p{C}+", " ");
+                        v.Value = s;
+                    }
+                }
+                var jsonProc = tokenProc.ToString(Formatting.None);
                 try
                 {
-                    procId = PgDocStore.UpsertProcess(pgUri, sourcePath, analysis, new BookmarkClassifier(), storeJson: false, storeDocuments: false, jsonPayload: null);
-                    PgDocStore.UpsertDocuments(pgUri, procId, grp.documents);
+                    PgDocStore.UpsertProcess(pgUri, sourcePath, analysis, new BookmarkClassifier(),
+                                             storeJson: true, storeDocuments: false, jsonPayload: jsonProc);
                 }
                 catch (Exception ex)
                 {
