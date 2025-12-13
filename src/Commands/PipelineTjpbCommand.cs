@@ -32,7 +32,6 @@ namespace FilterPDF.Commands
         public override void Execute(string[] args)
         {
             string inputDir = ".";
-            string output = ""; // por padrão não gera arquivo; apenas Postgres
             bool splitAnexos = false; // backward compat (anexos now covered by bookmark docs)
             int maxBookmarkPages = 30; // agora interno, sem flag na CLI
             bool onlyDespachos = false;
@@ -69,7 +68,6 @@ namespace FilterPDF.Commands
             for (int i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--input-dir" && i + 1 < args.Length) inputDir = args[i + 1];
-                if (args[i] == "--output" && i + 1 < args.Length) output = args[i + 1];
                 if (args[i] == "--split-anexos") splitAnexos = true;
                 if (args[i] == "--only-despachos") onlyDespachos = true;
                 if (args[i] == "--signer-contains" && i + 1 < args.Length) signerContains = args[i + 1];
@@ -191,32 +189,12 @@ namespace FilterPDF.Commands
                     Console.Error.WriteLine($"[pipeline-tjpb] WARN PG save {procName}: {ex.Message}");
                 }
             }
-
-            // Export opcional para arquivo (global)
-            if (!string.IsNullOrWhiteSpace(output))
-            {
-                var exportObj = new { processes = grouped, paragraph_stats = paragraphStats };
-                var tokenExp = JToken.FromObject(exportObj);
-                foreach (var v in tokenExp.SelectTokens("$..*").OfType<JValue>())
-                {
-                    if (v.Type == JTokenType.String && v.Value != null)
-                    {
-                        var s = v.Value.ToString();
-                        s = Regex.Replace(s, @"\p{C}+", " ");
-                        v.Value = s;
-                    }
-                }
-                var jsonResult = tokenExp.ToString(Formatting.Indented);
-                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output)) ?? ".");
-                File.WriteAllText(output, jsonResult);
-                Console.WriteLine($"[pipeline-tjpb] {(filteredDocs.Count > 0 ? filteredDocs.Count : allDocs.Count)} documentos -> {output}");
-            }
         }
 
         public override void ShowHelp()
         {
-            Console.WriteLine("fpdf pipeline-tjpb --input-dir <dir> [--output fpdf.json] [--split-anexos] [--only-despachos] [--signer-contains <texto>]");
-            Console.WriteLine("Lê caches (tmp/cache/*.json) ou PDFs; grava no Postgres e, opcionalmente, exporta JSON.");
+            Console.WriteLine("fpdf pipeline-tjpb --input-dir <dir> [--split-anexos] [--only-despachos] [--signer-contains <texto>]");
+            Console.WriteLine("Lê caches (tmp/cache/*.json) ou PDFs; grava no Postgres (processes + documents). Não gera arquivo.");
             Console.WriteLine("--split-anexos: cria subdocumentos a partir de bookmarks 'Anexo/Anexos' dentro de cada documento.");
             Console.WriteLine("--only-despachos: filtra apenas documentos cujo doc_label/doc_type contenha 'Despacho'.");
             Console.WriteLine("--signer-contains: filtra documentos cujo signer contenha o texto informado (case-insensitive).");
