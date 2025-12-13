@@ -12,6 +12,7 @@ using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using FilterPDF;
 using FilterPDF.Configuration;
 using FilterPDF.Utils;
+using System.Text.RegularExpressions;
 
 
 namespace FilterPDF
@@ -29,17 +30,14 @@ namespace FilterPDF
 
         private class LoadOptions
         {
-            public bool UsePostgres { get; set; } = true;
-            public string DbPath { get; set; } = FilterPDF.Utils.SqliteCacheStore.DefaultDbPath;
-            public bool ExtractRaw { get; set; } = false;
+            public bool ExtractRaw { get; set; } = true;  // salva sempre o raw (camada hard)
             public bool ExtractText { get; set; } = false;
-            public bool ExtractUltra { get; set; } = false;
+            public bool ExtractUltra { get; set; } = true; // padrão: coleta completa (camada soft)
             public bool ExtractCustom { get; set; } = false;
             public int TextStrategy { get; set; } = 2; // Default: advanced
             public string OutputPath { get; set; } = "";
             public string OutputDir { get; set; } = "";
             public int MaxFiles { get; set; } = int.MaxValue; // Limita quantos PDFs processar
-            public string PgUri { get; set; } = FilterPDF.Utils.PgDocStore.DefaultPgUri;
             public int NumWorkers { get; set; } = 1;
             public bool Overwrite { get; set; } = false;
             public bool Verbose { get; set; } = false;
@@ -199,6 +197,9 @@ namespace FilterPDF
             
             // Parse options from correct index
             var options = ParseOptions(args.Skip(optionsStartIndex).ToArray(), out var additionalFiles);
+
+            // Sem cache em disco: raw vai para Postgres (raw_processes) e parse vai para processes
+            options.OutputDir = "";
             
             // When using --input-dir or --input-file, ignore other files
             if (hasInputDir || hasInputFile)
@@ -275,14 +276,7 @@ namespace FilterPDF
                 ApplySubcommandSettings("ultra", options);
             }
             
-            if (!options.UsePostgres && string.IsNullOrWhiteSpace(options.DbPath))
-            {
-                options.DbPath = FilterPDF.Utils.SqliteCacheStore.DefaultDbPath;
-            }
-            if (options.UsePostgres)
-                Console.WriteLine($"[INFO] Usando Postgres em: {options.PgUri}");
-            else
-                Console.WriteLine($"[INFO] Usando banco SQLite em: {options.DbPath}");
+            Console.WriteLine("[INFO] Cache local em tmp/cache (Postgres desativado)");
 
             Console.WriteLine($"Load: Pre-processing {inputFiles.Count} file(s)");
             Console.WriteLine($"   Options: {(options.ExtractRaw ? "RAW" : "")} {(options.ExtractText ? "TEXT" : "")} {(options.ExtractUltra ? "ULTRA" : "")}");
@@ -615,25 +609,6 @@ namespace FilterPDF
                             }
                             break;
 
-                        case "--pg-uri":
-                            if (i + 1 < args.Length)
-                            {
-                                options.PgUri = args[++i];
-                                options.UsePostgres = true;
-                            }
-                            break;
-
-                        case "--no-pg":
-                            options.UsePostgres = false;
-                            break;
-
-                        case "--db-path":
-                            if (i + 1 < args.Length)
-                            {
-                                options.DbPath = args[++i];
-                            }
-                            break;
-                            
                         case "--input-dir":
                             if (i + 1 < args.Length)
                             {
@@ -815,17 +790,7 @@ namespace FilterPDF
                 }
 
                 var cacheName = Path.GetFileNameWithoutExtension(inputFile);
-                string cacheLocator = options.UsePostgres ? $"{options.PgUri}#{cacheName}" : $"{options.DbPath}#{cacheName}";
-                if (!options.UsePostgres)
-                {
-                    var dbPath = options.DbPath;
-                    FilterPDF.Utils.SqliteCacheStore.EnsureDatabase(dbPath);
-
-                    if (!options.Overwrite && FilterPDF.Utils.SqliteCacheStore.CacheExists(dbPath, cacheName))
-                    {
-                        return (true, true, "Cache already exists", $"{dbPath}#{cacheName}");
-                    }
-                }
+                string cacheLocator = GetOutputPath(inputFile, options);
 
                 using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(TIMEOUT_SECONDS));
 
@@ -851,28 +816,20 @@ namespace FilterPDF
         
         private string GetOutputPath(string inputFile, LoadOptions options)
         {
-            if (!string.IsNullOrEmpty(options.OutputPath) && !string.IsNullOrEmpty(options.OutputDir))
-            {
-                throw new ArgumentException("Cannot specify both --output and --output-dir");
-            }
-            else if (!string.IsNullOrEmpty(options.OutputPath))
-            {
-                return options.OutputPath;
-            }
-            else if (!string.IsNullOrEmpty(options.OutputDir))
-            {
-                var filename = Path.GetFileNameWithoutExtension(inputFile) + "_cache.json";
-                return Path.Combine(options.OutputDir, filename);
-            }
-            else
-            {
-                if (!Directory.Exists(".cache"))
-                {
-                    Directory.CreateDirectory(".cache");
-                }
-                var filename = Path.GetFileNameWithoutExtension(inputFile) + "._cache.json";
-                return Path.Combine(".cache", filename);
-            }
+            string baseName = DeriveProcessName(inputFile);
+
+            // Sem cache em disco: só retornamos um nome lógico (não será gravado)
+            return baseName + ".json";
+        }
+
+        private string DeriveProcessName(string inputFile)
+        {
+            var name = Path.GetFileNameWithoutExtension(inputFile);
+            var m = Regex.Match(name, @"\d+");
+            if (m.Success)
+                return m.Value;
+            // se não achar dígitos, use o nome limpo
+            return name;
         }
         
         private void ProcessSingleFile(string inputFile, LoadOptions options, CancellationToken cancellationToken = default)
@@ -887,21 +844,6 @@ namespace FilterPDF
             }
             
             var cacheName = Path.GetFileNameWithoutExtension(inputFile);
-            if (!options.UsePostgres)
-            {
-                var dbPath = options.DbPath;
-                FilterPDF.Utils.SqliteCacheStore.EnsureDatabase(dbPath);
-
-                // Check if already exists in SQLite
-                if (!options.Overwrite && FilterPDF.Utils.SqliteCacheStore.CacheExists(dbPath, cacheName))
-                {
-                    if (options.Verbose)
-                    {
-                        Console.WriteLine($"Skipping {inputFile} - cache already exists in {dbPath}");
-                    }
-                    return;
-                }
-            }
             
             if (options.Verbose)
             {
@@ -932,6 +874,7 @@ namespace FilterPDF
                                             options.ExtractRaw ? "raw" :
                                             options.ExtractText ? "text" : "both";
             analysisDict["textStrategy"] = options.TextStrategy;
+            analysisDict["process"] = DeriveProcessName(inputFile);
             cacheData = analysisDict;
             
             // Check for cancellation before saving
@@ -951,28 +894,20 @@ namespace FilterPDF
                                    options.ExtractRaw && !options.ExtractText ? "raw" :
                                    options.ExtractText && !options.ExtractRaw ? "text" : "both";
 
-            // Persistência
-            var analysisObj = analysisModel ?? cacheData as PDFAnalysisResult; // Prefer strong model when available
-            if (analysisObj != null)
+            // Salvar bruto no Postgres (raw_processes). Sem arquivos em disco.
+            try
             {
-                if (options.UsePostgres)
-                {
-                    var classifier = new FilterPDF.Utils.BookmarkClassifier();
-                    FilterPDF.Utils.PgDocStore.UpsertProcess(options.PgUri, inputFile, analysisObj, classifier, storeJson:false);
-                    if (options.Verbose)
-                        Console.WriteLine($"  Gravado no Postgres: {options.PgUri}");
-                }
-                else
-                {
-                    var dbPath = options.DbPath;
-                    if (!options.UsePostgres)
-                    {
-                        FilterPDF.Utils.SqliteCacheStore.UpsertCache(dbPath, cacheName, inputFile, analysisObj, extractionMode);
-                        if (options.Verbose)
-                            Console.WriteLine($"  Saved cache to SQLite: {dbPath} (cache {cacheName})");
-                    }
-                }
+                var procName = DeriveProcessName(inputFile);
+                FilterPDF.Utils.PgDocStore.UpsertRawProcess(FilterPDF.Utils.PgDocStore.DefaultPgUri, procName, inputFile, json);
+                if (options.Verbose)
+                    Console.WriteLine($"  Bruto salvo em raw_processes (processo {procName})");
             }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[WARN] Não foi possível salvar bruto no Postgres: {ex.Message}");
+            }
+
+            // Persistência em Postgres desativada
         }
         
         #if false // LEGACY ITEXT5 BLOCK (excluded from build)
@@ -2102,55 +2037,21 @@ namespace FilterPDF
             Console.WriteLine($"COMMAND: {Name}");
             Console.WriteLine($"    {Description}");
             Console.WriteLine();
-            Console.WriteLine("USAGE:");
-            Console.WriteLine($"    fpdf {Name} <subcommand> --input-file <file.pdf> [options]");
-            Console.WriteLine($"    fpdf {Name} <subcommand> --input-dir <directory> [options]");
+            Console.WriteLine("USO SIMPLES (sem banco, cache em tmp/cache):");
+            Console.WriteLine($"    fpdf {Name} --input-dir <pasta-com-pdfs>");
+            Console.WriteLine("Saída: tmp/cache/<arquivo>.json (um por PDF, modo ULTRA padrão).");
             Console.WriteLine();
-            Console.WriteLine("EXAMPLES:");
-            Console.WriteLine($"    fpdf {Name} ultra --input-file document.pdf");
-            Console.WriteLine($"    fpdf {Name} text --input-file report.pdf");
-            Console.WriteLine($"    fpdf {Name} custom --input-dir /path/to/pdfs --num-workers 4");
-            Console.WriteLine($"    fpdf {Name} images-only --input-dir /path/to/pdfs --num-workers 16");
-            Console.WriteLine($"    fpdf {Name} ultra --input-dir . --output-dir .cache");
-            Console.WriteLine();
-            Console.WriteLine("SUBCOMMANDS:");
-            Console.WriteLine("    ultra         Full forensic analysis (slowest, most complete)");
-            Console.WriteLine("    text          Fast text-only extraction");
-            Console.WriteLine("    custom        Balanced extraction with customizable options");
-            Console.WriteLine("    images-only   Extract only images and scanned pages");
-            Console.WriteLine("    base64-only   Extract only base64 encoded content");
-            Console.WriteLine();
-            Console.WriteLine("OPTIONS:");
-            Console.WriteLine("    -u, --ultra              FULL extraction for CLI cache (default)");
-            Console.WriteLine("    --raw                    Extract raw PDF structure");
-            Console.WriteLine("    -t, --text               Extract text content");
-            Console.WriteLine("    -b, --both               Extract both raw and text");
-            Console.WriteLine("    -o, --output <file>      Output file for single PDF");
-            Console.WriteLine("    -d, --output-dir <dir>   Output directory for multiple PDFs");
-            Console.WriteLine("    --input-dir <dir>        Load all PDFs from a directory");
-            Console.WriteLine("    -r, --recursive          Include subdirectories (with --input-dir)");
-            Console.WriteLine("    -w, --num-workers <n>    Number of parallel workers (default: 1)");
-            Console.WriteLine("    -s, --strategy <1|2|3>   Text extraction strategy (default: 2)");
-            Console.WriteLine("    --overwrite              Overwrite existing cache files");
-            Console.WriteLine("    -v, --verbose            Show detailed progress");
-            Console.WriteLine("    --no-progress            Disable progress output");
-            Console.WriteLine();
-            Console.WriteLine("CUSTOM MODE OPTIONS:");
-            Console.WriteLine("    --no-text                Don't extract text content");
-            Console.WriteLine("    --include-objects        Include PDF objects");
-            Console.WriteLine("    --include-streams        Include stream contents");
-            Console.WriteLine("    --no-fonts               Don't extract font information");
-            Console.WriteLine("    --no-images              Don't extract images");
-            Console.WriteLine("    --no-multimedia          Don't extract multimedia");
-            Console.WriteLine("    --no-embedded-files      Don't extract embedded files");
-            Console.WriteLine("    --no-javascript          Don't extract JavaScript");
-            Console.WriteLine("    --no-forms               Don't extract form fields");
-            Console.WriteLine("    --no-annotations         Don't extract annotations");
-            Console.WriteLine("    --no-metadata            Don't extract metadata");
-            Console.WriteLine("    --no-bookmarks           Don't extract bookmarks");
-            Console.WriteLine("    --max-stream-size <n>    Max stream size to decode (default: 10000)");
-            Console.WriteLine();
-            Console.WriteLine("EXAMPLES:");
+            Console.WriteLine("OPÇÕES PRINCIPAIS:");
+            Console.WriteLine("    --input-dir <dir>        Pasta com PDFs (processa *.pdf)");
+            Console.WriteLine("    --output-dir <dir>       Onde salvar (default: tmp/cache)");
+            Console.WriteLine("    --recursive | -r         Incluir subpastas");
+            Console.WriteLine("    --num-workers | -w <n>   Paralelismo (default: 4 se não informado)");
+            Console.WriteLine("    --text                   Somente texto (rápido)");
+            Console.WriteLine("    --raw                    Estrutura bruta");
+            Console.WriteLine("    --ultra                  Completo (default)");
+            Console.WriteLine("    --overwrite              Regrava se já existir");
+            Console.WriteLine("    --verbose                Verbose");
+            Console.WriteLine("    (Somente JSON local; sem Postgres)");
             Console.WriteLine("    # Ultra mode - full analysis (slow but complete)");
             Console.WriteLine($"    fpdf {Name} ultra --input-file document.pdf");
             Console.WriteLine();
