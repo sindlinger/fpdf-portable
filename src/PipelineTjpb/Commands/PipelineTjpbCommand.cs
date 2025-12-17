@@ -9,6 +9,12 @@ using Newtonsoft.Json.Linq;
 using FilterPDF.Utils;
 using System.Text;
 using System.Security.Cryptography;
+using FilterPDF.Commands;
+using FilterPDF;
+using System.IO.Compression;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Navigation;
+using iText.Kernel.Utils;
 
 namespace FilterPDF.Commands
 {
@@ -33,6 +39,9 @@ namespace FilterPDF.Commands
         private LaudoHashDb? _hashDb;
         private string _hashDbPath = "";
 
+        // Diretório padrão de entrada (inbox). Usuário apenas copia PDFs/ZIPs para cá.
+        private const string InboxDir = "data/inbox";
+
         public override void Execute(string[] args)
         {
             try
@@ -40,7 +49,6 @@ namespace FilterPDF.Commands
                 bool onlyDespachos = false;
                 string? signerContains = null;
                 string? processFilter = null; // opcional: processar só um processo
-                string? hashDbArg = null;
                 // Sempre salva no Postgres padrão
                 string pgUri = PgDocStore.DefaultPgUri;
                 var analysesByProcess = new Dictionary<string, PDFAnalysisResult>();
@@ -71,29 +79,24 @@ namespace FilterPDF.Commands
                     if (args[i] == "--only-despachos") onlyDespachos = true;
                     if (args[i] == "--signer-contains" && i + 1 < args.Length) signerContains = args[i + 1];
                     if (args[i] == "--process" && i + 1 < args.Length) processFilter = args[i + 1];
-                    if (args[i] == "--hash-db" && i + 1 < args.Length) hashDbArg = args[i + 1];
                 }
 
-                // Carrega hash DB (opcional)
-                var hashCandidates = new List<string>();
-                if (!string.IsNullOrWhiteSpace(hashDbArg)) hashCandidates.Add(hashDbArg);
-                hashCandidates.Add(Path.Combine(Directory.GetCurrentDirectory(), "laudo_hashes.json"));
-                hashCandidates.Add(Path.Combine(Directory.GetCurrentDirectory(), "data", "reference", "laudo_hashes.json"));
-                hashCandidates.Add(Path.Combine(Directory.GetCurrentDirectory(), "data", "reference", "laudo_hashes.jsonl"));
-                foreach (var hc in hashCandidates)
-                {
-                    if (File.Exists(hc))
-                    {
-                        _hashDb = LaudoHashDb.Load(hc);
-                        if (_hashDb != null) { _hashDbPath = hc; break; }
-                    }
-                }
+                // Desabilitado: hash-db (legado). Mantemos campos vazios.
+                _hashDb = null;
+                _hashDbPath = "";
+
+                // ---------- Pré-processamento + load (fixo em InboxDir) ----------
+                var loadedProcesses = PreprocessAndLoadFromInbox(pgUri);
+                if (loadedProcesses.Count > 0)
+                    Console.WriteLine($"[pipeline-tjpb] {loadedProcesses.Count} processo(s) ingestados do inbox '{InboxDir}'.");
 
                 // ---------- Lê análises do Postgres (raw_processes) ----------
                 var allDocs = new List<Dictionary<string, object>>();
                 var allDocsWords = new List<List<Dictionary<string, object>>>();
 
                 var rows = PgAnalysisLoader.ListRawProcesses(pgUri);
+                if (loadedProcesses.Count > 0)
+                    rows = rows.Where(r => loadedProcesses.Contains(r.ProcessNumber)).ToList();
                 if (!string.IsNullOrWhiteSpace(processFilter))
                     rows = rows.Where(r => string.Equals(r.ProcessNumber, processFilter, StringComparison.OrdinalIgnoreCase)).ToList();
 
@@ -224,6 +227,7 @@ namespace FilterPDF.Commands
         public override void ShowHelp()
         {
             Console.WriteLine("fpdf pipeline-tjpb [--only-despachos] [--signer-contains <texto>] [--process <num>]");
+            Console.WriteLine($"Ingestão automática: lê PDFs/ZIPs em '{InboxDir}', pré-processa e grava em raw_processes antes de gerar bucket/soft.");
             Console.WriteLine("Lê análises do Postgres (raw_processes) e grava documentos em pipeline_processes_tjpb.");
             Console.WriteLine("--only-despachos: filtra apenas documentos cujo doc_label/doc_type contenha 'Despacho'.");
             Console.WriteLine("--signer-contains: filtra documentos cujo signer contenha o texto informado (case-insensitive).");
@@ -238,6 +242,120 @@ namespace FilterPDF.Commands
             return name;
         }
 
+        /// <summary>
+        /// Ingestão fixa: MODO1 zip -> mergeia PDFs com bookmarks; MODO2 pdf -> copia.
+        /// Cada arquivo de entrada gera uma pasta com o número do processo e um único PDF.
+        /// </summary>
+        private HashSet<string> PreprocessAndLoadFromInbox(string pgUri)
+        {
+            var loaded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var stageDir = Path.Combine(Path.GetTempPath(), "fpdf-preprocess-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(stageDir);
+
+            try
+            {
+                if (!Directory.Exists(InboxDir))
+                {
+                    Console.WriteLine($"[pipeline-tjpb] Inbox '{InboxDir}' não existe; pulando ingestão.");
+                    return loaded;
+                }
+
+                var inputs = Directory.GetFiles(InboxDir, "*.*", SearchOption.AllDirectories)
+                                      .Where(f => f.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                                      .OrderBy(f => f)
+                                      .ToList();
+                if (inputs.Count == 0)
+                    return loaded;
+
+                foreach (var src in inputs)
+                {
+                    var proc = DeriveProcessName(src);
+                    if (string.IsNullOrWhiteSpace(proc)) continue;
+
+                    var procDir = Path.Combine(stageDir, proc);
+                    if (Directory.Exists(procDir))
+                    {
+                        Console.Error.WriteLine($"[pipeline-tjpb] Aviso: já existe pacote para processo {proc}; ignorando {Path.GetFileName(src)}.");
+                        continue;
+                    }
+                    Directory.CreateDirectory(procDir);
+                    var outPdf = Path.Combine(procDir, proc + ".pdf");
+
+                    if (src.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var ok = MergeZipToPdf(src, outPdf);
+                        if (!ok)
+                        {
+                            Console.Error.WriteLine($"[pipeline-tjpb] ZIP sem PDFs úteis: {Path.GetFileName(src)}");
+                            try { Directory.Delete(procDir, true); } catch { }
+                            continue;
+                        }
+                    }
+                    else // PDF
+                    {
+                        File.Copy(src, outPdf, overwrite: true);
+                    }
+                    loaded.Add(proc);
+                }
+
+                if (loaded.Count == 0) return loaded;
+
+                var loader = new FpdfLoadCommand();
+                loader.Execute(new[] { stageDir });
+                return loaded;
+            }
+            finally
+            {
+                try { Directory.Delete(stageDir, recursive: true); } catch { }
+            }
+        }
+
+        /// <summary>
+        /// Concatena PDFs de um ZIP num único PDF com bookmarks (nomes dos arquivos internos).
+        /// </summary>
+        private bool MergeZipToPdf(string zipPath, string outPdf)
+        {
+            try
+            {
+                using var archive = ZipFile.OpenRead(zipPath);
+                var pdfEntries = archive.Entries
+                    .Where(e => e.FullName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(e => e.FullName)
+                    .ToList();
+                if (pdfEntries.Count == 0) return false;
+
+                using var writer = new PdfWriter(outPdf);
+                using var destDoc = new PdfDocument(writer);
+                var merger = new PdfMerger(destDoc);
+                PdfOutline root = destDoc.GetOutlines(false);
+                int pageOffset = 0;
+
+                foreach (var entry in pdfEntries)
+                {
+                    using var ms = new MemoryStream();
+                    using (var s = entry.Open()) { s.CopyTo(ms); }
+                    ms.Position = 0;
+                    var reader = new PdfReader(ms);
+                    reader.SetUnethicalReading(true);
+                    using var srcDoc = new PdfDocument(reader);
+                    int pages = srcDoc.GetNumberOfPages();
+                    merger.Merge(srcDoc, 1, pages);
+                    var dest = PdfExplicitDestination.CreateFit(destDoc.GetPage(pageOffset + 1));
+                    root.AddOutline(Path.GetFileNameWithoutExtension(entry.FullName)).AddDestination(dest);
+                    pageOffset += pages;
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[pipeline-tjpb] Falha ao mergear ZIP {zipPath}: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Mergeia uma lista de PDFs em um único arquivo com bookmarks simples (nome do arquivo de origem).
+        /// </summary>
         private Dictionary<string, object> BuildDocObject(DocumentBoundary d, PDFAnalysisResult analysis, string pdfPath, List<FieldScript> scripts, double despachoThreshold)
         {
             var docText = string.Join("\n", Enumerable.Range(d.StartPage, d.PageCount)
