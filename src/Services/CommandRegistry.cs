@@ -131,7 +131,24 @@ namespace FilterPDF.Services
             RegisterCommand("load", new FpdfLoadCommand());
             RegisterCommand("cache", new FpdfCacheCommand());
             RegisterCommand("stats", new FpdfStatsCommand());
+            RegisterCommand("pipeline", new PipelineCommand());
             RegisterCommand("pipeline-tjpb", new PipelineTjpbCommand());
+            RegisterCommand("pipeline-find-despacho", new PipelineFindDespachoCommand());
+            RegisterCommand("pipeline-find-certidao-cm", new PipelineFindCertidaoCmCommand());
+            RegisterCommand("pipeline-excel", new PipelineExcelCommand());
+            RegisterCommand("laudo-hash", new LaudoHashCommand());
+            RegisterCommand("laudo-detect", new LaudoDetectCommand());
+            RegisterCommand("laudo-link", new LaudoLinkCommand());
+            RegisterCommand("laudo-hash-db", new LaudoHashDbCommand());
+            RegisterCommand("paragraphs-template", new ParagraphsTemplateCommand());
+            RegisterCommand("paragraphs-spans", new ParagraphsSpansCommand());
+            RegisterCommand("words-bbox", new WordsBBoxCommand());
+            RegisterCommand("doc-view", new DocViewCommand());
+            RegisterCommand("raw-list", new RawListCommand());
+            RegisterCommand("dataset", new FpdfDatasetCommand());
+            RegisterCommand("selftest", new SelfTestCommand());
+            RegisterCommand("laudo-hash", new LaudoHashCommand());
+            RegisterCommand("laudo-detect", new LaudoDetectCommand());
             
             // Register language commands
             RegisterCommand("idioma", new FpdfLanguageCommand());

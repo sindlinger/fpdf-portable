@@ -1070,6 +1070,7 @@ namespace FilterPDF
             commands["create-test"] = new CreateTestPdfCommand();
             commands["show-moddate"] = new ShowModDateCommand();
             commands["streams"] = new VisualizeStreamsCommand();
+            commands["dataset"] = new FpdfDatasetCommand();
             commands["structure-analyze"] = new AnalyzePdfStructureCommand();
             commands["find-to-unicode"] = new FindToUnicodeCommand();
             commands["inspect-stream"] = new InspectStreamsCommand();
@@ -1082,6 +1083,10 @@ namespace FilterPDF
             commands["analyze-objects"] = new AnalyzePdfObjectStructureCommand();
             commands["pipeline"] = new PipelineCommand();
             commands["pipeline-tjpb"] = new PipelineTjpbCommand(); // alias legacy
+            commands["laudo-hash"] = new LaudoHashCommand();
+            commands["laudo-detect"] = new LaudoDetectCommand();
+            commands["laudo-link"] = new LaudoLinkCommand();
+            commands["laudo-hash-db"] = new LaudoHashDbCommand();
             
             
             // Comando de gerenciamento
