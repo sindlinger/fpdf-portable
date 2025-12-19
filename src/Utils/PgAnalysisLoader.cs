@@ -12,6 +12,13 @@ namespace FilterPDF.Utils
     /// </summary>
     public static class PgAnalysisLoader
     {
+        public class RawProcessRow
+        {
+            public string ProcessNumber { get; set; } = "";
+            public string Source { get; set; } = "";
+            public DateTime CreatedAt { get; set; }
+            public string Json { get; set; } = "";
+        }
         public class ProcessRow
         {
             public long Id { get; set; }
@@ -67,9 +74,10 @@ namespace FilterPDF.Utils
 
         public static string GetPgUri(string? overrideUri = null)
         {
-            if (!string.IsNullOrWhiteSpace(overrideUri)) return overrideUri!;
+            if (!string.IsNullOrWhiteSpace(overrideUri)) return PgDocStore.NormalizePgUri(overrideUri!);
             var env = Environment.GetEnvironmentVariable("FPDF_PG_URI");
-            return string.IsNullOrWhiteSpace(env) ? PgDocStore.DefaultPgUri : env!;
+            var uri = string.IsNullOrWhiteSpace(env) ? PgDocStore.DefaultPgUri : env!;
+            return PgDocStore.NormalizePgUri(uri);
         }
 
         public static List<ProcessRow> ListProcesses(string? pgUri = null)
@@ -78,7 +86,7 @@ namespace FilterPDF.Utils
             var rows = new List<ProcessRow>();
             using var conn = new NpgsqlConnection(uri);
             conn.Open();
-            using var cmd = new NpgsqlCommand(@"SELECT id, process_number, source, created_at, COALESCE(json,''),
+            using var cmd = new NpgsqlCommand(@"SELECT id, process_number, source, created_at, COALESCE(json::text, ''),
                                                       COALESCE(total_pages,0), COALESCE(total_words,0), COALESCE(total_images,0), COALESCE(total_fonts,0),
                                                       COALESCE(scan_ratio,0), COALESCE(is_scanned,false),
                                                       COALESCE(meta_title,''), COALESCE(meta_author,''), COALESCE(meta_subject,''), COALESCE(meta_keywords,''),
@@ -111,6 +119,40 @@ namespace FilterPDF.Utils
                     HasMultimedia = !r.IsDBNull(18) && r.GetBoolean(18),
                     HasForms = !r.IsDBNull(19) && r.GetBoolean(19),
                     IsEncrypted = !r.IsDBNull(20) && r.GetBoolean(20)
+                });
+            }
+            return rows;
+        }
+
+        public static List<RawProcessRow> ListRawProcesses(string? pgUri = null, string? sourceContains = null, int? limit = null, int? offset = null)
+        {
+            var uri = GetPgUri(pgUri);
+            var rows = new List<RawProcessRow>();
+            using var conn = new NpgsqlConnection(uri);
+            conn.Open();
+            var sql = @"SELECT process_number, source, created_at, COALESCE(raw_json::text,'')
+                        FROM raw_processes";
+            if (!string.IsNullOrWhiteSpace(sourceContains))
+                sql += " WHERE source ILIKE @s";
+            sql += " ORDER BY created_at DESC";
+            if (limit.HasValue && limit.Value > 0)
+                sql += " LIMIT " + limit.Value;
+            if (offset.HasValue && offset.Value > 0)
+                sql += " OFFSET " + offset.Value;
+
+            using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.CommandTimeout = 120;
+            if (!string.IsNullOrWhiteSpace(sourceContains))
+                cmd.Parameters.AddWithValue("@s", "%" + sourceContains + "%");
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                rows.Add(new RawProcessRow
+                {
+                    ProcessNumber = r.IsDBNull(0) ? "" : r.GetString(0),
+                    Source = r.IsDBNull(1) ? "" : r.GetString(1),
+                    CreatedAt = r.IsDBNull(2) ? DateTime.MinValue : r.GetDateTime(2),
+                    Json = r.IsDBNull(3) ? "" : r.GetString(3)
                 });
             }
             return rows;
@@ -312,7 +354,7 @@ namespace FilterPDF.Utils
             return analysis == null ? null : (analysis, row);
         }
 
-        private static PDFAnalysisResult? Deserialize(string json)
+        public static PDFAnalysisResult? Deserialize(string json)
         {
             if (string.IsNullOrWhiteSpace(json)) return null;
             try { return JsonConvert.DeserializeObject<PDFAnalysisResult>(json); }

@@ -81,6 +81,8 @@ namespace FilterPDF
         public int PageCount => EndPage - StartPage + 1;
         public double Confidence { get; set; }
         public string DetectedType { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string RawTitle { get; set; } = "";
         public List<string> StartIndicators { get; set; } = new List<string>();
         public List<string> EndIndicators { get; set; } = new List<string>();
         public string FirstPageText { get; set; } = ""; // TEXTO COMPLETO da primeira página

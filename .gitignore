@@ -84,3 +84,12 @@ cache/
 # Output files from the tool
 output/
 results/.legacy/
+
+# Pipeline reference data (large/untracked)
+src/PipelineTjpb/reference/
+
+# Local runs / outputs
+data/inbox/
+data/out-test/
+dumps/
+nul

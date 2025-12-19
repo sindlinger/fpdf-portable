@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using FilterPDF.Commands;
+using FilterPDF.TjpbDespachoExtractor.Commands;
 using FilterPDF.Interfaces;
 
 namespace FilterPDF.Services
@@ -136,6 +137,7 @@ namespace FilterPDF.Services
             RegisterCommand("pipeline-find-despacho", new PipelineFindDespachoCommand());
             RegisterCommand("pipeline-find-certidao-cm", new PipelineFindCertidaoCmCommand());
             RegisterCommand("pipeline-excel", new PipelineExcelCommand());
+            RegisterCommand("tjpb-despacho-extractor", new TjpbDespachoExtractorCommand());
             RegisterCommand("laudo-hash", new LaudoHashCommand());
             RegisterCommand("laudo-detect", new LaudoDetectCommand());
             RegisterCommand("laudo-link", new LaudoLinkCommand());

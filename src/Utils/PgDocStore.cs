@@ -53,6 +53,13 @@ namespace FilterPDF.Utils
             processNumber = Clean(processNumber);
             rawJson = rawJson ?? "";
             rawJson = Regex.Replace(rawJson, @"\p{C}+", " ");
+            // Remove unpaired surrogate escape sequences that Postgres JSON rejects.
+            rawJson = Regex.Replace(rawJson, @"\\uD[89AB][0-9A-F]{2}", " ", RegexOptions.IgnoreCase);
+            rawJson = Regex.Replace(rawJson, @"\\uD[CDEF][0-9A-F]{2}", " ", RegexOptions.IgnoreCase);
+            // Remove control Unicode escapes (U+0000..U+001F) that break Postgres JSON parsing.
+            rawJson = Regex.Replace(rawJson, @"\\u00(0[0-9A-F]|1[0-9A-F])", " ", RegexOptions.IgnoreCase);
+            // Remove malformed \\u escapes that aren't followed by 4 hex digits.
+            rawJson = Regex.Replace(rawJson, @"\\u(?![0-9A-Fa-f]{4})", " ", RegexOptions.IgnoreCase);
 
             using var conn = new NpgsqlConnection(pgUri);
             conn.Open();
@@ -106,7 +113,7 @@ namespace FilterPDF.Utils
             return obj == null || obj == DBNull.Value ? null : obj.ToString();
         }
 
-        private static string NormalizePgUri(string uri)
+        public static string NormalizePgUri(string uri)
         {
             if (string.IsNullOrWhiteSpace(uri)) throw new ArgumentNullException(nameof(uri));
             if (uri.StartsWith("Host=", StringComparison.OrdinalIgnoreCase) ||
