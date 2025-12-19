@@ -234,8 +234,15 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                 pagesForExtraction.Add(endPage1 - 1);
 
             ParagraphSegment? firstPara = null;
-            ParagraphSegment? secondPara = null;
             ParagraphSegment? lastPara = null;
+            var paragraphKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void AddParagraph(ParagraphSegment? p)
+            {
+                if (p == null || string.IsNullOrWhiteSpace(p.Text)) return;
+                var key = $"{p.Page1}:{TextUtils.NormalizeWhitespace(p.Text)}";
+                if (paragraphKeys.Add(key))
+                    paragraphs.Add(p);
+            }
 
             for (int p = startPage1; p <= endPage1; p++)
             {
@@ -306,21 +313,14 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                         var hints = new List<string>();
                         hints.AddRange(_cfg.DespachoType.GeorcHints);
                         hints.AddRange(_cfg.DespachoType.AutorizacaoHints);
-                        var candidate = SelectParagraphByHints(paras, hints) ?? paras.LastOrDefault();
-                        if (candidate != null)
-                            secondPara = candidate;
+                        foreach (var para in paras)
+                            AddParagraph(para);
                     }
                 }
             }
 
-            if (firstPara != null)
-                paragraphs.Add(firstPara);
-            if (secondPara != null && (firstPara == null || secondPara.Page1 != firstPara.Page1 || secondPara.Text != firstPara.Text))
-                paragraphs.Add(secondPara);
-            if (lastPara != null &&
-                (firstPara == null || lastPara.Page1 != firstPara.Page1 || lastPara.Text != firstPara.Text) &&
-                (secondPara == null || lastPara.Page1 != secondPara.Page1 || lastPara.Text != secondPara.Text))
-                paragraphs.Add(lastPara);
+            AddParagraph(firstPara);
+            AddParagraph(lastPara);
             // reindex
             for (int i = 0; i < paragraphs.Count; i++)
                 paragraphs[i].Index = i;

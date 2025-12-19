@@ -113,6 +113,7 @@ despacho_type:
     - "(?i)proceder\\s*(?:à|a)?\\s*reserva\\s+orçament[aá]ria[^\\d]{0,120}?(R\\$\\s*\\d{1,3}(?:\\.\\d{3})*,\\d{2})"
     - "(?i)proceder\\s*.*?reserva\\s+orçament[aá]ria[^\\d]{0,120}?(R\\$\\s*\\d{1,3}(?:\\.\\d{3})*,\\d{2})"
     - "(?i)reserva\\s+orçament[aá]ria[^\\d]{0,120}?(R\\$\\s*\\d{1,3}(?:\\.\\d{3})*,\\d{2})"
+    - "(?i)nota\\s+de\\s+empenho[^\\d]{0,120}?(R\\$\\s*\\d{1,3}(?:\\.\\d{3})*,\\d{2})"
 
 template_regions:
   word_gap_x: 0.012
@@ -132,10 +133,17 @@ template_regions:
       - "CPF {{CPF_PERITO}}"
   last_page_bottom:
     min_y: 0.0
-    max_y: 0.70
+    max_y: 1.0
     templates:
       - "proceder à reserva orçamentária, no valor de R$ {{VALOR_ARBITRADO_DE}}"
       - "proceder a reserva orçamentaria, no valor de R$ {{VALOR_ARBITRADO_DE}}"
+      - "para havendo disponibilidade econômica financeira, proceder à reserva orçamentária, no valor de R$ {{VALOR_ARBITRADO_DE}}"
+      - "encaminhem-se os presentes autos à Gerência de Programação Orçamentária deste Tribunal – GEORC – para havendo disponibilidade econômica financeira, proceder à reserva orçamentária, no valor de R$ {{VALOR_ARBITRADO_DE}}"
+      - "encaminhem-se os presentes autos à Gerência de Programação Orçamentária deste Tribunal - GEORC - para havendo disponibilidade econômica financeira, proceder à reserva orçamentária, no valor de R$ {{VALOR_ARBITRADO_DE}}"
+      - "proceder à reserva orçamentária, no valor de R$ {{VALOR_ARBITRADO_DE}}, arbitrado em favor do Perito {{ESPECIALIDADE}}, {{PERITO}}"
+      - "nota de empenho, no valor de R$ {{VALOR_ARBITRADO_DE}}"
+      - "arbitrado em favor do Perito {{ESPECIALIDADE}}, {{PERITO}}, CPF {{CPF_PERITO}}"
+      - "arbitrado em favor do Perito {{ESPECIALIDADE}}, {{PERITO}}"
       - "Perito {{ESPECIALIDADE}}, {{PERITO}}, CPF {{CPF_PERITO}}"
       - "processo nº {{PROCESSO_JUDICIAL}}, movido por {{PROMOVENTE}}, em face de {{PROMOVIDO}}"
       - "processo nº {{PROCESSO_JUDICIAL}} movido por {{PROMOVENTE}} em face de {{PROMOVIDO}}"
@@ -147,13 +155,15 @@ template_regions:
       - "João Pessoa – PB, {{DATA}}"
       - "João Pessoa - PB, {{DATA}}"
       - "Documento assinado eletronicamente por {{ASSINANTE}}"
+      - "Documento assinado eletronicamente por {{ASSINANTE}}, Diretor(a) Especial"
+      - "Documento assinado eletronicamente por {{ASSINANTE}} Diretor(a) Especial"
 
 regex:
   processo_cnj: "\\b\\d{7}-\\d{2}\\.\\d{4}\\.\\d\\.\\d{2}\\.\\d{4}\\b"
   processo_sei: "\\b\\d{6,}\\.\\d{6}/\\d{4}-\\d{2}\\b"
   processo_adme: "\\b(?:ADME|CI)\\s*\\d{3,}\\b"
   cpf: "\\b\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}\\b"
-  money: "R\\$\\s*\\d{1,3}(?:\\.\\d{3})*,\\d{2}"
+  money: "(?:R\\$\\s*)?\\d{1,3}(?:\\.\\d{3})*,\\d{2}"
   date_pt: "\\b\\d{1,2}\\s+de\\s+[A-Za-z]+\\s+de\\s+\\d{4}\\b"
   date_slash: "\\b\\d{1,2}/\\d{1,2}/\\d{2,4}\\b"
 

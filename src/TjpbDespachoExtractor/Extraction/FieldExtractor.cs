@@ -939,36 +939,92 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             var firstParas = ctx.Paragraphs.Where(p => p.Page1 == firstPage).ToList();
             var secondParas = ctx.Paragraphs.Where(p => p.Page1 == secondPage).ToList();
             var lastParas = ctx.Paragraphs.Where(p => p.Page1 == lastPage).ToList();
+            var secondBody = ctx.BandSegments
+                .Where(b => b.Page1 == secondPage && string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(b => b.Words?.Count ?? 0)
+                .ThenByDescending(b => (b.Text ?? "").Length)
+                .FirstOrDefault();
 
-            if (tipo == "autorizacao")
+            if (tipo != "encaminhamento_cm" && secondBody != null && valorDe.Method == "not_found")
             {
-                valorJz = FindValor(firstParas, preferArbitrado: true);
-                var secondBody = ctx.BandSegments.FirstOrDefault(b =>
-                    b.Page1 == secondPage && string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase));
-                if (secondBody != null)
+                var text = secondBody.Text ?? "";
+                var patterns = _cfg.DespachoType.DeValuePatterns ?? new List<string>();
+                if (patterns.Count == 0)
+                    patterns.Add(@"(?i)proceder\s*(?:à|a)?\s*reserva\s+orçament[aá]ria[^\d]{0,120}?(R\$\s*\d{1,3}(?:\.\d{3})*,\d{2})");
+                foreach (var pat in patterns)
                 {
-                    var text = secondBody.Text ?? "";
-                    var patterns = _cfg.DespachoType.DeValuePatterns ?? new List<string>();
-                    if (patterns.Count == 0)
-                        patterns.Add(@"(?i)proceder\s*(?:à|a)?\s*reserva\s+orçament[aá]ria[^\d]{0,120}?(R\$\s*\d{1,3}(?:\.\d{3})*,\d{2})");
-                    foreach (var pat in patterns)
+                    var m = Regex.Match(text, pat);
+                    if (!m.Success) continue;
+                    var raw = m.Groups.Count > 1 ? m.Groups[1].Value : m.Value;
+                    var money = TextUtils.NormalizeMoney(raw);
+                    if (string.IsNullOrWhiteSpace(money))
                     {
-                        var m = Regex.Match(text, pat);
-                        if (!m.Success) continue;
-                        var raw = m.Groups.Count > 1 ? m.Groups[1].Value : m.Value;
-                        var money = TextUtils.NormalizeMoney(raw);
-                        if (string.IsNullOrWhiteSpace(money))
-                        {
-                            var mm = _money.Match(m.Value);
-                            if (mm.Success) money = TextUtils.NormalizeMoney(mm.Value);
-                        }
+                        var mm = _money.Match(m.Value);
+                        if (mm.Success) money = TextUtils.NormalizeMoney(mm.Value);
+                    }
+                    if (!string.IsNullOrWhiteSpace(money))
+                    {
+                        valorDe = BuildFieldFromBandMatch(money, 0.85, "regex_band:de_georc", secondBody, m, 1, Snip(text, m));
+                        break;
+                    }
+                }
+
+                if (valorDe.Method == "not_found" && secondBody.Words != null && secondBody.Words.Count > 0)
+                {
+                    var (collapsed, spans) = BuildCollapsedTextWithSpans(secondBody.Words);
+                    var matches = _money.Matches(collapsed);
+                    if (matches.Count > 0)
+                    {
+                        var m = matches[matches.Count - 1];
+                        var money = TextUtils.NormalizeMoney(m.Value);
                         if (!string.IsNullOrWhiteSpace(money))
                         {
-                            valorDe = BuildFieldFromBandMatch(money, 0.85, "regex_band:de_georc", secondBody, m, 1, Snip(text, m));
+                            var bbox = ComputeMatchBBox(spans, m.Index, m.Length) ?? secondBody.BBox;
+                            valorDe = BuildField(money, 0.65, "heuristic:second_bottom_last_money", null, Snip(collapsed, m), bbox, secondBody.Page1);
+                        }
+                    }
+                    if (valorDe.Method == "not_found")
+                    {
+                        var numRx = new Regex(@"\b\d{1,3}(?:\.\d{3})*,\d{2}\b");
+                        var numMatches = numRx.Matches(collapsed);
+                        for (int i = numMatches.Count - 1; i >= 0; i--)
+                        {
+                            var m = numMatches[i];
+                            var window = collapsed.Substring(Math.Max(0, m.Index - 80), Math.Min(collapsed.Length - Math.Max(0, m.Index - 80), 160));
+                            var winNorm = TextUtils.NormalizeForMatch(window);
+                            if (!(winNorm.Contains("valor") || winNorm.Contains("empenho") || winNorm.Contains("arbitrad") || winNorm.Contains("orcament") || winNorm.Contains("georc")))
+                                continue;
+                            var money = TextUtils.NormalizeMoney(m.Value);
+                            if (string.IsNullOrWhiteSpace(money)) continue;
+                            var bbox = ComputeMatchBBox(spans, m.Index, m.Length) ?? secondBody.BBox;
+                            valorDe = BuildField(money, 0.6, "heuristic:second_bottom_numeric", null, Snip(window, m), bbox, secondBody.Page1);
                             break;
                         }
                     }
                 }
+            }
+            if (tipo != "encaminhamento_cm" && valorDe.Method == "not_found")
+            {
+                var secondBand = ctx.Bands
+                    .Where(b => b.Page1 == secondPage && string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(b => (b.Text ?? "").Length)
+                    .FirstOrDefault();
+                if (secondBand != null && !string.IsNullOrWhiteSpace(secondBand.Text))
+                {
+                    var collapsed = TextUtils.CollapseSpacedLettersText(secondBand.Text);
+                    var m = _money.Match(collapsed);
+                    if (m.Success)
+                    {
+                        var money = TextUtils.NormalizeMoney(m.Value);
+                        if (!string.IsNullOrWhiteSpace(money))
+                            valorDe = BuildField(money, 0.55, "heuristic:second_band_text", null, Snip(collapsed, m), secondBand.BBoxN, secondBand.Page1);
+                    }
+                }
+            }
+
+            if (tipo == "autorizacao")
+            {
+                valorJz = FindValor(firstParas, preferArbitrado: true);
                 if (valorDe.Method == "not_found")
                     valorDe = FindValor(secondParas, preferGeorc: true);
             }
@@ -1028,7 +1084,18 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             {
                 var text = p.Text ?? "";
                 var norm = TextUtils.NormalizeForMatch(text);
-                foreach (Match m in _money.Matches(text))
+                var matchText = text;
+                List<(WordInfo word, int start, int end)> spans = new List<(WordInfo word, int start, int end)>();
+                if (p.Words != null && p.Words.Count > 0)
+                {
+                    var collapsed = BuildCollapsedTextWithSpans(p.Words);
+                    if (!string.IsNullOrWhiteSpace(collapsed.text))
+                    {
+                        matchText = collapsed.text;
+                        spans = collapsed.spans;
+                    }
+                }
+                foreach (Match m in _money.Matches(matchText))
                 {
                     var score = 0.6;
                     if (preferArbitrado && (norm.Contains("arbitrado") || norm.Contains("arbitramento") || norm.Contains("honorario")))
@@ -1040,7 +1107,8 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                     if (score > bestScore)
                     {
                         bestScore = score;
-                        best = BuildFieldFromMatch(TextUtils.NormalizeMoney(m.Value), score, "heuristic", p, m, 0, Snip(text, m));
+                        var bbox = spans.Count > 0 ? ComputeMatchBBox(spans, m.Index, m.Length) : p.BBox;
+                        best = BuildField(TextUtils.NormalizeMoney(m.Value), score, "heuristic", p, Snip(matchText, m), bbox, p.Page1);
                     }
                 }
             }
@@ -1049,10 +1117,19 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
 
         private string DetectDespachoTipo(DespachoContext ctx)
         {
+            var bottomText = string.Join(" ", ctx.Regions
+                .Where(r => r.Name.Equals("second_bottom", StringComparison.OrdinalIgnoreCase) ||
+                            r.Name.Equals("last_bottom", StringComparison.OrdinalIgnoreCase))
+                .Select(r => r.Text));
+            var bottomNorm = TextUtils.NormalizeForMatch(bottomText);
+            if (ContainsAny(bottomNorm, _cfg.DespachoType.GeorcHints) || ContainsAny(bottomNorm, _cfg.DespachoType.AutorizacaoHints))
+                return "autorizacao";
+            var conselhoStrong = new List<string> { "encaminh", "submet", "remet", "remetam", "remessa" };
+            if (ContainsAny(bottomNorm, _cfg.DespachoType.ConselhoHints) && ContainsAny(bottomNorm, conselhoStrong))
+                return "encaminhamento_cm";
+
             var tail = string.Join(" ", ctx.Paragraphs.Where(p => p.Page1 >= Math.Max(ctx.StartPage1, ctx.EndPage1 - 1)).Select(p => p.Text));
             var norm = TextUtils.NormalizeForMatch(tail);
-            if (ContainsAny(norm, _cfg.DespachoType.ConselhoHints))
-                return "encaminhamento_cm";
             if (ContainsAny(norm, _cfg.DespachoType.GeorcHints) || ContainsAny(norm, _cfg.DespachoType.AutorizacaoHints))
                 return "autorizacao";
             return "indefinido";
