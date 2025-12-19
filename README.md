@@ -32,6 +32,12 @@ fpdf tjpb-despacho-extractor report --config config.yaml --pg "Host=localhost;Us
 
 Opcional: `--json` para saida estruturada.
 
+## Documentacao adicional
+
+- `docs/DUPLICATES_AND_REPORTS.md` — duplicatas, relatorios de bbox e regras operacionais.
+- `docs/tjpb-despacho-schema.md` — schema completo do JSON.
+- `docs/REFERENCE_DATASETS.md` — datasets auxiliares (peritos, honorarios, etc.).
+
 ## Saida e schema
 
 A saida (por PDF) segue o schema abaixo, gravado em `processes.json` no Postgres:
