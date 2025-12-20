@@ -188,13 +188,28 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
 
             foreach (var region in ctx.Regions)
             {
-                var isBottom = region.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase) ||
-                               region.Name.Equals("second_bottom", StringComparison.OrdinalIgnoreCase);
-                var templates = region.Name == "first_top"
-                    ? ctx.Config.TemplateRegions.FirstPageTop.Templates
-                    : isBottom
-                        ? ctx.Config.TemplateRegions.LastPageBottom.Templates
-                        : new List<string>();
+                var isBottom = region.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase);
+                List<string> templates;
+                if (region.Name.Equals("first_top", StringComparison.OrdinalIgnoreCase))
+                {
+                    templates = ctx.Config.TemplateRegions.FirstPageTop.Templates;
+                }
+                else if (isBottom)
+                {
+                    templates = ctx.Config.TemplateRegions.LastPageBottom.Templates;
+                }
+                else if (region.Name.Equals("certidao_full", StringComparison.OrdinalIgnoreCase))
+                {
+                    templates = ctx.Config.TemplateRegions.CertidaoFull.Templates;
+                }
+                else if (region.Name.Equals("certidao_value_date", StringComparison.OrdinalIgnoreCase))
+                {
+                    templates = ctx.Config.TemplateRegions.CertidaoValueDate.Templates;
+                }
+                else
+                {
+                    templates = new List<string>();
+                }
 
                 foreach (var template in templates)
                 {
@@ -653,8 +668,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                 return best;
 
             foreach (var r in ctx.Regions.Where(r =>
-                         r.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase) ||
-                         r.Name.Equals("second_bottom", StringComparison.OrdinalIgnoreCase)))
+                         r.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase)))
             {
                 var text = r.Text ?? "";
                 if (string.IsNullOrWhiteSpace(text)) continue;
@@ -766,8 +780,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             if (promovente.Method == "not_found" || promovido.Method == "not_found")
             {
                 var regions = ctx.Regions.Where(r =>
-                    r.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase) ||
-                    r.Name.Equals("second_bottom", StringComparison.OrdinalIgnoreCase)).ToList();
+                    r.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase)).ToList();
                 foreach (var r in regions)
                 {
                     var text = r.Text ?? "";
@@ -933,22 +946,27 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             FieldInfo valorCm = NotFound();
             FieldInfo valorTabela = NotFound();
 
+            if (IsCertidaoContext(ctx))
+            {
+                valorCm = ExtractCertidaoValor(ctx);
+                return (Ensure(valorJz), Ensure(valorDe), Ensure(valorCm), Ensure(valorTabela));
+            }
+
             var tipo = DetectDespachoTipo(ctx);
             var firstPage = ctx.StartPage1;
-            var secondPage = ctx.StartPage1 + 1;
             var lastPage = ctx.EndPage1;
             var firstParas = ctx.Paragraphs.Where(p => p.Page1 == firstPage).ToList();
-            var secondParas = ctx.Paragraphs.Where(p => p.Page1 == secondPage).ToList();
             var lastParas = ctx.Paragraphs.Where(p => p.Page1 == lastPage).ToList();
-            var secondBody = ctx.BandSegments
-                .Where(b => b.Page1 == secondPage && string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase))
+            var lastBottomRegion = ctx.Regions.FirstOrDefault(r => r.Name.Equals("last_bottom", StringComparison.OrdinalIgnoreCase));
+            var lastBody = ctx.BandSegments
+                .Where(b => b.Page1 == lastPage && string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(b => b.Words?.Count ?? 0)
                 .ThenByDescending(b => (b.Text ?? "").Length)
                 .FirstOrDefault();
 
-            if (tipo != "encaminhamento_cm" && secondBody != null && valorDe.Method == "not_found")
+            if (tipo != "encaminhamento_cm" && lastBottomRegion != null && valorDe.Method == "not_found")
             {
-                var text = secondBody.Text ?? "";
+                var text = lastBottomRegion.Text ?? "";
                 var patterns = _cfg.DespachoType.DeValuePatterns ?? new List<string>();
                 if (patterns.Count == 0)
                     patterns.Add(@"(?i)proceder\s*(?:à|a)?\s*reserva\s+orçament[aá]ria[^\d]{0,120}?(R\$\s*\d{1,3}(?:\.\d{3})*,\d{2})");
@@ -965,14 +983,14 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                     }
                     if (!string.IsNullOrWhiteSpace(money))
                     {
-                        valorDe = BuildFieldFromBandMatch(money, 0.85, "regex_band:de_georc", secondBody, m, 1, Snip(text, m));
+                        valorDe = BuildFieldFromRegionMatch(money, 0.85, "regex_region:de_georc", lastBottomRegion, m, 1, Snip(text, m));
                         break;
                     }
                 }
 
-                if (valorDe.Method == "not_found" && secondBody.Words != null && secondBody.Words.Count > 0)
+                if (valorDe.Method == "not_found" && lastBottomRegion.Words != null && lastBottomRegion.Words.Count > 0)
                 {
-                    var (collapsed, spans) = BuildCollapsedTextWithSpans(secondBody.Words);
+                    var (collapsed, spans) = BuildCollapsedTextWithSpans(lastBottomRegion.Words);
                     var matches = _money.Matches(collapsed);
                     if (matches.Count > 0)
                     {
@@ -980,8 +998,8 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                         var money = TextUtils.NormalizeMoney(m.Value);
                         if (!string.IsNullOrWhiteSpace(money))
                         {
-                            var bbox = ComputeMatchBBox(spans, m.Index, m.Length) ?? secondBody.BBox;
-                            valorDe = BuildField(money, 0.65, "heuristic:second_bottom_last_money", null, Snip(collapsed, m), bbox, secondBody.Page1);
+                            var bbox = ComputeMatchBBox(spans, m.Index, m.Length) ?? lastBottomRegion.BBox;
+                            valorDe = BuildField(money, 0.65, "heuristic:last_bottom_last_money", null, Snip(collapsed, m), bbox, lastBottomRegion.Page1);
                         }
                     }
                     if (valorDe.Method == "not_found")
@@ -997,8 +1015,8 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                                 continue;
                             var money = TextUtils.NormalizeMoney(m.Value);
                             if (string.IsNullOrWhiteSpace(money)) continue;
-                            var bbox = ComputeMatchBBox(spans, m.Index, m.Length) ?? secondBody.BBox;
-                            valorDe = BuildField(money, 0.6, "heuristic:second_bottom_numeric", null, Snip(window, m), bbox, secondBody.Page1);
+                            var bbox = ComputeMatchBBox(spans, m.Index, m.Length) ?? lastBottomRegion.BBox;
+                            valorDe = BuildField(money, 0.6, "heuristic:last_bottom_numeric", null, Snip(window, m), bbox, lastBottomRegion.Page1);
                             break;
                         }
                     }
@@ -1007,7 +1025,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             if (tipo != "encaminhamento_cm" && valorDe.Method == "not_found")
             {
                 var secondBand = ctx.Bands
-                    .Where(b => b.Page1 == secondPage && string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase))
+                    .Where(b => b.Page1 == lastPage && string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase))
                     .OrderByDescending(b => (b.Text ?? "").Length)
                     .FirstOrDefault();
                 if (secondBand != null && !string.IsNullOrWhiteSpace(secondBand.Text))
@@ -1018,7 +1036,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                     {
                         var money = TextUtils.NormalizeMoney(m.Value);
                         if (!string.IsNullOrWhiteSpace(money))
-                            valorDe = BuildField(money, 0.55, "heuristic:second_band_text", null, Snip(collapsed, m), secondBand.BBoxN, secondBand.Page1);
+                            valorDe = BuildField(money, 0.55, "heuristic:last_band_text", null, Snip(collapsed, m), secondBand.BBoxN, secondBand.Page1);
                     }
                 }
             }
@@ -1027,7 +1045,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             {
                 valorJz = FindValor(firstParas, preferArbitrado: true);
                 if (valorDe.Method == "not_found")
-                    valorDe = FindValor(secondParas, preferGeorc: true);
+                    valorDe = FindValor(lastParas, preferGeorc: true);
             }
             else if (tipo == "encaminhamento_cm")
             {
@@ -1049,7 +1067,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                     }
                 }
 
-                foreach (var p in secondParas)
+                foreach (var p in lastParas)
                 {
                     foreach (Match m in _money.Matches(p.Text ?? ""))
                     {
@@ -1075,6 +1093,38 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             }
 
             return (Ensure(valorJz), Ensure(valorDe), Ensure(valorCm), Ensure(valorTabela));
+        }
+
+        private FieldInfo ExtractCertidaoValor(DespachoContext ctx)
+        {
+            var region = ctx.Regions.FirstOrDefault(r => r.Name.Equals("certidao_value_date", StringComparison.OrdinalIgnoreCase))
+                         ?? ctx.Regions.FirstOrDefault(r => r.Name.Equals("certidao_full", StringComparison.OrdinalIgnoreCase));
+            if (region == null || region.Words == null || region.Words.Count == 0)
+                return NotFound();
+
+            var (collapsed, spans) = BuildCollapsedTextWithSpans(region.Words);
+            var text = string.IsNullOrWhiteSpace(collapsed) ? region.Text ?? "" : collapsed;
+            if (string.IsNullOrWhiteSpace(text))
+                return NotFound();
+
+            FieldInfo best = NotFound();
+            double bestScore = 0;
+            foreach (Match m in _money.Matches(text))
+            {
+                var score = 0.7;
+                var window = text.Substring(Math.Max(0, m.Index - 80), Math.Min(text.Length - Math.Max(0, m.Index - 80), 160));
+                var norm = TextUtils.NormalizeForMatch(window);
+                if (norm.Contains("honor")) score += 0.15;
+                if (norm.Contains("pagamento")) score += 0.1;
+                if (norm.Contains("autorizad")) score += 0.05;
+                if (score <= bestScore) continue;
+                bestScore = score;
+                var money = TextUtils.NormalizeMoney(m.Value);
+                if (string.IsNullOrWhiteSpace(money)) continue;
+                var bbox = spans.Count > 0 ? ComputeMatchBBox(spans, m.Index, m.Length) : region.BBox;
+                best = BuildField(money, score, "regex_certidao_cm", null, Snip(text, m), bbox, region.Page1);
+            }
+            return best.Method == "not_found" ? best : best;
         }
 
         private FieldInfo FindValor(List<ParagraphSegment> paragraphs, bool preferArbitrado = false, bool preferGeorc = false, bool preferConselho = false)
@@ -1118,9 +1168,11 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
 
         private string DetectDespachoTipo(DespachoContext ctx)
         {
+            if (IsCertidaoContext(ctx))
+                return "certidao_cm";
+
             var bottomText = string.Join(" ", ctx.Regions
-                .Where(r => r.Name.Equals("second_bottom", StringComparison.OrdinalIgnoreCase) ||
-                            r.Name.Equals("last_bottom", StringComparison.OrdinalIgnoreCase))
+                .Where(r => r.Name.Equals("last_bottom", StringComparison.OrdinalIgnoreCase))
                 .Select(r => r.Text));
             var bottomNorm = TextUtils.NormalizeForMatch(bottomText);
             if (ContainsAny(bottomNorm, _cfg.DespachoType.GeorcHints) || ContainsAny(bottomNorm, _cfg.DespachoType.AutorizacaoHints))
@@ -1134,6 +1186,12 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             if (ContainsAny(norm, _cfg.DespachoType.GeorcHints) || ContainsAny(norm, _cfg.DespachoType.AutorizacaoHints))
                 return "autorizacao";
             return "indefinido";
+        }
+
+        private bool IsCertidaoContext(DespachoContext ctx)
+        {
+            if (ctx == null || ctx.Regions == null) return false;
+            return ctx.Regions.Any(r => r.Name.StartsWith("certidao", StringComparison.OrdinalIgnoreCase));
         }
 
         private bool ContainsAny(string norm, List<string> hints)
@@ -1183,6 +1241,13 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
 
         private FieldInfo ExtractData(DespachoContext ctx)
         {
+            if (IsCertidaoContext(ctx))
+            {
+                var cert = ExtractCertidaoDate(ctx);
+                if (cert.Method != "not_found")
+                    return cert;
+            }
+
             var dataTemplates = MergeTemplates(_cfg.Fields.Data.Templates, new List<string> { "Documento assinado eletronicamente em {{value}}" });
             var dataCand = _template.ExtractFromParagraphs(ctx.Paragraphs, dataTemplates, new Regex(@"(?i)(\d{1,2}\s+de\s+[A-Za-z]+\s+de\s+\d{4})"));
             if (dataCand != null && TextUtils.TryParseDate(dataCand.Value, out var iso0) && IsRecentDate(iso0))
@@ -1198,6 +1263,42 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             }
 
             return NotFound();
+        }
+
+        private FieldInfo ExtractCertidaoDate(DespachoContext ctx)
+        {
+            var region = ctx.Regions.FirstOrDefault(r => r.Name.Equals("certidao_full", StringComparison.OrdinalIgnoreCase))
+                         ?? ctx.Regions.FirstOrDefault(r => r.Name.Equals("certidao_value_date", StringComparison.OrdinalIgnoreCase));
+            if (region == null || region.Words == null || region.Words.Count == 0)
+                return NotFound();
+
+            var lines = LineBuilder.BuildLines(region.Words, region.Page1, _cfg.Thresholds.Paragraph.LineMergeY, _cfg.Thresholds.Paragraph.WordGapX);
+            var paras = ParagraphBuilder.BuildParagraphs(lines, _cfg.Thresholds.Paragraph.ParagraphGapY);
+            var dateRx = _datePt;
+
+            ParagraphSegment? candidate = null;
+            ParagraphSegment? fallback = null;
+            foreach (var p in paras)
+            {
+                var text = p.Text ?? "";
+                if (!dateRx.IsMatch(text)) continue;
+                fallback = p;
+                var norm = TextUtils.NormalizeForMatch(text);
+                if (ContainsAny(norm, _cfg.Certidao.DateHints))
+                    candidate = p;
+            }
+
+            var target = candidate ?? fallback;
+            if (target == null) return NotFound();
+
+            var (collapsed, spans) = BuildCollapsedTextWithSpans(target.Words ?? new List<WordInfo>());
+            var textMatch = string.IsNullOrWhiteSpace(collapsed) ? target.Text ?? "" : collapsed;
+            var m = dateRx.Match(textMatch);
+            if (!m.Success) return NotFound();
+            if (!TextUtils.TryParseDate(m.Value, out var iso) || !IsRecentDate(iso))
+                return NotFound();
+            var bbox = spans.Count > 0 ? ComputeMatchBBox(spans, m.Index, m.Length) : target.BBox;
+            return BuildField(FormatDateBr(iso), 0.85, "regex_certidao_date", target, Snip(textMatch, m), bbox, target.Page1);
         }
 
         private bool IsRecentDate(string iso, int maxYears = 5)
@@ -1230,8 +1331,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             }
 
             foreach (var r in ctx.Regions.Where(r =>
-                         r.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase) ||
-                         r.Name.Equals("second_bottom", StringComparison.OrdinalIgnoreCase)))
+                         r.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase)))
             {
                 var text = r.Text ?? "";
                 if (string.IsNullOrWhiteSpace(text)) continue;
@@ -1292,6 +1392,12 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
 
             var footerCacheHit = TryExtractAssinanteFromFooterCache(ctx, sigRegex, sigCollapsedRegex, pjeRegex);
             if (footerCacheHit != null) return footerCacheHit;
+
+            if (IsCertidaoContext(ctx))
+            {
+                var certidaoHit = TryExtractAssinanteFromCertidao(ctx);
+                if (certidaoHit != null) return certidaoHit;
+            }
 
             // Fallback final: assinatura digital do PDF (sem depender do texto extraido)
             if (!string.IsNullOrWhiteSpace(ctx.FilePath))
@@ -1397,6 +1503,37 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             var snippet = string.IsNullOrWhiteSpace(raw) ? "footer_signers" : TextUtils.SafeSnippet(raw, 0, Math.Min(160, raw.Length));
             var method = signers.Count > 0 ? "footer_signers" : "footer_raw";
             return BuildField(picked, 0.72, method, null, snippet, bbox, page1);
+        }
+
+        private FieldInfo? TryExtractAssinanteFromCertidao(DespachoContext ctx)
+        {
+            var region = ctx.Regions.FirstOrDefault(r => r.Name.Equals("certidao_full", StringComparison.OrdinalIgnoreCase));
+            if (region == null || string.IsNullOrWhiteSpace(region.Text)) return null;
+
+            var text = region.Text ?? "";
+            var m = Regex.Match(text, @"(?i)(robson\\s+de\\s+lima\\s+canan[eé]a)");
+            if (!m.Success)
+                m = Regex.Match(text, @"(?i)(robson\\s+de\\s+lima\\s+cananea)");
+            if (!m.Success) return null;
+
+            var name = NormalizeSignerName(m.Groups[1].Value.Trim());
+            if (string.IsNullOrWhiteSpace(name) || !LooksLikeAssinante(name)) return null;
+
+            var bbox = region.BBox;
+            if (region.Words != null && region.Words.Count > 0)
+            {
+                var (collapsed, spans) = BuildCollapsedTextWithSpans(region.Words);
+                if (!string.IsNullOrWhiteSpace(collapsed))
+                {
+                    var m2 = Regex.Match(collapsed, @"(?i)robsondelimacanan[eé]a");
+                    if (m2.Success)
+                    {
+                        var b = ComputeMatchBBox(spans, m2.Index, m2.Length);
+                        if (b != null) bbox = b;
+                    }
+                }
+            }
+            return BuildField(name, 0.9, "regex_certidao", null, Snip(text, m), bbox, region.Page1);
         }
 
         private FieldInfo? TryExtractAssinanteFromBand(BandSegment band, string methodPrefix, Regex sigRegex, Regex sigCollapsedRegex, Regex pjeRegex, DespachoContext ctx)

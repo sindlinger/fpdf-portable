@@ -29,64 +29,28 @@ namespace FilterPDF.TjpbDespachoExtractor.Utils
             {
                 using var reader = new PdfReader(filePath);
                 using var pdfDoc = new PdfDocument(reader);
-                var util = new SignatureUtil(pdfDoc);
-                var names = util.GetSignatureNames();
-                if (names == null || names.Count == 0)
-                    return list;
+                list.AddRange(ExtractSignatures(pdfDoc));
+            }
+            catch
+            {
+                return list;
+            }
 
-                var acroForm = PdfAcroForm.GetAcroForm(pdfDoc, false);
-                foreach (var fieldName in names)
-                {
-                    var pkcs7 = util.ReadSignatureData(fieldName);
-                    var signerName = NormalizeSignerName(pkcs7?.GetSignName() ?? "");
-                    if (string.IsNullOrWhiteSpace(signerName))
-                    {
-                        var cert = pkcs7?.GetSigningCertificate();
-                        if (cert != null)
-                            signerName = NormalizeSignerName(cert.SubjectDN?.ToString() ?? "");
-                    }
+            return list;
+        }
 
-                    var reason = pkcs7?.GetReason() ?? "";
-                    var location = pkcs7?.GetLocation() ?? "";
-                    var signDate = pkcs7?.GetSignDate();
+        public static List<FilterPDF.TjpbDespachoExtractor.Models.SignatureInfo> ExtractSignatures(byte[] sourceBytes)
+        {
+            var list = new List<FilterPDF.TjpbDespachoExtractor.Models.SignatureInfo>();
+            if (sourceBytes == null || sourceBytes.Length == 0)
+                return list;
 
-                    var field = acroForm?.GetField(fieldName);
-                    var widgets = field?.GetWidgets();
-                    if (widgets == null || widgets.Count == 0)
-                    {
-                        list.Add(new FilterPDF.TjpbDespachoExtractor.Models.SignatureInfo
-                        {
-                            Method = "digital",
-                            FieldName = fieldName,
-                            SignerName = signerName,
-                            Reason = reason ?? "",
-                            Location = location ?? "",
-                            SignDate = signDate?.ToUniversalTime().ToString("o"),
-                            Page1 = 0,
-                            BBoxN = null
-                        });
-                        continue;
-                    }
-
-                    foreach (var widget in widgets)
-                    {
-                        var page = widget.GetPage();
-                        var page1 = page != null ? pdfDoc.GetPageNumber(page) : 0;
-                        var bboxN = NormalizeRect(widget.GetRectangle()?.ToRectangle(), page?.GetPageSize());
-
-                        list.Add(new FilterPDF.TjpbDespachoExtractor.Models.SignatureInfo
-                        {
-                            Method = "digital",
-                            FieldName = fieldName,
-                            SignerName = signerName,
-                            Reason = reason ?? "",
-                            Location = location ?? "",
-                            SignDate = signDate?.ToUniversalTime().ToString("o"),
-                            Page1 = page1,
-                            BBoxN = bboxN
-                        });
-                    }
-                }
+            try
+            {
+                using var ms = new MemoryStream(sourceBytes);
+                using var reader = new PdfReader(ms);
+                using var pdfDoc = new PdfDocument(reader);
+                list.AddRange(ExtractSignatures(pdfDoc));
             }
             catch
             {
@@ -207,6 +171,71 @@ namespace FilterPDF.TjpbDespachoExtractor.Utils
                 X1 = Math.Max(0, Math.Min(1, x1)),
                 Y1 = Math.Max(0, Math.Min(1, y1))
             };
+        }
+
+        private static List<FilterPDF.TjpbDespachoExtractor.Models.SignatureInfo> ExtractSignatures(PdfDocument pdfDoc)
+        {
+            var list = new List<FilterPDF.TjpbDespachoExtractor.Models.SignatureInfo>();
+            var util = new SignatureUtil(pdfDoc);
+            var names = util.GetSignatureNames();
+            if (names == null || names.Count == 0)
+                return list;
+
+            var acroForm = PdfAcroForm.GetAcroForm(pdfDoc, false);
+            foreach (var fieldName in names)
+            {
+                var pkcs7 = util.ReadSignatureData(fieldName);
+                var signerName = NormalizeSignerName(pkcs7?.GetSignName() ?? "");
+                if (string.IsNullOrWhiteSpace(signerName))
+                {
+                    var cert = pkcs7?.GetSigningCertificate();
+                    if (cert != null)
+                        signerName = NormalizeSignerName(cert.SubjectDN?.ToString() ?? "");
+                }
+
+                var reason = pkcs7?.GetReason() ?? "";
+                var location = pkcs7?.GetLocation() ?? "";
+                var signDate = pkcs7?.GetSignDate();
+
+                var field = acroForm?.GetField(fieldName);
+                var widgets = field?.GetWidgets();
+                if (widgets == null || widgets.Count == 0)
+                {
+                    list.Add(new FilterPDF.TjpbDespachoExtractor.Models.SignatureInfo
+                    {
+                        Method = "digital",
+                        FieldName = fieldName,
+                        SignerName = signerName,
+                        Reason = reason ?? "",
+                        Location = location ?? "",
+                        SignDate = signDate?.ToUniversalTime().ToString("o"),
+                        Page1 = 0,
+                        BBoxN = null
+                    });
+                    continue;
+                }
+
+                foreach (var widget in widgets)
+                {
+                    var page = widget.GetPage();
+                    var page1 = page != null ? pdfDoc.GetPageNumber(page) : 0;
+                    var bboxN = NormalizeRect(widget.GetRectangle()?.ToRectangle(), page?.GetPageSize());
+
+                    list.Add(new FilterPDF.TjpbDespachoExtractor.Models.SignatureInfo
+                    {
+                        Method = "digital",
+                        FieldName = fieldName,
+                        SignerName = signerName,
+                        Reason = reason ?? "",
+                        Location = location ?? "",
+                        SignDate = signDate?.ToUniversalTime().ToString("o"),
+                        Page1 = page1,
+                        BBoxN = bboxN
+                    });
+                }
+            }
+
+            return list;
         }
     }
 }

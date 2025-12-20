@@ -8,6 +8,10 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using FilterPDF.Utils;
 using System.Text;
+using FilterPDF.TjpbDespachoExtractor.Config;
+using FilterPDF.TjpbDespachoExtractor.Extraction;
+using FilterPDF.TjpbDespachoExtractor.Models;
+using TjpbTextUtils = FilterPDF.TjpbDespachoExtractor.Utils.TextUtils;
 
 namespace FilterPDF.Commands
 {
@@ -31,11 +35,16 @@ namespace FilterPDF.Commands
 
         public override void Execute(string[] args)
         {
-            string inputDir = ".";
+            string? inputDir = null;
             bool splitAnexos = false; // backward compat (anexos now covered by bookmark docs)
             int maxBookmarkPages = 30; // agora interno, sem flag na CLI
             bool onlyDespachos = false;
             string? signerContains = null;
+            string? processFilter = null;
+            string? sourceContains = null;
+            int? limit = null;
+            int? offset = null;
+            bool forcePg = false;
             string pgUri = FilterPDF.Utils.PgDocStore.DefaultPgUri;
             var analysesByProcess = new Dictionary<string, PDFAnalysisResult>();
             string cacheDir = Path.Combine(Directory.GetCurrentDirectory(), "tmp", "cache");
@@ -71,72 +80,102 @@ namespace FilterPDF.Commands
                 if (args[i] == "--split-anexos") splitAnexos = true;
                 if (args[i] == "--only-despachos") onlyDespachos = true;
                 if (args[i] == "--signer-contains" && i + 1 < args.Length) signerContains = args[i + 1];
+                if (args[i] == "--process" && i + 1 < args.Length) processFilter = args[i + 1];
+                if (args[i] == "--source-contains" && i + 1 < args.Length) sourceContains = args[i + 1];
+                if (args[i] == "--limit" && i + 1 < args.Length && int.TryParse(args[i + 1], out var lim)) limit = lim;
+                if (args[i] == "--offset" && i + 1 < args.Length && int.TryParse(args[i + 1], out var off)) offset = off;
+                if (args[i] == "--from-pg") forcePg = true;
             }
 
-            var dir = new DirectoryInfo(inputDir);
-            if (!dir.Exists)
-            {
-                Console.WriteLine($"Diretório não encontrado: {inputDir}");
-                return;
-            }
-
-            // Detecta se estamos lendo de cache (json) ou de PDFs
-            var jsonCaches = dir.GetFiles("*.json").OrderBy(f => f.Name).ToList();
-            var pdfs = dir.GetFiles("*.pdf").OrderBy(f => f.Name).ToList();
-            bool useCache = jsonCaches.Count > 0 && pdfs.Count == 0;
+            bool usePg = forcePg || string.IsNullOrWhiteSpace(inputDir);
 
             var allDocs = new List<Dictionary<string, object>>();
             var allDocsWords = new List<List<Dictionary<string, object>>>();
 
-            var sources = useCache ? jsonCaches.Cast<FileInfo>() : pdfs.Cast<FileInfo>();
-
-            foreach (var file in sources)
+            TjpbDespachoConfig? tjpbCfg = null;
+            DespachoExtractor? despachoExtractor = null;
+            try
             {
-                try
+                tjpbCfg = TjpbDespachoConfig.Load("config.yaml");
+                despachoExtractor = new DespachoExtractor(tjpbCfg);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[pipeline-tjpb] WARN config.yaml não carregado: {ex.Message}");
+            }
+
+            if (usePg)
+            {
+                var rows = PgAnalysisLoader.ListRawProcesses(pgUri, sourceContains, limit, offset);
+                if (!string.IsNullOrWhiteSpace(processFilter))
+                    rows = rows.Where(r => string.Equals(r.ProcessNumber, processFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+                foreach (var row in rows)
                 {
-                    PDFAnalysisResult analysis;
-                    string pdfPath;
-
-                    if (useCache)
+                    try
                     {
-                        var text = File.ReadAllText(file.FullName);
-                        analysis = JsonConvert.DeserializeObject<PDFAnalysisResult>(text)
-                                   ?? throw new Exception("Cache inválido");
-                        pdfPath = file.FullName;
+                        var analysis = PgAnalysisLoader.Deserialize(row.Json);
+                        if (analysis == null) continue;
+                        if (!string.IsNullOrWhiteSpace(row.Source))
+                            analysis.FilePath = row.Source;
+
+                        var procName = row.ProcessNumber ?? DeriveProcessName(row.Source ?? "");
+                        analysesByProcess[procName] = analysis;
+
+                        BuildDocsForAnalysis(analysis, row.Source ?? procName, procName, fieldScripts, maxBookmarkPages, splitAnexos,
+                                             despachoExtractor, tjpbCfg, pgUri, allDocs, allDocsWords);
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        analysis = new PDFAnalyzer(file.FullName).AnalyzeFull();
-                        pdfPath = file.FullName;
-                    }
-
-                    var procName = DeriveProcessName(pdfPath);
-                    analysesByProcess[procName] = analysis;
-                    var bookmarkDocs = BuildBookmarkBoundaries(analysis, maxBookmarkPages);
-                    var segmenter = new DocumentSegmenter(new DocumentSegmentationConfig());
-                    var docs = bookmarkDocs.Count > 0 ? bookmarkDocs : segmenter.FindDocuments(analysis);
-
-                    foreach (var d in docs)
-                    {
-                        var obj = BuildDocObject(d, analysis, pdfPath, fieldScripts);
-                        allDocs.Add(obj);
-                        if (obj.ContainsKey("words"))
-                        {
-                            var w = obj["words"] as List<Dictionary<string, object>>;
-                            if (w != null) allDocsWords.Add(w);
-                        }
-
-                        // Legacy split-anexos now redundant; kept for compatibility
-                        if (splitAnexos && d.DetectedType == "anexo")
-                        {
-                        var anexosChildren = SplitAnexos(d, analysis, pdfPath, fieldScripts);
-                            allDocs.AddRange(anexosChildren);
-                        }
+                        Console.Error.WriteLine($"[pipeline-tjpb] WARN {row.ProcessNumber}: {ex.Message}");
                     }
                 }
-                catch (Exception ex)
+            }
+            else
+            {
+                var dir = new DirectoryInfo(inputDir ?? ".");
+                if (!dir.Exists)
                 {
-                    Console.Error.WriteLine($"[pipeline-tjpb] WARN {file.Name}: {ex.Message}");
+                    Console.WriteLine($"Diretório não encontrado: {inputDir}");
+                    return;
+                }
+
+                var jsonCaches = dir.GetFiles("*.json").OrderBy(f => f.Name).ToList();
+                var pdfs = dir.GetFiles("*.pdf").OrderBy(f => f.Name).ToList();
+                bool useCache = jsonCaches.Count > 0 && pdfs.Count == 0;
+
+                var sources = useCache ? jsonCaches.Cast<FileInfo>() : pdfs.Cast<FileInfo>();
+
+                foreach (var file in sources)
+                {
+                    try
+                    {
+                        PDFAnalysisResult analysis;
+                        string pdfPath;
+
+                        if (useCache)
+                        {
+                            var text = File.ReadAllText(file.FullName);
+                            analysis = JsonConvert.DeserializeObject<PDFAnalysisResult>(text)
+                                       ?? throw new Exception("Cache inválido");
+                            pdfPath = file.FullName;
+                        }
+                        else
+                        {
+                            analysis = new PDFAnalyzer(file.FullName).AnalyzeFull();
+                            pdfPath = file.FullName;
+                        }
+
+                        var procName = DeriveProcessName(pdfPath);
+                        analysesByProcess[procName] = analysis;
+
+                        BuildDocsForAnalysis(analysis, pdfPath, procName, fieldScripts, maxBookmarkPages, splitAnexos,
+                                             despachoExtractor, tjpbCfg, pgUri, allDocs, allDocsWords);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[pipeline-tjpb] WARN {file.Name}: {ex.Message}");
+                    }
                 }
             }
 
@@ -204,11 +243,15 @@ namespace FilterPDF.Commands
 
         public override void ShowHelp()
         {
-            Console.WriteLine("fpdf pipeline-tjpb --input-dir <dir> [--split-anexos] [--only-despachos] [--signer-contains <texto>]");
-            Console.WriteLine("Lê caches (tmp/cache/*.json) ou PDFs; grava no Postgres (processes + documents). Não gera arquivo.");
+            Console.WriteLine("fpdf pipeline-tjpb [--from-pg] [--input-dir <dir>] [--split-anexos] [--only-despachos] [--signer-contains <texto>]");
+            Console.WriteLine("Modo PG (default se --input-dir não for usado): lê raw_processes; grava no Postgres (processes).");
+            Console.WriteLine("Modo arquivo: lê caches (*.json) ou PDFs do diretório; grava no Postgres (processes).");
             Console.WriteLine("--split-anexos: cria subdocumentos a partir de bookmarks 'Anexo/Anexos' dentro de cada documento.");
             Console.WriteLine("--only-despachos: filtra apenas documentos cujo doc_label/doc_type contenha 'Despacho'.");
             Console.WriteLine("--signer-contains: filtra documentos cujo signer contenha o texto informado (case-insensitive).");
+            Console.WriteLine("--process: filtra processo específico no modo PG.");
+            Console.WriteLine("--source-contains: filtra source no modo PG.");
+            Console.WriteLine("--limit/--offset: paginação no modo PG.");
         }
 
         private string DeriveProcessName(string path)
@@ -365,6 +408,385 @@ namespace FilterPDF.Commands
                 ["fields"] = extractedFields,
                 ["forensics"] = forensics
             };
+        }
+
+        private void BuildDocsForAnalysis(PDFAnalysisResult analysis, string pdfPath, string processNumber, List<FieldScript> scripts,
+                                          int maxBookmarkPages, bool splitAnexos, DespachoExtractor? despachoExtractor,
+                                          TjpbDespachoConfig? tjpbCfg, string pgUri,
+                                          List<Dictionary<string, object>> allDocs, List<List<Dictionary<string, object>>> allDocsWords)
+        {
+            var bookmarkDocs = BuildBookmarkBoundaries(analysis, maxBookmarkPages);
+            var segmenter = new DocumentSegmenter(new DocumentSegmentationConfig());
+            var docs = bookmarkDocs.Count > 0 ? bookmarkDocs : segmenter.FindDocuments(analysis);
+
+            var docObjects = new List<Dictionary<string, object>>();
+            foreach (var d in docs)
+            {
+                var obj = BuildDocObject(d, analysis, pdfPath, scripts);
+                if (!string.IsNullOrWhiteSpace(processNumber))
+                    obj["process"] = processNumber;
+                docObjects.Add(obj);
+
+                if (splitAnexos && d.DetectedType == "anexo")
+                {
+                    var anexosChildren = SplitAnexos(d, analysis, pdfPath, scripts);
+                    if (!string.IsNullOrWhiteSpace(processNumber))
+                    {
+                        foreach (var child in anexosChildren)
+                            child["process"] = processNumber;
+                    }
+                    docObjects.AddRange(anexosChildren);
+                }
+            }
+
+            var specialDocs = new List<Dictionary<string, object>>();
+            var specialRanges = new List<SpecialRange>();
+            if (despachoExtractor != null && tjpbCfg != null)
+            {
+                var options = new FilterPDF.TjpbDespachoExtractor.Extraction.ExtractionOptions
+                {
+                    ProcessNumber = processNumber ?? ""
+                };
+
+                var footerInfo = PgAnalysisLoader.GetFooterInfo(processNumber, pgUri);
+                if (footerInfo == null || (footerInfo.Signers.Count == 0 && string.IsNullOrWhiteSpace(footerInfo.SignatureRaw)))
+                    footerInfo = BuildFooterInfoFromAnalysis(analysis);
+                options.FooterSigners = footerInfo?.Signers ?? new List<string>();
+                options.FooterSignatureRaw = footerInfo?.SignatureRaw;
+
+                var despachoDocs = despachoExtractor.ExtractAllByBookmarks(analysis, pdfPath, options);
+                foreach (var d in despachoDocs ?? new List<DespachoDocumentInfo>())
+                {
+                    var special = BuildSpecialDocObject(analysis, pdfPath, processNumber, d, scripts, tjpbCfg);
+                    if (special == null) continue;
+                    if (!string.IsNullOrWhiteSpace(processNumber))
+                        special["process"] = processNumber;
+                    specialDocs.Add(special);
+                    specialRanges.Add(new SpecialRange
+                    {
+                        StartPage = d.StartPage1,
+                        EndPage = d.EndPage1,
+                        DocType = special.TryGetValue("doc_type", out var dt) ? dt?.ToString() ?? "" : "",
+                        Label = special.TryGetValue("doc_label", out var dl) ? dl?.ToString() ?? "" : ""
+                    });
+                }
+
+                var certDoc = despachoExtractor.ExtractCertidao(analysis, options);
+                if (certDoc != null)
+                {
+                    var special = BuildSpecialDocObject(analysis, pdfPath, processNumber, certDoc, scripts, tjpbCfg);
+                    if (special != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(processNumber))
+                            special["process"] = processNumber;
+                        specialDocs.Add(special);
+                        specialRanges.Add(new SpecialRange
+                        {
+                            StartPage = certDoc.StartPage1,
+                            EndPage = certDoc.EndPage1,
+                            DocType = special.TryGetValue("doc_type", out var dt) ? dt?.ToString() ?? "" : "",
+                            Label = special.TryGetValue("doc_label", out var dl) ? dl?.ToString() ?? "" : ""
+                        });
+                    }
+                }
+            }
+
+            if (specialRanges.Count > 0)
+                docObjects = RemoveGenericDocs(docObjects, specialRanges);
+            if (specialDocs.Count > 0)
+                docObjects.AddRange(specialDocs);
+
+            foreach (var obj in docObjects)
+            {
+                allDocs.Add(obj);
+                if (obj.TryGetValue("words", out var wobj) && wobj is List<Dictionary<string, object>> wlist)
+                    allDocsWords.Add(wlist);
+            }
+        }
+
+        private class SpecialRange
+        {
+            public int StartPage { get; set; }
+            public int EndPage { get; set; }
+            public string DocType { get; set; } = "";
+            public string Label { get; set; } = "";
+        }
+
+        private List<Dictionary<string, object>> RemoveGenericDocs(List<Dictionary<string, object>> docs, List<SpecialRange> specials)
+        {
+            var filtered = new List<Dictionary<string, object>>();
+            foreach (var doc in docs)
+            {
+                var label = doc.TryGetValue("doc_label", out var dl) ? dl?.ToString() ?? "" : "";
+                var start = doc.TryGetValue("start_page", out var sp) ? Convert.ToInt32(sp) : 0;
+                var end = doc.TryGetValue("end_page", out var ep) ? Convert.ToInt32(ep) : 0;
+
+                bool remove = false;
+                foreach (var s in specials)
+                {
+                    if (s.DocType.Contains("certidao", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (label.Contains("certidao", StringComparison.OrdinalIgnoreCase) && start == s.StartPage)
+                        {
+                            remove = true;
+                            break;
+                        }
+                    }
+                    else if (s.DocType.Contains("despacho", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (label.Contains("despacho", StringComparison.OrdinalIgnoreCase) && start == s.StartPage)
+                        {
+                            remove = true;
+                            break;
+                        }
+                    }
+                }
+                if (!remove)
+                    filtered.Add(doc);
+            }
+            return filtered;
+        }
+
+        private Dictionary<string, object>? BuildSpecialDocObject(PDFAnalysisResult analysis, string pdfPath, string processNumber,
+                                                                   DespachoDocumentInfo doc, List<FieldScript> scripts, TjpbDespachoConfig cfg)
+        {
+            if (doc == null) return null;
+            var start = doc.StartPage1;
+            var end = doc.EndPage1;
+            if (start <= 0 || end <= 0 || start > analysis.Pages.Count || end > analysis.Pages.Count) return null;
+
+            var label = FindBookmarkTitleForPage(analysis, start);
+            if (string.IsNullOrWhiteSpace(label))
+                label = doc.DocType.Equals("certidao_cm", StringComparison.OrdinalIgnoreCase) ? "Certidão CM" : "Despacho DIESP";
+
+            var boundary = BuildBoundaryForRange(analysis, start, end, label);
+            var baseDoc = BuildDocObject(boundary, analysis, pdfPath, scripts);
+
+            var docType = doc.DocType.Equals("certidao_cm", StringComparison.OrdinalIgnoreCase)
+                ? "certidao_cm"
+                : doc.DespachoTipo.Equals("encaminhamento_cm", StringComparison.OrdinalIgnoreCase)
+                    ? "despacho_encaminhamento_cm"
+                    : "despacho_autorizacao";
+
+            baseDoc["doc_label"] = label;
+            baseDoc["doc_type"] = docType;
+
+            if (baseDoc.TryGetValue("doc_summary", out var dsObj) && dsObj is Dictionary<string, object> ds)
+            {
+                ds["despacho_tipo"] = doc.DespachoTipo ?? "";
+                ds["match_score"] = doc.MatchScore;
+                if (doc.Warnings != null && doc.Warnings.Count > 0)
+                    ds["warnings"] = doc.Warnings;
+                if (doc.Fields != null && doc.Fields.TryGetValue("ASSINANTE", out var ass) && !string.IsNullOrWhiteSpace(ass?.Value))
+                {
+                    if (!ds.TryGetValue("signer", out var sigObj) || string.IsNullOrWhiteSpace(sigObj?.ToString()))
+                        ds["signer"] = ass.Value;
+                }
+                if (doc.Fields != null && doc.Fields.TryGetValue("DATA", out var data) && !string.IsNullOrWhiteSpace(data?.Value))
+                {
+                    if (!ds.TryGetValue("signed_at", out var dtObj) || string.IsNullOrWhiteSpace(dtObj?.ToString()))
+                        ds["signed_at"] = data.Value;
+                }
+            }
+
+            var bands = BuildBandsPayload(doc.Bands, cfg);
+            if (bands.Count > 0) baseDoc["bands"] = bands;
+
+            var primaryFields = ConvertDespachoFields(doc.Fields);
+            var fallbackFields = baseDoc.TryGetValue("fields", out var fobj) && fobj is List<Dictionary<string, object>> list
+                ? list
+                : new List<Dictionary<string, object>>();
+            var merged = MergeFieldsWithLimit(primaryFields, fallbackFields, 2);
+            baseDoc["fields"] = merged;
+
+            return baseDoc;
+        }
+
+        private DocumentBoundary BuildBoundaryForRange(PDFAnalysisResult analysis, int startPage, int endPage, string title)
+        {
+            return new DocumentBoundary
+            {
+                StartPage = startPage,
+                EndPage = endPage,
+                Title = title ?? "",
+                DetectedType = "special",
+                FirstPageText = analysis.Pages[startPage - 1].TextInfo.PageText,
+                LastPageText = analysis.Pages[endPage - 1].TextInfo.PageText,
+                FullText = string.Join("\n", Enumerable.Range(startPage, endPage - startPage + 1).Select(p => analysis.Pages[p - 1].TextInfo.PageText)),
+                Fonts = new HashSet<string>(analysis.Pages.Skip(startPage - 1).Take(endPage - startPage + 1).SelectMany(p => p.TextInfo.Fonts.Select(f => f.Name)), StringComparer.OrdinalIgnoreCase),
+                PageSize = analysis.Pages.First().Size.GetPaperSize(),
+                HasSignatureImage = analysis.Pages.Skip(startPage - 1).Take(endPage - startPage + 1).Any(p => p.Resources.Images?.Any(img => img.Width > 100 && img.Height > 30) ?? false),
+                TotalWords = analysis.Pages.Skip(startPage - 1).Take(endPage - startPage + 1).Sum(p => p.TextInfo.WordCount)
+            };
+        }
+
+        private string FindBookmarkTitleForPage(PDFAnalysisResult analysis, int page1)
+        {
+            if (analysis.Bookmarks?.RootItems == null) return "";
+            string title = "";
+            void Walk(IEnumerable<BookmarkItem> items)
+            {
+                foreach (var b in items)
+                {
+                    var p = b.Destination?.PageNumber ?? 0;
+                    if (p == page1 && !string.IsNullOrWhiteSpace(b.Title))
+                        title = b.Title.Trim();
+                    if (b.Children != null && b.Children.Count > 0)
+                        Walk(b.Children);
+                }
+            }
+            Walk(analysis.Bookmarks.RootItems);
+            return title;
+        }
+
+        private List<Dictionary<string, object>> BuildBandsPayload(List<BandInfo> bands, TjpbDespachoConfig cfg)
+        {
+            var list = new List<Dictionary<string, object>>();
+            if (bands == null) return list;
+            foreach (var b in bands)
+            {
+                var region = b.Region ?? "";
+                var diffScore = ComputeRegionDiffScore(region, b.Text ?? "", cfg);
+                list.Add(new Dictionary<string, object>
+                {
+                    ["page1"] = b.Page1,
+                    ["band"] = b.Band,
+                    ["region"] = region,
+                    ["text"] = b.Text ?? "",
+                    ["hash_sha256"] = b.HashSha256 ?? "",
+                    ["bbox_n"] = b.BBoxN,
+                    ["diff_score"] = diffScore
+                });
+            }
+            return list;
+        }
+
+        private double ComputeRegionDiffScore(string region, string text, TjpbDespachoConfig cfg)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return 0.0;
+            List<string> templates;
+            if (region.Equals("first_top", StringComparison.OrdinalIgnoreCase))
+                templates = cfg.TemplateRegions.FirstPageTop.Templates;
+            else if (region.Equals("last_bottom", StringComparison.OrdinalIgnoreCase))
+                templates = cfg.TemplateRegions.LastPageBottom.Templates;
+            else if (region.Equals("certidao_full", StringComparison.OrdinalIgnoreCase))
+                templates = cfg.TemplateRegions.CertidaoFull.Templates;
+            else if (region.Equals("certidao_value_date", StringComparison.OrdinalIgnoreCase))
+                templates = cfg.TemplateRegions.CertidaoValueDate.Templates;
+            else
+                return 0.0;
+
+            if (templates == null || templates.Count == 0) return 0.0;
+            var placeholder = new Regex(@"\{\{\s*([A-Z0-9_]+)\s*\}\}", RegexOptions.IgnoreCase);
+            var norm = TjpbTextUtils.NormalizeForMatch(text);
+            double best = 0.0;
+            foreach (var t in templates)
+            {
+                if (string.IsNullOrWhiteSpace(t)) continue;
+                var core = placeholder.Replace(t, "");
+                var coreNorm = TjpbTextUtils.NormalizeForMatch(core);
+                if (string.IsNullOrWhiteSpace(coreNorm)) continue;
+                var score = DiffPlexMatcher.Similarity(coreNorm, norm);
+                if (score > best) best = score;
+            }
+            return best;
+        }
+
+        private List<Dictionary<string, object>> ConvertDespachoFields(Dictionary<string, FilterPDF.TjpbDespachoExtractor.Models.FieldInfo> fields)
+        {
+            var list = new List<Dictionary<string, object>>();
+            if (fields == null) return list;
+            foreach (var kv in fields)
+            {
+                var f = kv.Value;
+                if (f == null || f.Method == "not_found" || string.IsNullOrWhiteSpace(f.Value))
+                    continue;
+                list.Add(new Dictionary<string, object>
+                {
+                    ["name"] = kv.Key,
+                    ["value"] = f.Value,
+                    ["page"] = f.Evidence?.Page1 ?? 0,
+                    ["pattern"] = f.Method ?? "despacho_extractor",
+                    ["weight"] = f.Confidence,
+                    ["bbox_n"] = f.Evidence?.BBoxN,
+                    ["snippet"] = f.Evidence?.Snippet ?? "",
+                    ["source"] = "despacho_extractor"
+                });
+            }
+            return list;
+        }
+
+        private List<Dictionary<string, object>> MergeFieldsWithLimit(List<Dictionary<string, object>> primary, List<Dictionary<string, object>> secondary, int maxPerName)
+        {
+            var combined = new List<Dictionary<string, object>>();
+            if (primary != null) combined.AddRange(primary);
+            if (secondary != null) combined.AddRange(secondary);
+
+            var result = new List<Dictionary<string, object>>();
+            var groups = combined.GroupBy(f => f.TryGetValue("name", out var n) ? n?.ToString() ?? "" : "", StringComparer.OrdinalIgnoreCase);
+            foreach (var g in groups)
+            {
+                var ordered = g
+                    .OrderByDescending(f => GetFieldWeight(f))
+                    .ThenByDescending(f => (f.TryGetValue("source", out var s) ? s?.ToString() ?? "" : "") == "despacho_extractor")
+                    .ToList();
+
+                var seenValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var f in ordered)
+                {
+                    var val = f.TryGetValue("value", out var v) ? v?.ToString() ?? "" : "";
+                    if (!string.IsNullOrWhiteSpace(val) && !seenValues.Add(val))
+                        continue;
+                    result.Add(f);
+                    if (result.Count(r => string.Equals(r.TryGetValue("name", out var rn) ? rn?.ToString() : "", g.Key, StringComparison.OrdinalIgnoreCase)) >= maxPerName)
+                        break;
+                }
+            }
+            return result;
+        }
+
+        private double GetFieldWeight(Dictionary<string, object> field)
+        {
+            if (field == null) return 0.0;
+            if (field.TryGetValue("weight", out var w))
+            {
+                try { return Convert.ToDouble(w); } catch { }
+            }
+            return 0.5;
+        }
+
+        private PgAnalysisLoader.FooterInfo BuildFooterInfoFromAnalysis(PDFAnalysisResult analysis)
+        {
+            var info = new PgAnalysisLoader.FooterInfo();
+            if (analysis?.Pages == null || analysis.Pages.Count == 0) return info;
+            var last = analysis.Pages[analysis.Pages.Count - 1];
+            var lines = (last.TextInfo?.PageText ?? "")
+                .Split('\n')
+                .Where(l => !string.IsNullOrWhiteSpace(l))
+                .Select(l => l.Trim())
+                .ToList();
+            if (lines.Count == 0) return info;
+            var tail = lines.Count > 12 ? lines.Skip(lines.Count - 12) : lines;
+            info.SignatureRaw = string.Join("\n", tail);
+            info.Signers = ExtractSignersFromLines(tail);
+            return info;
+        }
+
+        private List<string> ExtractSignersFromLines(IEnumerable<string> lines)
+        {
+            var signers = new List<string>();
+            var nameRegex = new Regex(@"\b[A-ZÁÂÃÉÊÍÓÔÕÚÇ][A-Za-zÁÂÃÉÊÍÓÔÕÚÇàáâãéêíóôõúç'\-]{2,}(?:\s+[A-ZÁÂÃÉÊÍÓÔÕÚÇ][A-Za-zÁÂÃÉÊÍÓÔÕÚÇàáâãéêíóôõúç'\-]{2,})+", RegexOptions.Compiled);
+            foreach (var line in lines)
+            {
+                var m = nameRegex.Match(line);
+                if (m.Success)
+                {
+                    var name = m.Value.Trim();
+                    if (!signers.Contains(name))
+                        signers.Add(name);
+                }
+            }
+            return signers;
         }
 
         // Doc type classification removida: usamos apenas o nome do bookmark como rótulo.

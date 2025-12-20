@@ -10,6 +10,10 @@ using FilterPDF.Utils;
 using FilterPDF.TjpbDespachoExtractor.Config;
 using FilterPDF.TjpbDespachoExtractor.Extraction;
 using FilterPDF.TjpbDespachoExtractor.Models;
+using FilterPDF.TjpbDespachoExtractor.Utils;
+using iText.Kernel.Geom;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas;
 
 namespace FilterPDF.TjpbDespachoExtractor.Commands
 {
@@ -36,9 +40,29 @@ namespace FilterPDF.TjpbDespachoExtractor.Commands
                 RunBookmarks(args.Skip(1).ToArray());
                 return;
             }
+            if (args[0].Equals("find-despacho", StringComparison.OrdinalIgnoreCase))
+            {
+                RunFindDespacho(args.Skip(1).ToArray());
+                return;
+            }
+            if (args[0].Equals("find-certidao", StringComparison.OrdinalIgnoreCase))
+            {
+                RunFindCertidao(args.Skip(1).ToArray());
+                return;
+            }
+            if (args[0].Equals("signatures", StringComparison.OrdinalIgnoreCase))
+            {
+                RunSignatures(args.Skip(1).ToArray());
+                return;
+            }
             if (args[0].Equals("report", StringComparison.OrdinalIgnoreCase))
             {
                 RunReport(args.Skip(1).ToArray());
+                return;
+            }
+            if (args[0].Equals("crop-regions", StringComparison.OrdinalIgnoreCase))
+            {
+                RunCropRegions(args.Skip(1).ToArray());
                 return;
             }
 
@@ -181,6 +205,303 @@ namespace FilterPDF.TjpbDespachoExtractor.Commands
                 catch (Exception ex)
                 {
                     Console.Error.WriteLine($"[tjpb-despacho-extractor] ERROR {row.ProcessNumber}: {ex.Message}");
+                }
+            }
+        }
+
+        private void RunFindDespacho(string[] args)
+        {
+            string? inbox = null;
+            string configPath = "config.yaml";
+            string? processFilter = null;
+            string? bookmarkContains = null;
+            string? sourceContains = null;
+            bool json = false;
+            bool showRegions = false;
+            bool firstOnly = false;
+            bool debug = false;
+            int limit = 100;
+            int offset = 0;
+            string pgUri = PgDocStore.DefaultPgUri;
+
+            for (int i = 0; i < args.Length; i++)
+            {
+                switch (args[i])
+                {
+                    case "--inbox":
+                        if (i + 1 < args.Length) inbox = args[++i];
+                        break;
+                    case "--config":
+                        if (i + 1 < args.Length) configPath = args[++i];
+                        break;
+                    case "--process":
+                        if (i + 1 < args.Length) processFilter = args[++i];
+                        break;
+                    case "--bookmark-contains":
+                        if (i + 1 < args.Length) bookmarkContains = args[++i];
+                        break;
+                    case "--source-contains":
+                        if (i + 1 < args.Length) sourceContains = args[++i];
+                        break;
+                    case "--limit":
+                        if (i + 1 < args.Length && int.TryParse(args[++i], out var lim)) limit = lim;
+                        break;
+                    case "--offset":
+                        if (i + 1 < args.Length && int.TryParse(args[++i], out var off)) offset = off;
+                        break;
+                    case "--pg":
+                        if (i + 1 < args.Length) pgUri = args[++i];
+                        break;
+                    case "--json":
+                        json = true;
+                        break;
+                    case "--show-regions":
+                        showRegions = true;
+                        break;
+                    case "--debug":
+                        debug = true;
+                        break;
+                    case "--first":
+                        firstOnly = true;
+                        break;
+                }
+            }
+
+            var cfg = TjpbDespachoConfig.Load(configPath);
+            var sourceFilter = !string.IsNullOrWhiteSpace(sourceContains) ? sourceContains : inbox;
+            var rows = !string.IsNullOrWhiteSpace(processFilter)
+                ? PgAnalysisLoader.ListRawProcessesByProcess(processFilter, pgUri, sourceFilter)
+                : PgAnalysisLoader.ListRawProcesses(pgUri, sourceFilter, limit, offset);
+
+            if (rows.Count == 0)
+            {
+                Console.WriteLine("Nenhum processo encontrado em raw_processes.");
+                return;
+            }
+
+            var results = new List<Dictionary<string, object>>();
+
+            foreach (var row in rows)
+            {
+                var analysis = PgAnalysisLoader.Deserialize(row.Json);
+                if (analysis == null || analysis.Pages == null || analysis.Pages.Count == 0)
+                    continue;
+
+                var totalPages = analysis.DocumentInfo?.TotalPages ?? analysis.Pages.Count;
+                var ranges = BuildBookmarkRanges(analysis.Bookmarks, totalPages);
+                if (ranges.Count == 0) continue;
+
+                foreach (var br in ranges)
+                {
+                    if (string.IsNullOrWhiteSpace(br.Title)) continue;
+                    var titleNorm = TextUtils.NormalizeForMatch(br.Title);
+                    if (!titleNorm.Contains("despacho")) continue;
+                    if (!string.IsNullOrWhiteSpace(bookmarkContains) &&
+                        !br.Title.Contains(bookmarkContains, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var sourceBytes = EnsureSourceBytes(row.ProcessNumber ?? "", row.Source ?? "", pgUri);
+                    if (!TryMatchDespachoCandidate(analysis, row.Source ?? "", sourceBytes, br, cfg,
+                            out var header, out var footer, out var lastRegion, out var lastPageText, out var lastPage1, out var rejectReason))
+                    {
+                        if (debug)
+                            PrintReject(row.ProcessNumber, br, rejectReason);
+                        continue;
+                    }
+
+                    var item = new Dictionary<string, object>
+                    {
+                        ["process_number"] = row.ProcessNumber ?? "",
+                        ["source"] = row.Source ?? "",
+                        ["bookmark_title"] = br.Title ?? "",
+                        ["start_page1"] = br.StartPage1,
+                        ["end_page1"] = lastPage1,
+                        ["header_source"] = header.Source,
+                        ["footer_source"] = footer.Source
+                    };
+
+                    if (lastPage1 != br.EndPage1)
+                        item["range_end_page1"] = br.EndPage1;
+
+                    if (showRegions)
+                    {
+                        var firstRegion = BuildFirstTopRegion(analysis, br.StartPage1, cfg);
+                        var firstHash = TextUtils.Sha256Hex(TextUtils.NormalizeForHash(firstRegion.Text));
+                        var lastHash = TextUtils.Sha256Hex(TextUtils.NormalizeForHash(lastRegion.Text));
+                        var firstScore = ComputeTemplateScore(firstRegion.Text, "first_top", cfg);
+                        var lastScore = ComputeTemplateScore(lastRegion.Text, "last_bottom", cfg);
+                        item["first_top_text"] = firstRegion.Text;
+                        item["last_bottom_text"] = lastRegion.Text;
+                        item["first_top_bbox"] = firstRegion.BBox;
+                        item["last_bottom_bbox"] = lastRegion.BBox;
+                        item["first_top_hash"] = firstHash;
+                        item["last_bottom_hash"] = lastHash;
+                        item["first_top_score_diffplex"] = firstScore;
+                        item["last_bottom_score_diffplex"] = lastScore;
+                    }
+
+                    results.Add(item);
+                    if (firstOnly) break;
+                }
+
+                if (firstOnly && results.Count > 0)
+                    break;
+            }
+
+            if (json)
+            {
+                Console.WriteLine(JsonConvert.SerializeObject(results, Formatting.Indented));
+                return;
+            }
+
+            foreach (var r in results)
+            {
+                Console.WriteLine($"{r["process_number"]} p{r["start_page1"]}-{r["end_page1"]} | {r["bookmark_title"]}");
+                if (showRegions)
+                {
+                    Console.WriteLine("---- first_top ----");
+                    Console.WriteLine(r["first_top_text"]);
+                    Console.WriteLine("---- last_bottom ----");
+                    Console.WriteLine(r["last_bottom_text"]);
+                }
+            }
+        }
+
+        private void RunFindCertidao(string[] args)
+        {
+            string configPath = "config.yaml";
+            string? processFilter = null;
+            string? sourceContains = null;
+            bool json = false;
+            bool showRegions = false;
+            bool debug = false;
+            bool firstOnly = false;
+            int limit = 100;
+            int offset = 0;
+            string pgUri = PgDocStore.DefaultPgUri;
+
+            for (int i = 0; i < args.Length; i++)
+            {
+                switch (args[i])
+                {
+                    case "--config":
+                        if (i + 1 < args.Length) configPath = args[++i];
+                        break;
+                    case "--process":
+                        if (i + 1 < args.Length) processFilter = args[++i];
+                        break;
+                    case "--source-contains":
+                        if (i + 1 < args.Length) sourceContains = args[++i];
+                        break;
+                    case "--limit":
+                        if (i + 1 < args.Length && int.TryParse(args[++i], out var lim)) limit = lim;
+                        break;
+                    case "--offset":
+                        if (i + 1 < args.Length && int.TryParse(args[++i], out var off)) offset = off;
+                        break;
+                    case "--pg":
+                        if (i + 1 < args.Length) pgUri = args[++i];
+                        break;
+                    case "--json":
+                        json = true;
+                        break;
+                    case "--show-regions":
+                        showRegions = true;
+                        break;
+                    case "--debug":
+                        debug = true;
+                        break;
+                    case "--first":
+                        firstOnly = true;
+                        break;
+                }
+            }
+
+            var cfg = TjpbDespachoConfig.Load(configPath);
+            var rows = !string.IsNullOrWhiteSpace(processFilter)
+                ? PgAnalysisLoader.ListRawProcessesByProcess(processFilter, pgUri, sourceContains)
+                : PgAnalysisLoader.ListRawProcesses(pgUri, sourceContains, limit, offset);
+
+            if (rows.Count == 0)
+            {
+                Console.WriteLine("Nenhum processo encontrado em raw_processes.");
+                return;
+            }
+
+            var results = new List<Dictionary<string, object>>();
+
+            foreach (var row in rows)
+            {
+                var analysis = PgAnalysisLoader.Deserialize(row.Json);
+                if (analysis == null || analysis.Pages == null || analysis.Pages.Count == 0)
+                    continue;
+
+                var page1 = CertidaoExtraction.FindCertidaoPage(analysis, cfg);
+                if (page1 <= 0)
+                {
+                    if (debug)
+                    {
+                        var reasons = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                        for (int p = 1; p <= analysis.Pages.Count; p++)
+                        {
+                            if (CertidaoExtraction.IsCertidaoPage(analysis, p, cfg, out var reason))
+                                continue;
+                            if (!reasons.ContainsKey(reason)) reasons[reason] = 0;
+                            reasons[reason] += 1;
+                        }
+                        Console.WriteLine($"[certidao] {row.ProcessNumber}: not_found ({string.Join(", ", reasons.Select(r => $"{r.Key}:{r.Value}"))})");
+                    }
+                    continue;
+                }
+
+                var regions = CertidaoExtraction.BuildCertidaoRegions(analysis, page1, cfg);
+                var fullRegion = regions.FirstOrDefault(r => r.Name.Equals("certidao_full", StringComparison.OrdinalIgnoreCase));
+                var valueRegion = regions.FirstOrDefault(r => r.Name.Equals("certidao_value_date", StringComparison.OrdinalIgnoreCase));
+                if (fullRegion == null) continue;
+
+                var item = new Dictionary<string, object>
+                {
+                    ["process_number"] = row.ProcessNumber ?? "",
+                    ["source"] = row.Source ?? "",
+                    ["page1"] = page1,
+                    ["certidao_full_bbox"] = fullRegion.BBox,
+                    ["certidao_full_hash"] = TextUtils.Sha256Hex(TextUtils.NormalizeForHash(fullRegion.Text)),
+                    ["certidao_full_score_diffplex"] = ComputeTemplateScore(fullRegion.Text, "certidao_full", cfg)
+                };
+                if (valueRegion != null)
+                {
+                    item["certidao_value_date_bbox"] = valueRegion.BBox;
+                    item["certidao_value_date_hash"] = TextUtils.Sha256Hex(TextUtils.NormalizeForHash(valueRegion.Text));
+                    item["certidao_value_date_score_diffplex"] = ComputeTemplateScore(valueRegion.Text, "certidao_value_date", cfg);
+                }
+                if (showRegions)
+                {
+                    item["certidao_full_text"] = fullRegion.Text;
+                    if (valueRegion != null) item["certidao_value_date_text"] = valueRegion.Text;
+                }
+                results.Add(item);
+
+                if (firstOnly) break;
+            }
+
+            if (json)
+            {
+                Console.WriteLine(JsonConvert.SerializeObject(results, Formatting.Indented));
+                return;
+            }
+
+            foreach (var r in results)
+            {
+                Console.WriteLine($"{r["process_number"]} p{r["page1"]} | certidao_cm");
+                if (showRegions)
+                {
+                    Console.WriteLine("---- certidao_full ----");
+                    Console.WriteLine(r["certidao_full_text"]);
+                    if (r.ContainsKey("certidao_value_date_text"))
+                    {
+                        Console.WriteLine("---- certidao_value_date ----");
+                        Console.WriteLine(r["certidao_value_date_text"]);
+                    }
                 }
             }
         }
@@ -439,6 +760,879 @@ namespace FilterPDF.TjpbDespachoExtractor.Commands
             Console.WriteLine(stats.ToText());
         }
 
+        private void RunSignatures(string[] args)
+        {
+            string? processFilter = null;
+            string? sourceContains = null;
+            int limit = 50;
+            int offset = 0;
+            bool json = false;
+            string pgUri = PgDocStore.DefaultPgUri;
+
+            for (int i = 0; i < args.Length; i++)
+            {
+                switch (args[i])
+                {
+                    case "--process":
+                        if (i + 1 < args.Length) processFilter = args[++i];
+                        break;
+                    case "--source-contains":
+                        if (i + 1 < args.Length) sourceContains = args[++i];
+                        break;
+                    case "--limit":
+                        if (i + 1 < args.Length && int.TryParse(args[++i], out var lim)) limit = lim;
+                        break;
+                    case "--offset":
+                        if (i + 1 < args.Length && int.TryParse(args[++i], out var off)) offset = off;
+                        break;
+                    case "--pg":
+                        if (i + 1 < args.Length) pgUri = args[++i];
+                        break;
+                    case "--json":
+                        json = true;
+                        break;
+                }
+            }
+
+            var rows = !string.IsNullOrWhiteSpace(processFilter)
+                ? PgAnalysisLoader.ListRawProcessesByProcess(processFilter, pgUri, sourceContains)
+                : PgAnalysisLoader.ListRawProcesses(pgUri, sourceContains, limit, offset);
+
+            if (rows.Count == 0)
+            {
+                Console.WriteLine("Nenhum processo encontrado em raw_processes.");
+                return;
+            }
+
+            var results = new List<Dictionary<string, object>>();
+            foreach (var row in rows)
+            {
+                var analysis = PgAnalysisLoader.Deserialize(row.Json);
+                if (analysis == null)
+                    continue;
+
+                var sourceBytes = EnsureSourceBytes(row.ProcessNumber ?? "", row.Source ?? "", pgUri);
+                var sigsRaw = analysis.Signatures ?? new List<DigitalSignature>();
+                var sigsItext = (!string.IsNullOrWhiteSpace(row.Source) && File.Exists(row.Source))
+                    ? SignatureExtractor.ExtractSignatures(row.Source ?? "")
+                    : SignatureExtractor.ExtractSignatures(sourceBytes ?? Array.Empty<byte>());
+
+                var fullText = "";
+                var lastPageText = "";
+                if (analysis.Pages != null && analysis.Pages.Count > 0)
+                {
+                    fullText = string.Join("\n", analysis.Pages.Select(p => p.TextInfo?.PageText ?? ""));
+                    lastPageText = analysis.Pages[analysis.Pages.Count - 1].TextInfo?.PageText ?? "";
+                }
+                var fullHasRobson = TextUtils.NormalizeForMatch(fullText).Contains("robson");
+                var lastHasRobson = TextUtils.NormalizeForMatch(lastPageText).Contains("robson");
+
+                var item = new Dictionary<string, object>
+                {
+                    ["process_number"] = row.ProcessNumber ?? "",
+                    ["source"] = row.Source ?? "",
+                    ["raw_signatures"] = sigsRaw.Select(s => new
+                    {
+                        signer = s.SignerName,
+                        name = s.Name,
+                        subject = s.Certificate?.Subject ?? "",
+                        page1 = s.Page1,
+                        field = s.FieldName
+                    }).ToList(),
+                    ["itext_signatures"] = sigsItext.Select(s => new
+                    {
+                        signer = s.SignerName,
+                        page1 = s.Page1,
+                        field = s.FieldName
+                    }).ToList(),
+                    ["text_has_robson_full"] = fullHasRobson,
+                    ["text_has_robson_last_page"] = lastHasRobson
+                };
+
+                results.Add(item);
+            }
+
+            if (json)
+            {
+                Console.WriteLine(JsonConvert.SerializeObject(results, Formatting.Indented));
+                return;
+            }
+
+            foreach (var r in results)
+            {
+                Console.WriteLine($"{r["process_number"]} | {r["source"]}");
+                var raw = r["raw_signatures"] as List<dynamic>;
+                var itext = r["itext_signatures"] as List<dynamic>;
+                Console.WriteLine($"  raw_signatures: {(raw?.Count ?? 0)}");
+                foreach (var s in raw ?? new List<dynamic>())
+                {
+                    Console.WriteLine($"    - {s.signer} | {s.subject} | p{s.page1} | {s.field}");
+                }
+                Console.WriteLine($"  itext_signatures: {(itext?.Count ?? 0)}");
+                foreach (var s in itext ?? new List<dynamic>())
+                {
+                    Console.WriteLine($"    - {s.signer} | p{s.page1} | {s.field}");
+                }
+                Console.WriteLine($"  text_has_robson_full: {r["text_has_robson_full"]}");
+                Console.WriteLine($"  text_has_robson_last_page: {r["text_has_robson_last_page"]}");
+            }
+        }
+
+        private void RunCropRegions(string[] args)
+        {
+            string configPath = "config.yaml";
+            string? processFilter = null;
+            string? bookmarkContains = null;
+            string? sourceContains = null;
+            string? outDir = null;
+            string? templateOut = null;
+            bool firstOnly = false;
+            bool includeCertidao = false;
+            bool onlyCertidao = false;
+            bool json = false;
+            bool debug = false;
+            int limit = 100;
+            int offset = 0;
+            string pgUri = PgDocStore.DefaultPgUri;
+
+            for (int i = 0; i < args.Length; i++)
+            {
+                switch (args[i])
+                {
+                    case "--config":
+                        if (i + 1 < args.Length) configPath = args[++i];
+                        break;
+                    case "--process":
+                        if (i + 1 < args.Length) processFilter = args[++i];
+                        break;
+                    case "--bookmark-contains":
+                        if (i + 1 < args.Length) bookmarkContains = args[++i];
+                        break;
+                    case "--source-contains":
+                        if (i + 1 < args.Length) sourceContains = args[++i];
+                        break;
+                    case "--out-dir":
+                        if (i + 1 < args.Length) outDir = args[++i];
+                        break;
+                    case "--template-out":
+                        if (i + 1 < args.Length) templateOut = args[++i];
+                        break;
+                    case "--certidao":
+                        includeCertidao = true;
+                        break;
+                    case "--certidao-only":
+                        includeCertidao = true;
+                        onlyCertidao = true;
+                        break;
+                    case "--first":
+                        firstOnly = true;
+                        break;
+                    case "--json":
+                        json = true;
+                        break;
+                    case "--debug":
+                        debug = true;
+                        break;
+                    case "--limit":
+                        if (i + 1 < args.Length && int.TryParse(args[++i], out var lim)) limit = lim;
+                        break;
+                    case "--offset":
+                        if (i + 1 < args.Length && int.TryParse(args[++i], out var off)) offset = off;
+                        break;
+                    case "--pg":
+                        if (i + 1 < args.Length) pgUri = args[++i];
+                        break;
+                }
+            }
+
+            var cfg = TjpbDespachoConfig.Load(configPath);
+            var rows = !string.IsNullOrWhiteSpace(processFilter)
+                ? PgAnalysisLoader.ListRawProcessesByProcess(processFilter, pgUri, sourceContains)
+                : PgAnalysisLoader.ListRawProcesses(pgUri, sourceContains, limit, offset);
+
+            if (rows.Count == 0)
+            {
+                Console.WriteLine("Nenhum processo encontrado em raw_processes.");
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(outDir))
+                Directory.CreateDirectory(outDir);
+
+            var results = new List<Dictionary<string, object>>();
+
+            foreach (var row in rows)
+            {
+                var analysis = PgAnalysisLoader.Deserialize(row.Json);
+                if (analysis == null || analysis.Pages == null || analysis.Pages.Count == 0)
+                    continue;
+
+                var totalPages = analysis.DocumentInfo?.TotalPages ?? analysis.Pages.Count;
+                var ranges = BuildBookmarkRanges(analysis.Bookmarks, totalPages);
+                if (!onlyCertidao && ranges.Count > 0)
+                {
+                    foreach (var br in ranges)
+                    {
+                        if (string.IsNullOrWhiteSpace(br.Title)) continue;
+                        var titleNorm = TextUtils.NormalizeForMatch(br.Title);
+                        if (!titleNorm.Contains("despacho")) continue;
+                        if (!string.IsNullOrWhiteSpace(bookmarkContains) &&
+                            !br.Title.Contains(bookmarkContains, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        var sourceBytes = EnsureSourceBytes(row.ProcessNumber ?? "", row.Source ?? "", pgUri);
+                        if (!TryMatchDespachoCandidate(analysis, row.Source ?? "", sourceBytes, br, cfg,
+                                out var header, out var footer, out var lastRegion, out var lastPageText, out var lastPage1, out var rejectReason))
+                        {
+                            if (debug)
+                                PrintReject(row.ProcessNumber, br, rejectReason);
+                            continue;
+                        }
+
+                        var firstRegion = BuildFirstTopRegion(analysis, br.StartPage1, cfg);
+                        var firstBox = ExpandFirstTopBBox(firstRegion.BBox);
+                        var lastBox = ExpandLastBottomBBox(lastRegion.BBox);
+                        if (firstBox == null || lastBox == null) continue;
+
+                        var firstHash = TextUtils.Sha256Hex(TextUtils.NormalizeForHash(firstRegion.Text));
+                        var lastHash = TextUtils.Sha256Hex(TextUtils.NormalizeForHash(lastRegion.Text));
+                        var firstScore = ComputeTemplateScore(firstRegion.Text, "first_top", cfg);
+                        var lastScore = ComputeTemplateScore(lastRegion.Text, "last_bottom", cfg);
+                        var item = new Dictionary<string, object>
+                        {
+                            ["doc_type"] = "despacho",
+                            ["process_number"] = row.ProcessNumber ?? "",
+                            ["source"] = row.Source ?? "",
+                            ["bookmark_title"] = br.Title ?? "",
+                            ["start_page1"] = br.StartPage1,
+                            ["end_page1"] = lastPage1,
+                            ["first_top_bbox"] = firstBox,
+                            ["last_bottom_bbox"] = lastBox,
+                            ["first_top_hash"] = firstHash,
+                            ["last_bottom_hash"] = lastHash,
+                            ["first_top_score_diffplex"] = firstScore,
+                            ["last_bottom_score_diffplex"] = lastScore
+                        };
+                        if (lastPage1 != br.EndPage1)
+                            item["range_end_page1"] = br.EndPage1;
+                        results.Add(item);
+
+                        if (!string.IsNullOrWhiteSpace(outDir))
+                        {
+                            var safeProcess = SanitizeFileName(row.ProcessNumber ?? "process");
+                            var baseName = $"{safeProcess}_p{br.StartPage1:000}_{lastPage1:000}";
+
+                            var srcBytes = EnsureSourceBytes(row.ProcessNumber ?? "", row.Source ?? "", pgUri);
+                            var srcPath = File.Exists(row.Source) ? row.Source : null;
+
+                            var outFirst = Path.Combine(outDir, baseName + "_first_top.pdf");
+                            var outLast = Path.Combine(outDir, baseName + "_last_bottom.pdf");
+
+                            CropPdfRegion(srcPath, srcBytes, br.StartPage1, firstBox, outFirst);
+                            CropPdfRegion(srcPath, srcBytes, lastPage1, lastBox, outLast);
+                        }
+
+                        if (firstOnly) break;
+                    }
+                }
+
+                if (includeCertidao)
+                {
+                    var page1 = CertidaoExtraction.FindCertidaoPage(analysis, cfg);
+                    if (page1 > 0)
+                    {
+                        var regions = CertidaoExtraction.BuildCertidaoRegions(analysis, page1, cfg);
+                        var fullRegion = regions.FirstOrDefault(r => r.Name.Equals("certidao_full", StringComparison.OrdinalIgnoreCase));
+                        var valueRegion = regions.FirstOrDefault(r => r.Name.Equals("certidao_value_date", StringComparison.OrdinalIgnoreCase));
+                        if (fullRegion != null && fullRegion.BBox != null)
+                        {
+                            var fullBox = ExpandFullWidthBBox(fullRegion.BBox);
+                            var item = new Dictionary<string, object>
+                            {
+                                ["doc_type"] = "certidao_cm",
+                                ["process_number"] = row.ProcessNumber ?? "",
+                                ["source"] = row.Source ?? "",
+                                ["page1"] = page1,
+                                ["certidao_full_bbox"] = fullBox,
+                                ["certidao_full_hash"] = TextUtils.Sha256Hex(TextUtils.NormalizeForHash(fullRegion.Text)),
+                                ["certidao_full_score_diffplex"] = ComputeTemplateScore(fullRegion.Text, "certidao_full", cfg)
+                            };
+                            if (valueRegion != null)
+                            {
+                                item["certidao_value_date_bbox"] = valueRegion.BBox;
+                                item["certidao_value_date_hash"] = TextUtils.Sha256Hex(TextUtils.NormalizeForHash(valueRegion.Text));
+                                item["certidao_value_date_score_diffplex"] = ComputeTemplateScore(valueRegion.Text, "certidao_value_date", cfg);
+                            }
+                            results.Add(item);
+
+                            if (!string.IsNullOrWhiteSpace(outDir))
+                            {
+                                var safeProcess = SanitizeFileName(row.ProcessNumber ?? "process");
+                                var baseName = $"{safeProcess}_p{page1:000}";
+                                var srcBytes = EnsureSourceBytes(row.ProcessNumber ?? "", row.Source ?? "", pgUri);
+                                var srcPath = File.Exists(row.Source) ? row.Source : null;
+                                var outFull = Path.Combine(outDir, baseName + "_certidao_full.pdf");
+                                CropPdfRegion(srcPath, srcBytes, page1, fullBox, outFull);
+                                if (valueRegion != null && valueRegion.BBox != null)
+                                {
+                                    var outValue = Path.Combine(outDir, baseName + "_certidao_value_date.pdf");
+                                    CropPdfRegion(srcPath, srcBytes, page1, valueRegion.BBox, outValue);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (firstOnly && results.Count > 0)
+                    break;
+            }
+
+            if (!string.IsNullOrWhiteSpace(templateOut) && results.Count > 0)
+            {
+                var first = results.FirstOrDefault(r => r.ContainsKey("first_top_bbox") && r.ContainsKey("last_bottom_bbox"));
+                if (first == null)
+                {
+                    if (!json)
+                        Console.WriteLine("template_out: nenhum despacho encontrado para gerar template.");
+                }
+                else
+                {
+                var regions = new List<TemplateRegion>
+                {
+                    new TemplateRegion
+                    {
+                        Name = "first_top",
+                        Page = Convert.ToInt32(first["start_page1"]),
+                        X0 = (float)((BBoxN)first["first_top_bbox"]).X0,
+                        Y0 = (float)((BBoxN)first["first_top_bbox"]).Y0,
+                        X1 = (float)((BBoxN)first["first_top_bbox"]).X1,
+                        Y1 = (float)((BBoxN)first["first_top_bbox"]).Y1,
+                        Tolerance = 0.0f
+                    },
+                    new TemplateRegion
+                    {
+                        Name = "last_bottom",
+                        Page = Convert.ToInt32(first["end_page1"]),
+                        X0 = (float)((BBoxN)first["last_bottom_bbox"]).X0,
+                        Y0 = (float)((BBoxN)first["last_bottom_bbox"]).Y0,
+                        X1 = (float)((BBoxN)first["last_bottom_bbox"]).X1,
+                        Y1 = (float)((BBoxN)first["last_bottom_bbox"]).Y1,
+                        Tolerance = 0.0f
+                    }
+                };
+
+                File.WriteAllText(templateOut, JsonConvert.SerializeObject(regions, Formatting.Indented));
+                }
+            }
+
+            if (json)
+            {
+                Console.WriteLine(JsonConvert.SerializeObject(results, Formatting.Indented));
+                return;
+            }
+
+            foreach (var r in results)
+            {
+                var docType = r.TryGetValue("doc_type", out var dtObj) ? dtObj?.ToString() ?? "" : "";
+                if (docType.Equals("certidao_cm", StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine($"{r["process_number"]} p{r["page1"]} | certidao_cm");
+                }
+                else
+                {
+                    Console.WriteLine($"{r["process_number"]} p{r["start_page1"]}-{r["end_page1"]} | {r["bookmark_title"]}");
+                }
+            }
+        }
+
+        private static BBoxN? ExpandFirstTopBBox(BBoxN? bbox)
+        {
+            if (bbox == null) return null;
+            var y0 = Clamp01(bbox.Y0);
+            var y1 = 1.0;
+            if (y0 >= y1) return null;
+            return new BBoxN { X0 = 0.0, X1 = 1.0, Y0 = y0, Y1 = y1 };
+        }
+
+        private static BBoxN? ExpandLastBottomBBox(BBoxN? bbox)
+        {
+            if (bbox == null) return null;
+            var y1 = Clamp01(bbox.Y1);
+            var y0 = 0.0;
+            if (y0 >= y1) return null;
+            return new BBoxN { X0 = 0.0, X1 = 1.0, Y0 = y0, Y1 = y1 };
+        }
+
+        private static BBoxN? ExpandFullWidthBBox(BBoxN? bbox)
+        {
+            if (bbox == null) return null;
+            var y0 = Clamp01(bbox.Y0);
+            var y1 = Clamp01(bbox.Y1);
+            if (y0 >= y1) return null;
+            return new BBoxN { X0 = 0.0, X1 = 1.0, Y0 = y0, Y1 = y1 };
+        }
+
+        private static double Clamp01(double v)
+        {
+            if (v < 0) return 0;
+            if (v > 1) return 1;
+            return v;
+        }
+
+        private static byte[]? EnsureSourceBytes(string processNumber, string sourcePath, string pgUri)
+        {
+            if (!string.IsNullOrWhiteSpace(sourcePath) && File.Exists(sourcePath))
+                return null;
+            return PgDocStore.FetchRawFile(pgUri, processNumber);
+        }
+
+        private static void CropPdfRegion(string? sourcePath, byte[]? sourceBytes, int page1, BBoxN bbox, string outPath)
+        {
+            if (page1 <= 0) return;
+            if (bbox == null) return;
+            if (sourceBytes == null && (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath)))
+                return;
+
+            using var reader = sourceBytes != null
+                ? new PdfReader(new MemoryStream(sourceBytes))
+                : new PdfReader(sourcePath ?? "");
+            using var srcDoc = new PdfDocument(reader);
+            if (page1 > srcDoc.GetNumberOfPages()) return;
+
+            var srcPage = srcDoc.GetPage(page1);
+            var pageSize = srcPage.GetPageSize();
+            var rect = new Rectangle(
+                (float)(bbox.X0 * pageSize.GetWidth()),
+                (float)(bbox.Y0 * pageSize.GetHeight()),
+                (float)((bbox.X1 - bbox.X0) * pageSize.GetWidth()),
+                (float)((bbox.Y1 - bbox.Y0) * pageSize.GetHeight()));
+
+            if (rect.GetWidth() <= 0 || rect.GetHeight() <= 0) return;
+
+            using var writer = new PdfWriter(outPath);
+            using var outDoc = new PdfDocument(writer);
+            var newPage = outDoc.AddNewPage();
+            var pageRect = new Rectangle(0, 0, rect.GetWidth(), rect.GetHeight());
+            newPage.SetMediaBox(pageRect);
+            newPage.SetCropBox(pageRect);
+            var xObject = srcPage.CopyAsFormXObject(outDoc);
+            var canvas = new PdfCanvas(newPage);
+            canvas.AddXObjectAt(xObject, -rect.GetX(), -rect.GetY());
+        }
+
+        private class BookmarkRange
+        {
+            public string Title { get; set; } = "";
+            public int Level { get; set; }
+            public int StartPage1 { get; set; }
+            public int EndPage1 { get; set; }
+        }
+
+        private bool TryMatchDespachoCandidate(PDFAnalysisResult analysis, string sourcePath, byte[]? sourceBytes, BookmarkRange br, TjpbDespachoConfig cfg,
+            out RegionSnippet header, out RegionSnippet footer, out RegionSnippet lastRegion, out string lastPageText, out int lastPage1, out string? rejectReason)
+        {
+            header = new RegionSnippet();
+            footer = new RegionSnippet();
+            lastRegion = new RegionSnippet();
+            lastPageText = "";
+            lastPage1 = br.EndPage1;
+            rejectReason = null;
+
+            var pageCount = br.EndPage1 - br.StartPage1 + 1;
+            if (pageCount < 2)
+            {
+                rejectReason = "page_count<2";
+                return false;
+            }
+
+            if (analysis.Pages == null || analysis.Pages.Count == 0)
+            {
+                rejectReason = "no_pages";
+                return false;
+            }
+
+            if (br.StartPage1 < 1 || br.EndPage1 < 1 ||
+                br.StartPage1 > analysis.Pages.Count || br.EndPage1 > analysis.Pages.Count)
+            {
+                rejectReason = "page_out_of_range";
+                return false;
+            }
+
+            header = BuildHeaderCandidate(analysis, br.StartPage1, cfg);
+            if (!header.IsOk)
+            {
+                rejectReason = "missing_header_anchor";
+                return false;
+            }
+
+            var headerNorm = TextUtils.NormalizeForMatch(header.Text);
+            if (!ContainsAny(headerNorm, cfg.Anchors.Subheader))
+            {
+                rejectReason = "missing_subheader_origin";
+                return false;
+            }
+            if (!ContainsAny(headerNorm, cfg.Anchors.Title))
+            {
+                rejectReason = "missing_title_anchor";
+                return false;
+            }
+
+            lastPage1 = FindSignaturePageInRange(analysis, br.StartPage1, br.EndPage1);
+            if (lastPage1 <= 0)
+                lastPage1 = br.EndPage1;
+
+            footer = BuildFooterCandidate(analysis, lastPage1, cfg);
+            lastRegion = BuildLastBottomRegion(analysis, lastPage1, cfg);
+            lastPageText = GetPageText(analysis, lastPage1);
+
+            var rangeTailText = BuildRangeTailText(analysis, br.StartPage1, br.EndPage1);
+            if (!HasRobsonSignature(analysis, sourcePath, sourceBytes, footer.Text, lastRegion.Text, lastPageText, rangeTailText))
+            {
+                rejectReason = "robson_signature_not_found";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static void PrintReject(string? processNumber, BookmarkRange br, string? reason)
+        {
+            var proc = processNumber ?? "";
+            var why = string.IsNullOrWhiteSpace(reason) ? "no_match" : reason;
+            Console.WriteLine($"[reject] {proc} p{br.StartPage1}-{br.EndPage1} | {br.Title} | {why}");
+        }
+
+        private List<BookmarkRange> BuildBookmarkRanges(BookmarkStructure? bookmarks, int totalPages)
+        {
+            var list = new List<BookmarkRange>();
+            if (bookmarks?.RootItems == null || bookmarks.RootItems.Count == 0) return list;
+            var ordered = FlattenBookmarks(bookmarks.RootItems)
+                .Where(b => b.Page1 > 0)
+                .OrderBy(b => b.Page1)
+                .ThenBy(b => b.Level)
+                .ToList();
+
+            for (int i = 0; i < ordered.Count; i++)
+            {
+                var start = ordered[i].Page1;
+                var end = (i + 1 < ordered.Count) ? Math.Max(start, ordered[i + 1].Page1 - 1) : totalPages;
+                list.Add(new BookmarkRange
+                {
+                    Title = ordered[i].Title ?? "",
+                    Level = ordered[i].Level,
+                    StartPage1 = start,
+                    EndPage1 = end
+                });
+            }
+            return list;
+        }
+
+        private struct RegionSnippet
+        {
+            public string Text;
+            public BBoxN? BBox;
+            public string Source;
+            public bool IsOk;
+        }
+
+        private RegionSnippet BuildHeaderCandidate(PDFAnalysisResult analysis, int page1, TjpbDespachoConfig cfg)
+        {
+            var header = new RegionSnippet { Text = "", BBox = null, Source = "header_band", IsOk = false };
+            var page = analysis.Pages[Math.Max(0, page1 - 1)];
+            var words = TextUtils.DeduplicateWords(page.TextInfo?.Words ?? new List<WordInfo>());
+            var seg = BandSegmenter.SegmentPage(words, page1, cfg.Thresholds.Bands, cfg.Thresholds.Paragraph.LineMergeY, cfg.Thresholds.Paragraph.WordGapX);
+            var headerText = string.Join("\n", seg.BandSegments
+                .Where(b => b.Band.Equals("header", StringComparison.OrdinalIgnoreCase) ||
+                            b.Band.Equals("subheader", StringComparison.OrdinalIgnoreCase) ||
+                            b.Band.Equals("title", StringComparison.OrdinalIgnoreCase))
+                .Select(b => b.Text ?? ""));
+            header.Text = TextUtils.NormalizeWhitespace(headerText);
+            header.BBox = TextUtils.UnionBBox(seg.BandSegments.SelectMany(b => b.Words ?? new List<WordInfo>()).ToList());
+
+            if (string.IsNullOrWhiteSpace(header.Text))
+            {
+                var lines = (page.TextInfo?.PageText ?? "")
+                    .Split('\n')
+                    .Where(l => !string.IsNullOrWhiteSpace(l))
+                    .Take(8)
+                    .Select(l => l.Trim());
+                header.Text = string.Join(" ", lines);
+                header.Source = "top_lines";
+            }
+
+            var norm = TextUtils.NormalizeForMatch(header.Text);
+            var hasOrigin = ContainsAny(norm, cfg.Anchors.Header) ||
+                            ContainsAny(norm, cfg.Anchors.Subheader) ||
+                            ContainsAny(norm, cfg.Anchors.Title);
+            header.IsOk = hasOrigin;
+            return header;
+        }
+
+        private RegionSnippet BuildFooterCandidate(PDFAnalysisResult analysis, int page1, TjpbDespachoConfig cfg)
+        {
+            var footer = new RegionSnippet { Text = "", BBox = null, Source = "footer_band", IsOk = false };
+            var page = analysis.Pages[Math.Max(0, page1 - 1)];
+            var words = TextUtils.DeduplicateWords(page.TextInfo?.Words ?? new List<WordInfo>());
+            var seg = BandSegmenter.SegmentPage(words, page1, cfg.Thresholds.Bands, cfg.Thresholds.Paragraph.LineMergeY, cfg.Thresholds.Paragraph.WordGapX);
+            var footerText = string.Join("\n", seg.BandSegments
+                .Where(b => b.Band.Equals("footer", StringComparison.OrdinalIgnoreCase))
+                .Select(b => b.Text ?? ""));
+            footer.Text = TextUtils.NormalizeWhitespace(footerText);
+            footer.BBox = TextUtils.UnionBBox(seg.BandSegments.Where(b => b.Band.Equals("footer", StringComparison.OrdinalIgnoreCase))
+                .SelectMany(b => b.Words ?? new List<WordInfo>()).ToList());
+
+            var lines = (page.TextInfo?.PageText ?? "")
+                .Split('\n')
+                .Where(l => !string.IsNullOrWhiteSpace(l))
+                .Select(l => l.Trim())
+                .ToList();
+            var tail = lines.Count > 12 ? lines.Skip(lines.Count - 12) : lines;
+            var tailText = TextUtils.NormalizeWhitespace(string.Join(" ", tail));
+            if (!string.IsNullOrWhiteSpace(tailText))
+            {
+                if (string.IsNullOrWhiteSpace(footer.Text))
+                {
+                    footer.Text = tailText;
+                    footer.Source = "bottom_lines";
+                }
+                else
+                {
+                    footer.Text = TextUtils.NormalizeWhitespace($"{footer.Text} {tailText}");
+                    footer.Source = "footer_band+bottom_lines";
+                }
+            }
+
+            footer.IsOk = !string.IsNullOrWhiteSpace(footer.Text);
+            return footer;
+        }
+
+        private RegionSnippet BuildFirstTopRegion(PDFAnalysisResult analysis, int page1, TjpbDespachoConfig cfg)
+        {
+            var page = analysis.Pages[Math.Max(0, page1 - 1)];
+            var words = TextUtils.DeduplicateWords(page.TextInfo?.Words ?? new List<WordInfo>());
+            var seg = BandSegmenter.SegmentPage(words, page1, cfg.Thresholds.Bands, cfg.Thresholds.Paragraph.LineMergeY, cfg.Thresholds.Paragraph.WordGapX);
+
+            var headerWords = seg.BandSegments
+                .Where(b => b.Band.Equals("header", StringComparison.OrdinalIgnoreCase) ||
+                            b.Band.Equals("subheader", StringComparison.OrdinalIgnoreCase) ||
+                            b.Band.Equals("title", StringComparison.OrdinalIgnoreCase))
+                .SelectMany(b => b.Words ?? new List<WordInfo>())
+                .ToList();
+
+            var bodyLines = LineBuilder.BuildLines(seg.BodyWords ?? new List<WordInfo>(), page1, cfg.Thresholds.Paragraph.LineMergeY, cfg.Thresholds.Paragraph.WordGapX);
+            var paras = ParagraphBuilder.BuildParagraphs(bodyLines, cfg.Thresholds.Paragraph.ParagraphGapY);
+            var firstPara = paras.FirstOrDefault();
+
+            var wordsAll = new List<WordInfo>();
+            wordsAll.AddRange(headerWords);
+            if (firstPara?.Words != null) wordsAll.AddRange(firstPara.Words);
+
+            var text = TextUtils.BuildTextFromWords(wordsAll, cfg.Thresholds.Paragraph.LineMergeY, cfg.TemplateRegions.WordGapX);
+            return new RegionSnippet
+            {
+                Text = text,
+                BBox = TextUtils.UnionBBox(wordsAll),
+                Source = "header+first_para",
+                IsOk = !string.IsNullOrWhiteSpace(text)
+            };
+        }
+
+        private RegionSnippet BuildLastBottomRegion(PDFAnalysisResult analysis, int page1, TjpbDespachoConfig cfg)
+        {
+            var page = analysis.Pages[Math.Max(0, page1 - 1)];
+            var words = TextUtils.DeduplicateWords(page.TextInfo?.Words ?? new List<WordInfo>());
+            var seg = BandSegmenter.SegmentPage(words, page1, cfg.Thresholds.Bands, cfg.Thresholds.Paragraph.LineMergeY, cfg.Thresholds.Paragraph.WordGapX);
+
+            var footerWords = seg.BandSegments
+                .Where(b => b.Band.Equals("footer", StringComparison.OrdinalIgnoreCase))
+                .SelectMany(b => b.Words ?? new List<WordInfo>())
+                .ToList();
+
+            var bodyLines = LineBuilder.BuildLines(seg.BodyWords ?? new List<WordInfo>(), page1, cfg.Thresholds.Paragraph.LineMergeY, cfg.Thresholds.Paragraph.WordGapX);
+            var paras = ParagraphBuilder.BuildParagraphs(bodyLines, cfg.Thresholds.Paragraph.ParagraphGapY);
+            var lastPara = paras.LastOrDefault();
+
+            var wordsAll = new List<WordInfo>();
+            if (lastPara?.Words != null) wordsAll.AddRange(lastPara.Words);
+            wordsAll.AddRange(footerWords);
+
+            var text = TextUtils.BuildTextFromWords(wordsAll, cfg.Thresholds.Paragraph.LineMergeY, cfg.TemplateRegions.WordGapX);
+            return new RegionSnippet
+            {
+                Text = text,
+                BBox = TextUtils.UnionBBox(wordsAll),
+                Source = "last_para+footer",
+                IsOk = !string.IsNullOrWhiteSpace(text)
+            };
+        }
+
+        private bool ContainsAll(string norm, List<string> tokens)
+        {
+            foreach (var t in tokens ?? new List<string>())
+            {
+                if (string.IsNullOrWhiteSpace(t)) continue;
+                if (!norm.Contains(TextUtils.NormalizeForMatch(t)))
+                    return false;
+            }
+            return true;
+        }
+
+        private bool ContainsAny(string norm, List<string> tokens)
+        {
+            foreach (var t in tokens ?? new List<string>())
+            {
+                if (string.IsNullOrWhiteSpace(t)) continue;
+                if (norm.Contains(TextUtils.NormalizeForMatch(t)))
+                    return true;
+            }
+            return false;
+        }
+
+        private bool HasRobsonSignature(PDFAnalysisResult analysis, string sourcePath, byte[]? sourceBytes, string footerText, string lastBottomText, string lastPageText, string rangeTailText)
+        {
+            bool HasRobson(string? value)
+            {
+                if (string.IsNullOrWhiteSpace(value)) return false;
+                return TextUtils.NormalizeForMatch(value).Contains("robson");
+            }
+
+            if (analysis?.Signatures != null)
+            {
+                foreach (var sig in analysis.Signatures)
+                {
+                    if (HasRobson(sig.SignerName) || HasRobson(sig.Name) || HasRobson(sig.Certificate?.Subject))
+                        return true;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(sourcePath) && File.Exists(sourcePath))
+            {
+                var sigs = SignatureExtractor.ExtractSignatures(sourcePath);
+                foreach (var s in sigs)
+                {
+                    if (HasRobson(s.SignerName))
+                        return true;
+                }
+            }
+            else if (sourceBytes != null && sourceBytes.Length > 0)
+            {
+                var sigs = SignatureExtractor.ExtractSignatures(sourceBytes);
+                foreach (var s in sigs)
+                {
+                    if (HasRobson(s.SignerName))
+                        return true;
+                }
+            }
+
+            if (HasRobson(footerText) || HasRobson(lastBottomText) || HasRobson(lastPageText) || HasRobson(rangeTailText))
+                return true;
+
+            return false;
+        }
+
+        private static string GetPageText(PDFAnalysisResult analysis, int page1)
+        {
+            if (analysis?.Pages == null || analysis.Pages.Count == 0) return "";
+            if (page1 < 1 || page1 > analysis.Pages.Count) return "";
+            return analysis.Pages[page1 - 1].TextInfo?.PageText ?? "";
+        }
+
+        private static string BuildRangeTailText(PDFAnalysisResult analysis, int startPage1, int endPage1)
+        {
+            if (analysis?.Pages == null || analysis.Pages.Count == 0) return "";
+            var start = Math.Max(1, startPage1);
+            var end = Math.Min(analysis.Pages.Count, endPage1);
+            var parts = new List<string>();
+            for (int p = start; p <= end; p++)
+            {
+                var text = GetPageText(analysis, p);
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                parts.Add(GetTailText(text));
+            }
+            return string.Join("\n", parts);
+        }
+
+        private static int FindSignaturePageInRange(PDFAnalysisResult analysis, int startPage1, int endPage1)
+        {
+            if (analysis?.Pages == null || analysis.Pages.Count == 0) return 0;
+            var start = Math.Max(1, startPage1);
+            var end = Math.Min(analysis.Pages.Count, endPage1);
+            // Scan from end to start; prioritize last page with Robson in tail
+            for (int p = end; p >= start; p--)
+            {
+                var text = GetPageText(analysis, p);
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                var tail = GetTailText(text);
+                if (TextUtils.NormalizeForMatch(tail).Contains("robson"))
+                    return p;
+            }
+            // Fallback: last page with signature anchor in tail
+            for (int p = end; p >= start; p--)
+            {
+                var text = GetPageText(analysis, p);
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                var tail = GetTailText(text);
+                var norm = TextUtils.NormalizeForMatch(tail);
+                if (norm.Contains("documento assinado") || norm.Contains("assinado eletronicamente"))
+                    return p;
+            }
+            return end;
+        }
+
+        private static string GetTailText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            var start = (int)(text.Length * 0.7);
+            if (start < 0) start = 0;
+            if (start >= text.Length) return text;
+            return text.Substring(start);
+        }
+
+        private static double ComputeTemplateScore(string regionText, string regionName, TjpbDespachoConfig cfg)
+        {
+            if (string.IsNullOrWhiteSpace(regionText)) return 0.0;
+
+            List<string> templates;
+            if (string.Equals(regionName, "first_top", StringComparison.OrdinalIgnoreCase))
+            {
+                templates = cfg.TemplateRegions.FirstPageTop.Templates;
+            }
+            else if (string.Equals(regionName, "last_bottom", StringComparison.OrdinalIgnoreCase))
+            {
+                templates = cfg.TemplateRegions.LastPageBottom.Templates;
+            }
+            else if (string.Equals(regionName, "certidao_full", StringComparison.OrdinalIgnoreCase))
+            {
+                templates = cfg.TemplateRegions.CertidaoFull.Templates;
+            }
+            else if (string.Equals(regionName, "certidao_value_date", StringComparison.OrdinalIgnoreCase))
+            {
+                templates = cfg.TemplateRegions.CertidaoValueDate.Templates;
+            }
+            else
+            {
+                templates = new List<string>();
+            }
+
+            if (templates == null || templates.Count == 0) return 0.0;
+
+            var placeholder = new Regex(@"\{\{\s*([A-Z0-9_]+)\s*\}\}", RegexOptions.IgnoreCase);
+            var regionNorm = TextUtils.NormalizeForMatch(regionText);
+            double best = 0.0;
+
+            foreach (var t in templates)
+            {
+                if (string.IsNullOrWhiteSpace(t)) continue;
+                var core = placeholder.Replace(t, "");
+                var coreNorm = TextUtils.NormalizeForMatch(core);
+                if (string.IsNullOrWhiteSpace(coreNorm)) continue;
+                var score = DiffPlexMatcher.Similarity(coreNorm, regionNorm);
+                if (score > best) best = score;
+            }
+
+            return best;
+        }
+
         private List<BookmarkFlatItem> FlattenBookmarks(List<BookmarkItem> items)
         {
             var list = new List<BookmarkFlatItem>();
@@ -514,6 +1708,10 @@ namespace FilterPDF.TjpbDespachoExtractor.Commands
         {
             Console.WriteLine("tjpb-despacho-extractor extract --inbox <dir> --config <config.yaml> [--out <dir>] [--dump] [--verbose] [--process <num>] [--bookmark-contains <text>] [--limit <n>] [--offset <n>] [--pg <uri>] [--skip-load]");
             Console.WriteLine("tjpb-despacho-extractor bookmarks --inbox <dir> [--process <num>] [--contains <text>] [--json] [--limit <n>] [--offset <n>] [--pg <uri>] [--skip-load]");
+            Console.WriteLine("tjpb-despacho-extractor find-despacho [--inbox <dir>] [--source-contains <text>] [--process <num>] [--bookmark-contains <text>] [--limit <n>] [--offset <n>] [--pg <uri>] [--json] [--show-regions] [--first] [--debug]");
+            Console.WriteLine("tjpb-despacho-extractor find-certidao [--source-contains <text>] [--process <num>] [--limit <n>] [--offset <n>] [--pg <uri>] [--json] [--show-regions] [--first] [--debug]");
+            Console.WriteLine("tjpb-despacho-extractor signatures [--process <num>] [--source-contains <text>] [--limit <n>] [--offset <n>] [--pg <uri>] [--json]");
+            Console.WriteLine("tjpb-despacho-extractor crop-regions [--source-contains <text>] [--process <num>] [--bookmark-contains <text>] [--certidao|--certidao-only] [--out-dir <dir>] [--template-out <file>] [--first] [--limit <n>] [--offset <n>] [--pg <uri>] [--json] [--debug]");
             Console.WriteLine("tjpb-despacho-extractor report --config <config.yaml> [--pg <uri>] [--limit <n>] [--offset <n>] [--process <num>] [--source-contains <text>] [--json]");
             Console.WriteLine("--inbox: pasta com PDFs (default: data/inbox)");
             Console.WriteLine("--config: caminho do config.yaml (default: ./config.yaml)");

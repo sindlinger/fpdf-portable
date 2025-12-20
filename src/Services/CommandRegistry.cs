@@ -132,6 +132,7 @@ namespace FilterPDF.Services
             RegisterCommand("load", new FpdfLoadCommand());
             RegisterCommand("cache", new FpdfCacheCommand());
             RegisterCommand("stats", new FpdfStatsCommand());
+            RegisterCommand("db-clear", new FpdfDbClearCommand());
             RegisterCommand("pipeline", new PipelineCommand());
             RegisterCommand("pipeline-tjpb", new PipelineTjpbCommand());
             RegisterCommand("pipeline-find-despacho", new PipelineFindDespachoCommand());

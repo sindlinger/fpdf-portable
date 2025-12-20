@@ -440,8 +440,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                     Words = region.Words ?? new List<WordInfo>(),
                     BBox = region.BBox,
                     Weight = region.Name.StartsWith("first_top", StringComparison.OrdinalIgnoreCase) ||
-                             region.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase) ||
-                             region.Name.Equals("second_bottom", StringComparison.OrdinalIgnoreCase)
+                             region.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase)
                         ? 1.0
                         : 0.9
                 });

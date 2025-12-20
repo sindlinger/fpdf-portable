@@ -164,6 +164,38 @@ namespace FilterPDF.Utils
             return rows;
         }
 
+        public static List<RawProcessRow> ListRawProcessesByProcess(string processNumber, string? pgUri = null, string? sourceContains = null)
+        {
+            var uri = GetPgUri(pgUri);
+            var rows = new List<RawProcessRow>();
+            using var conn = new NpgsqlConnection(uri);
+            conn.Open();
+            var sql = @"SELECT process_number, source, created_at, COALESCE(raw_json::text,'')
+                        FROM raw_processes
+                        WHERE process_number = @p";
+            if (!string.IsNullOrWhiteSpace(sourceContains))
+                sql += " AND source ILIKE @s";
+            sql += " ORDER BY created_at DESC";
+
+            using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.CommandTimeout = 120;
+            cmd.Parameters.AddWithValue("@p", processNumber);
+            if (!string.IsNullOrWhiteSpace(sourceContains))
+                cmd.Parameters.AddWithValue("@s", "%" + sourceContains + "%");
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                rows.Add(new RawProcessRow
+                {
+                    ProcessNumber = r.IsDBNull(0) ? "" : r.GetString(0),
+                    Source = r.IsDBNull(1) ? "" : r.GetString(1),
+                    CreatedAt = r.IsDBNull(2) ? DateTime.MinValue : r.GetDateTime(2),
+                    Json = r.IsDBNull(3) ? "" : r.GetString(3)
+                });
+            }
+            return rows;
+        }
+
         public static FooterInfo? GetFooterInfo(string processNumber, string? pgUri = null)
         {
             if (string.IsNullOrWhiteSpace(processNumber)) return null;

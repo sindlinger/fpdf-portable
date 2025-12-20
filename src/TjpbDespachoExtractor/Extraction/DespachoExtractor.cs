@@ -131,7 +131,25 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                 return result;
             }
 
-            var regions = BuildTemplateRegions(analysis, range.startPage1, range.endPage1);
+            var rangeText = BuildRangeText(analysis, range.startPage1, range.endPage1);
+            var tipoRange = DetectDespachoTipoByText(rangeText);
+            var effectiveEnd = tipoRange == "encaminhamento_cm"
+                ? range.startPage1
+                : FindSignaturePageInRange(analysis, range.startPage1, range.endPage1);
+            if (effectiveEnd < range.startPage1)
+                effectiveEnd = range.startPage1;
+
+            Log(result, logFn, "info", "range_selection", new Dictionary<string, object>
+            {
+                { "startPage1", range.startPage1 },
+                { "endPage1", range.endPage1 },
+                { "effectiveEndPage1", effectiveEnd },
+                { "tipoRange", tipoRange }
+            });
+
+            var regions = BuildTemplateRegions(analysis, range.startPage1, effectiveEnd);
+            if (tipoRange == "encaminhamento_cm")
+                regions = regions.Where(r => r.Name.Equals("first_top", StringComparison.OrdinalIgnoreCase)).ToList();
             if (options.Verbose || options.Dump)
             {
                 foreach (var r in regions)
@@ -146,14 +164,84 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                 }
             }
 
-            var doc = BuildDocument(analysis, range.startPage1, range.endPage1, best.score, regions,
+            var doc = BuildDocument(analysis, range.startPage1, effectiveEnd, best.score, tipoRange, regions,
                 options.ProcessNumber ?? "", options.FooterSigners, options.FooterSignatureRaw);
             result.Documents.Add(doc);
 
             LogVariationSnippets(result, logFn, regions);
 
+            var certidaoDoc = BuildCertidaoDocument(analysis, options.ProcessNumber ?? "", options.FooterSigners, options.FooterSignatureRaw);
+            if (certidaoDoc != null)
+            {
+                result.Documents.Add(certidaoDoc);
+                Log(result, logFn, "info", "certidao_cm_found", new Dictionary<string, object>
+                {
+                    { "page1", certidaoDoc.StartPage1 },
+                    { "docType", certidaoDoc.DocType }
+                });
+            }
+
             result.Run.FinishedAt = DateTime.UtcNow.ToString("o");
             return result;
+        }
+
+        public List<DespachoDocumentInfo> ExtractAllByBookmarks(PDFAnalysisResult analysis, string sourcePath, ExtractionOptions options, Action<LogEntry>? logFn = null)
+        {
+            var docs = new List<DespachoDocumentInfo>();
+            if (analysis == null || analysis.Pages == null || analysis.Pages.Count == 0) return docs;
+
+            var totalPages = analysis.DocumentInfo?.TotalPages ?? analysis.Pages.Count;
+            var bookmarkRanges = BuildBookmarkRanges(analysis.Bookmarks, totalPages)
+                .Where(b => IsDespachoBookmark(b.Title))
+                .ToList();
+            if (bookmarkRanges.Count == 0) return docs;
+
+            var density = ComputeDensities(analysis);
+
+            foreach (var br in bookmarkRanges)
+            {
+                var pageCount = br.EndPage1 - br.StartPage1 + 1;
+                if (pageCount < _cfg.Thresholds.MinPages) continue;
+
+                var firstText = analysis.Pages[br.StartPage1 - 1].TextInfo?.PageText ?? "";
+                var firstNorm = TextUtils.NormalizeForMatch(firstText);
+                if (!ContainsAny(firstNorm, _cfg.Anchors.Subheader) || !ContainsAny(firstNorm, _cfg.Anchors.Title))
+                    continue;
+
+                var rangeText = BuildRangeText(analysis, br.StartPage1, br.EndPage1);
+                var tipoRange = DetectDespachoTipoByText(rangeText);
+                var effectiveEnd = tipoRange == "encaminhamento_cm"
+                    ? br.StartPage1
+                    : FindSignaturePageInRange(analysis, br.StartPage1, br.EndPage1);
+                if (effectiveEnd < br.StartPage1) effectiveEnd = br.StartPage1;
+
+                var regions = BuildTemplateRegions(analysis, br.StartPage1, effectiveEnd);
+                if (tipoRange == "encaminhamento_cm")
+                    regions = regions.Where(r => r.Name.Equals("first_top", StringComparison.OrdinalIgnoreCase)).ToList();
+
+                var lastRegionText = string.Join(" ", regions.Where(r => r.Name.Equals("last_bottom", StringComparison.OrdinalIgnoreCase)).Select(r => r.Text));
+                var lastPageText = analysis.Pages[effectiveEnd - 1].TextInfo?.PageText ?? "";
+                var rangeTailText = BuildRangeTailText(analysis, br.StartPage1, br.EndPage1);
+
+                if (!HasRobsonSignature(analysis, sourcePath, options, lastRegionText, lastPageText, rangeTailText))
+                    continue;
+
+                var info = ScoreCandidate(analysis, br.StartPage1, br.EndPage1, density,
+                    bookmarkTitle: br.Title, bookmarkLevel: br.Level, source: "bookmark");
+                var matchScore = Math.Max(info.ScoreDmp, info.ScoreDiffPlex);
+
+                var doc = BuildDocument(analysis, br.StartPage1, effectiveEnd, matchScore, tipoRange, regions,
+                    options.ProcessNumber ?? "", options.FooterSigners, options.FooterSignatureRaw);
+                docs.Add(doc);
+            }
+
+            return docs;
+        }
+
+        public DespachoDocumentInfo? ExtractCertidao(PDFAnalysisResult analysis, ExtractionOptions options)
+        {
+            if (analysis == null) return null;
+            return BuildCertidaoDocument(analysis, options?.ProcessNumber ?? "", options?.FooterSigners ?? new List<string>(), options?.FooterSignatureRaw);
         }
 
         private void LogVariationSnippets(ExtractionResult result, Action<LogEntry>? logFn, List<RegionSegment> regions)
@@ -165,7 +253,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             foreach (var r in regions)
             {
                 if (string.IsNullOrWhiteSpace(r.Text)) continue;
-                if (r.Name.Equals("second_bottom", StringComparison.OrdinalIgnoreCase))
+                if (r.Name.Equals("last_bottom", StringComparison.OrdinalIgnoreCase))
                 {
                     var hits = CollectHintSnippets(r.Text, autorHints, 220);
                     if (hits.Count > 0)
@@ -215,12 +303,128 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             return snippets;
         }
 
+        private string BuildRangeText(PDFAnalysisResult analysis, int startPage1, int endPage1)
+        {
+            if (analysis.Pages == null || analysis.Pages.Count == 0) return "";
+            var start = Math.Max(1, startPage1);
+            var end = Math.Min(analysis.Pages.Count, endPage1);
+            var parts = new List<string>();
+            for (int p = start; p <= end; p++)
+            {
+                var text = analysis.Pages[p - 1].TextInfo?.PageText ?? "";
+                if (!string.IsNullOrWhiteSpace(text))
+                    parts.Add(text);
+            }
+            return string.Join("\n", parts);
+        }
+
+        private string BuildRangeTailText(PDFAnalysisResult analysis, int startPage1, int endPage1)
+        {
+            if (analysis.Pages == null || analysis.Pages.Count == 0) return "";
+            var start = Math.Max(1, startPage1);
+            var end = Math.Min(analysis.Pages.Count, endPage1);
+            var parts = new List<string>();
+            for (int p = start; p <= end; p++)
+            {
+                var text = analysis.Pages[p - 1].TextInfo?.PageText ?? "";
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                parts.Add(GetTailText(text));
+            }
+            return string.Join("\n", parts);
+        }
+
+        private int FindSignaturePageInRange(PDFAnalysisResult analysis, int startPage1, int endPage1)
+        {
+            if (analysis.Pages == null || analysis.Pages.Count == 0) return endPage1;
+            var start = Math.Max(1, startPage1);
+            var end = Math.Min(analysis.Pages.Count, endPage1);
+            // Prefer last page with Robson in tail
+            for (int p = end; p >= start; p--)
+            {
+                var text = analysis.Pages[p - 1].TextInfo?.PageText ?? "";
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                var tail = GetTailText(text);
+                if (TextUtils.NormalizeForMatch(tail).Contains("robson"))
+                    return p;
+            }
+            // Fallback: last page with signature anchor in tail
+            for (int p = end; p >= start; p--)
+            {
+                var text = analysis.Pages[p - 1].TextInfo?.PageText ?? "";
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                var tail = GetTailText(text);
+                var norm = TextUtils.NormalizeForMatch(tail);
+                if (norm.Contains("documento assinado") || norm.Contains("assinado eletronicamente"))
+                    return p;
+            }
+            return end;
+        }
+
+        private bool HasRobsonSignature(PDFAnalysisResult analysis, string sourcePath, ExtractionOptions options, string lastBottomText, string lastPageText, string rangeTailText)
+        {
+            bool HasRobson(string? value)
+            {
+                if (string.IsNullOrWhiteSpace(value)) return false;
+                return TextUtils.NormalizeForMatch(value).Contains("robson");
+            }
+
+            if (analysis?.Signatures != null)
+            {
+                foreach (var sig in analysis.Signatures)
+                {
+                    if (HasRobson(sig.SignerName) || HasRobson(sig.Name) || HasRobson(sig.Certificate?.Subject))
+                        return true;
+                }
+            }
+
+            if (options?.FooterSigners != null && options.FooterSigners.Any(HasRobson))
+                return true;
+            if (HasRobson(options?.FooterSignatureRaw))
+                return true;
+
+            if (!string.IsNullOrWhiteSpace(sourcePath) && File.Exists(sourcePath))
+            {
+                var sigs = SignatureExtractor.ExtractSignatures(sourcePath);
+                foreach (var s in sigs)
+                {
+                    if (HasRobson(s.SignerName))
+                        return true;
+                }
+            }
+
+            if (HasRobson(lastBottomText) || HasRobson(lastPageText) || HasRobson(rangeTailText))
+                return true;
+
+            return false;
+        }
+
+        private string DetectDespachoTipoByText(string text)
+        {
+            var norm = TextUtils.NormalizeForMatch(text);
+            if (ContainsAny(norm, _cfg.DespachoType.GeorcHints) || ContainsAny(norm, _cfg.DespachoType.AutorizacaoHints))
+                return "autorizacao";
+            var conselhoStrong = new List<string> { "encaminh", "submet", "remet", "remetam", "remessa" };
+            if (ContainsAny(norm, _cfg.DespachoType.ConselhoHints) && ContainsAny(norm, conselhoStrong))
+                return "encaminhamento_cm";
+            return "indefinido";
+        }
+
+        private static string GetTailText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            var start = (int)(text.Length * 0.7);
+            if (start < 0) start = 0;
+            if (start >= text.Length) return text;
+            return text.Substring(start);
+        }
+
         private DespachoDocumentInfo BuildDocument(PDFAnalysisResult analysis, int startPage1, int endPage1, double matchScore,
-            List<RegionSegment> regions, string processNumber, List<string> footerSigners, string? footerSignatureRaw)
+            string despachoTipo, List<RegionSegment> regions, string processNumber, List<string> footerSigners, string? footerSignatureRaw)
         {
             var doc = new DespachoDocumentInfo
             {
                 DocType = "despacho",
+                DespachoTipo = despachoTipo ?? "",
                 StartPage1 = startPage1,
                 EndPage1 = endPage1,
                 MatchScore = matchScore
@@ -232,11 +436,6 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             var pages = new List<PageTextInfo>();
 
             var pagesForExtraction = new HashSet<int> { startPage1, endPage1 };
-            var secondPage1 = startPage1 + 1;
-            if (secondPage1 <= endPage1)
-                pagesForExtraction.Add(secondPage1);
-            if (endPage1 - startPage1 >= 2)
-                pagesForExtraction.Add(endPage1 - 1);
 
             ParagraphSegment? firstPara = null;
             ParagraphSegment? lastPara = null;
@@ -262,7 +461,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                 bands.AddRange(bandSeg.Bands.Where(b => !string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase)));
                 bandSegments.AddRange(bandSeg.BandSegments.Where(b => !string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase)));
 
-                // Top region (primeira metade da primeira pagina)
+                // Top region (header/subheader/titulo + primeiro paragrafo da primeira pagina)
                 if (p == startPage1)
                 {
                     var topWords = regions
@@ -271,7 +470,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                         .ToList();
                     if (topWords.Count > 0)
                     {
-                        AddBodyBand(bands, bandSegments, p, topWords);
+                        AddBodyBand(bands, bandSegments, p, topWords, "first_top");
                         var lines = LineBuilder.BuildLines(topWords, p, _cfg.Thresholds.Paragraph.LineMergeY, _cfg.Thresholds.Paragraph.WordGapX);
                         var paras = ParagraphBuilder.BuildParagraphs(lines, _cfg.Thresholds.Paragraph.ParagraphGapY);
                         var hints = new List<string>();
@@ -284,42 +483,21 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                     }
                 }
 
-                // Bottom region (ultima metade da ultima pagina; inclui last_bottom_prev quando existir)
-                if (p == endPage1 || (p == endPage1 - 1 && p != secondPage1))
+                // Bottom region (ultimo paragrafo + rodape da ultima pagina)
+                if (p == endPage1)
                 {
                     var bottomWords = regions
-                        .Where(r => r.Page1 == p && r.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase))
+                        .Where(r => r.Page1 == p && r.Name.Equals("last_bottom", StringComparison.OrdinalIgnoreCase))
                         .SelectMany(r => r.Words ?? new List<WordInfo>())
                         .ToList();
                     if (bottomWords.Count > 0)
                     {
-                        AddBodyBand(bands, bandSegments, p, bottomWords);
+                        AddBodyBand(bands, bandSegments, p, bottomWords, "last_bottom");
                         var lines = LineBuilder.BuildLines(bottomWords, p, _cfg.Thresholds.Paragraph.LineMergeY, _cfg.Thresholds.Paragraph.WordGapX);
                         var paras = ParagraphBuilder.BuildParagraphs(lines, _cfg.Thresholds.Paragraph.ParagraphGapY);
                         var candidate = SelectParagraphByHints(paras, _cfg.Anchors.Footer) ?? paras.LastOrDefault();
                         if (candidate != null)
                             lastPara = candidate;
-                    }
-                }
-
-                // Bottom region da segunda pagina (para valor do DE)
-                if (p == secondPage1)
-                {
-                    var bottomWords = regions
-                        .Where(r => r.Page1 == p && (r.Name.Equals("second_bottom", StringComparison.OrdinalIgnoreCase) ||
-                                                    r.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase)))
-                        .SelectMany(r => r.Words ?? new List<WordInfo>())
-                        .ToList();
-                    if (bottomWords.Count > 0)
-                    {
-                        AddBodyBand(bands, bandSegments, p, bottomWords);
-                        var lines = LineBuilder.BuildLines(bottomWords, p, _cfg.Thresholds.Paragraph.LineMergeY, _cfg.Thresholds.Paragraph.WordGapX);
-                        var paras = ParagraphBuilder.BuildParagraphs(lines, _cfg.Thresholds.Paragraph.ParagraphGapY);
-                        var hints = new List<string>();
-                        hints.AddRange(_cfg.DespachoType.GeorcHints);
-                        hints.AddRange(_cfg.DespachoType.AutorizacaoHints);
-                        foreach (var para in paras)
-                            AddParagraph(para);
                     }
                 }
             }
@@ -363,9 +541,95 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             doc.Fields = fieldExtractor.ExtractAll(ctx);
 
             var warnings = new List<string>();
+            if (string.Equals(despachoTipo, "encaminhamento_cm", StringComparison.OrdinalIgnoreCase) &&
+                regions.Any(r => r.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase)))
+                warnings.Add("unexpected_last_bottom_for_conselho");
+
+            if ((string.Equals(despachoTipo, "autorizacao", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(despachoTipo, "georc", StringComparison.OrdinalIgnoreCase)) &&
+                !regions.Any(r => r.Name.Equals("last_bottom", StringComparison.OrdinalIgnoreCase)))
+                warnings.Add("missing_last_bottom_for_georc");
             if (doc.Fields["PROCESSO_ADMINISTRATIVO"].Method == "not_found" && doc.Fields["PROCESSO_JUDICIAL"].Method == "not_found")
                 warnings.Add("missing_process_numbers");
             doc.Warnings = warnings;
+
+            return doc;
+        }
+
+        private DespachoDocumentInfo? BuildCertidaoDocument(PDFAnalysisResult analysis, string processNumber, List<string> footerSigners, string? footerSignatureRaw)
+        {
+            var page1 = CertidaoExtraction.FindCertidaoPage(analysis, _cfg);
+            if (page1 <= 0) return null;
+
+            var regions = CertidaoExtraction.BuildCertidaoRegions(analysis, page1, _cfg);
+            var fullRegion = regions.FirstOrDefault(r => r.Name.Equals("certidao_full", StringComparison.OrdinalIgnoreCase));
+            if (fullRegion == null || fullRegion.Words == null || fullRegion.Words.Count == 0)
+                return null;
+
+            var scoreFull = ComputeTemplateScore(fullRegion.Text ?? "", _cfg.TemplateRegions.CertidaoFull.Templates);
+            var scoreValue = 0.0;
+            var valueRegion = regions.FirstOrDefault(r => r.Name.Equals("certidao_value_date", StringComparison.OrdinalIgnoreCase));
+            if (valueRegion != null)
+                scoreValue = ComputeTemplateScore(valueRegion.Text ?? "", _cfg.TemplateRegions.CertidaoValueDate.Templates);
+            var matchScore = Math.Max(scoreFull, scoreValue);
+
+            var doc = new DespachoDocumentInfo
+            {
+                DocType = "certidao_cm",
+                DespachoTipo = "certidao_cm",
+                StartPage1 = page1,
+                EndPage1 = page1,
+                MatchScore = matchScore
+            };
+
+            var bands = new List<BandInfo>();
+            var bandSegments = new List<BandSegment>();
+            foreach (var r in regions)
+            {
+                if (r.Words == null || r.Words.Count == 0) continue;
+                AddBodyBand(bands, bandSegments, page1, r.Words, r.Name);
+            }
+
+            var lines = LineBuilder.BuildLines(fullRegion.Words, page1, _cfg.Thresholds.Paragraph.LineMergeY, _cfg.Thresholds.Paragraph.WordGapX);
+            var paras = ParagraphBuilder.BuildParagraphs(lines, _cfg.Thresholds.Paragraph.ParagraphGapY);
+            for (int i = 0; i < paras.Count; i++) paras[i].Index = i;
+
+            doc.Bands = bands;
+            doc.Paragraphs = paras.Select(p => new ParagraphInfo
+            {
+                Page1 = p.Page1,
+                Index = p.Index,
+                Text = p.Text,
+                HashSha256 = TextUtils.Sha256Hex(TextUtils.NormalizeForHash(p.Text)),
+                BBoxN = p.BBox
+            }).ToList();
+
+            var pages = new List<PageTextInfo>
+            {
+                new PageTextInfo { Page1 = page1, Text = analysis.Pages[page1 - 1].TextInfo.PageText ?? "" }
+            };
+
+            var ctx = new DespachoContext
+            {
+                FullText = fullRegion.Text ?? pages[0].Text,
+                Paragraphs = paras,
+                Bands = bands,
+                BandSegments = bandSegments,
+                Regions = regions,
+                Pages = pages,
+                FileName = Path.GetFileName(analysis.FilePath ?? ""),
+                FilePath = analysis.FilePath ?? "",
+                Config = _cfg,
+                StartPage1 = page1,
+                EndPage1 = page1,
+                ProcessNumber = processNumber ?? "",
+                FooterSigners = footerSigners ?? new List<string>(),
+                FooterSignatureRaw = footerSignatureRaw
+            };
+
+            var fieldExtractor = new FieldExtractor(_cfg);
+            doc.Fields = fieldExtractor.ExtractAll(ctx);
+            doc.Warnings = new List<string>();
 
             return doc;
         }
@@ -399,7 +663,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             return null;
         }
 
-        private void AddBodyBand(List<BandInfo> bands, List<BandSegment> bandSegments, int page1, List<WordInfo> words)
+        private void AddBodyBand(List<BandInfo> bands, List<BandSegment> bandSegments, int page1, List<WordInfo> words, string region)
         {
             if (words == null || words.Count == 0) return;
             var text = TextUtils.BuildTextFromWords(words, _cfg.Thresholds.Paragraph.LineMergeY, _cfg.TemplateRegions.WordGapX);
@@ -410,6 +674,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             {
                 Page1 = page1,
                 Band = "body",
+                Region = region ?? "",
                 Text = text,
                 HashSha256 = hash,
                 BBoxN = bbox
@@ -430,47 +695,61 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             var regions = new List<RegionSegment>();
             if (analysis.Pages == null || analysis.Pages.Count == 0) return regions;
 
+            // ---------- FIRST PAGE: header/subheader/title + first paragraph ----------
             var firstPage = analysis.Pages[Math.Max(0, startPage1 - 1)];
+            var firstWords = TextUtils.DeduplicateWords(firstPage.TextInfo?.Words ?? new List<WordInfo>());
+            var firstSeg = BandSegmenter.SegmentPage(firstWords, startPage1, _cfg.Thresholds.Bands, _cfg.Thresholds.Paragraph.LineMergeY, _cfg.Thresholds.Paragraph.WordGapX);
+
+            var bodyLines = LineBuilder.BuildLines(firstSeg.BodyWords ?? new List<WordInfo>(), startPage1, _cfg.Thresholds.Paragraph.LineMergeY, _cfg.Thresholds.Paragraph.WordGapX);
+            var bodyParas = ParagraphBuilder.BuildParagraphs(bodyLines, _cfg.Thresholds.Paragraph.ParagraphGapY);
+            var hints = new List<string>();
+            hints.AddRange(_cfg.Priorities.ProcessoAdminLabels);
+            hints.AddRange(_cfg.Priorities.PeritoLabels);
+            hints.AddRange(_cfg.Priorities.VaraLabels);
+            hints.AddRange(_cfg.Priorities.ComarcaLabels);
+            var cnjRx = new Regex(_cfg.Regex.ProcessoCnj, RegexOptions.Compiled | RegexOptions.IgnoreCase);
+            var firstPara = SelectParagraphByHints(bodyParas, hints, cnjRx) ?? bodyParas.FirstOrDefault();
+
+            var headerWords = firstSeg.BandSegments
+                .Where(b => b.Band.Equals("header", StringComparison.OrdinalIgnoreCase) ||
+                            b.Band.Equals("subheader", StringComparison.OrdinalIgnoreCase) ||
+                            b.Band.Equals("title", StringComparison.OrdinalIgnoreCase))
+                .SelectMany(b => b.Words ?? new List<WordInfo>())
+                .ToList();
+
+            var firstRegionWords = new List<WordInfo>();
+            firstRegionWords.AddRange(headerWords);
+            if (firstPara?.Words != null) firstRegionWords.AddRange(firstPara.Words);
+            var rFirst = BuildRegionFromWords("first_top", startPage1, firstRegionWords);
+            if (rFirst != null) regions.Add(rFirst);
+
+            // ---------- LAST PAGE: last paragraph + footer ----------
             var lastPage = analysis.Pages[Math.Max(0, endPage1 - 1)];
+            var lastWords = TextUtils.DeduplicateWords(lastPage.TextInfo?.Words ?? new List<WordInfo>());
+            var lastSeg = BandSegmenter.SegmentPage(lastWords, endPage1, _cfg.Thresholds.Bands, _cfg.Thresholds.Paragraph.LineMergeY, _cfg.Thresholds.Paragraph.WordGapX);
+            var lastLines = LineBuilder.BuildLines(lastSeg.BodyWords ?? new List<WordInfo>(), endPage1, _cfg.Thresholds.Paragraph.LineMergeY, _cfg.Thresholds.Paragraph.WordGapX);
+            var lastParas = ParagraphBuilder.BuildParagraphs(lastLines, _cfg.Thresholds.Paragraph.ParagraphGapY);
+            var lastPara = SelectParagraphByHints(lastParas, _cfg.Anchors.Footer) ?? lastParas.LastOrDefault();
 
-            var topCfg = _cfg.TemplateRegions.FirstPageTop;
-            if (topCfg.Templates.Count > 0)
-            {
-                var r = BuildRegion("first_top", firstPage.TextInfo?.Words, startPage1, topCfg.MinY, topCfg.MaxY);
-                if (r != null) regions.Add(r);
-            }
+            var footerWords = lastSeg.BandSegments
+                .Where(b => b.Band.Equals("footer", StringComparison.OrdinalIgnoreCase))
+                .SelectMany(b => b.Words ?? new List<WordInfo>())
+                .ToList();
 
-            var bottomCfg = _cfg.TemplateRegions.LastPageBottom;
-            if (bottomCfg.Templates.Count > 0)
-            {
-                var r = BuildRegion("last_bottom", lastPage.TextInfo?.Words, endPage1, bottomCfg.MinY, bottomCfg.MaxY);
-                if (r != null) regions.Add(r);
-                if (endPage1 - startPage1 >= 2)
-                {
-                    var secondPage = analysis.Pages[Math.Max(0, startPage1)];
-                    var rSecond = BuildRegion("second_bottom", secondPage.TextInfo?.Words, startPage1 + 1, bottomCfg.MinY, bottomCfg.MaxY);
-                    if (rSecond != null) regions.Add(rSecond);
-                }
-                if (endPage1 > startPage1)
-                {
-                    var prevPage = analysis.Pages[Math.Max(0, endPage1 - 2)];
-                    var rPrev = BuildRegion("last_bottom_prev", prevPage.TextInfo?.Words, endPage1 - 1, bottomCfg.MinY, bottomCfg.MaxY);
-                    if (rPrev != null) regions.Add(rPrev);
-                }
-            }
+            var lastRegionWords = new List<WordInfo>();
+            if (lastPara?.Words != null) lastRegionWords.AddRange(lastPara.Words);
+            lastRegionWords.AddRange(footerWords);
+            var rLast = BuildRegionFromWords("last_bottom", endPage1, lastRegionWords);
+            if (rLast != null) regions.Add(rLast);
 
             return regions;
         }
 
-        private RegionSegment? BuildRegion(string name, List<WordInfo>? words, int page1, double minY, double maxY)
+        private RegionSegment? BuildRegionFromWords(string name, int page1, List<WordInfo> words)
         {
             if (words == null || words.Count == 0) return null;
-            minY = Math.Max(0, Math.Min(1, minY));
-            maxY = Math.Max(0, Math.Min(1, maxY));
-            if (minY > maxY) (minY, maxY) = (maxY, minY);
-
             var filtered = TextUtils.DeduplicateWords(words)
-                .Where(w => w != null && w.NormY1 >= minY && w.NormY0 <= maxY)
+                .Where(w => w != null)
                 .OrderByDescending(w => (w.NormY0 + w.NormY1) / 2.0)
                 .ThenBy(w => w.NormX0)
                 .ToList();
@@ -794,6 +1073,25 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             var score = 1.0 - (double)dist / maxLen;
             if (score < 0) score = 0;
             return score;
+        }
+
+        private double ComputeTemplateScore(string regionText, List<string> templates)
+        {
+            if (string.IsNullOrWhiteSpace(regionText)) return 0.0;
+            if (templates == null || templates.Count == 0) return 0.0;
+            var placeholder = new Regex(@"\{\{\s*([A-Z0-9_]+)\s*\}\}", RegexOptions.IgnoreCase);
+            var regionNorm = TextUtils.NormalizeForMatch(regionText);
+            double best = 0.0;
+            foreach (var t in templates)
+            {
+                if (string.IsNullOrWhiteSpace(t)) continue;
+                var core = placeholder.Replace(t, "");
+                var coreNorm = TextUtils.NormalizeForMatch(core);
+                if (string.IsNullOrWhiteSpace(coreNorm)) continue;
+                var score = DiffPlexMatcher.Similarity(coreNorm, regionNorm);
+                if (score > best) best = score;
+            }
+            return best;
         }
 
         private string ComputeFileSha256(string path)

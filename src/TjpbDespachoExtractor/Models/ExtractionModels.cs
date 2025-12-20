@@ -102,6 +102,9 @@ namespace FilterPDF.TjpbDespachoExtractor.Models
         [JsonProperty("docType")]
         public string DocType { get; set; } = "despacho";
 
+        [JsonProperty("despachoTipo")]
+        public string DespachoTipo { get; set; } = "";
+
         [JsonProperty("startPage1")]
         public int StartPage1 { get; set; }
 
@@ -131,6 +134,9 @@ namespace FilterPDF.TjpbDespachoExtractor.Models
 
         [JsonProperty("band")]
         public string Band { get; set; } = "";
+
+        [JsonProperty("region")]
+        public string Region { get; set; } = "";
 
         [JsonProperty("text")]
         public string Text { get; set; } = "";

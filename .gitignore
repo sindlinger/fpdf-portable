@@ -90,6 +90,10 @@ src/PipelineTjpb/reference/
 
 # Local runs / outputs
 data/inbox/
+data/inbox_batch1/
+data/inbox_batch2/
+data/pipeline_two/
+data/out-report/
 data/out-test/
 dumps/
 nul
