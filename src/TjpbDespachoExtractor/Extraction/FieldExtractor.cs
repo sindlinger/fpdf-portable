@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using DiffMatchPatch;
 using FilterPDF.Models;
+using FilterPDF.Utils;
 using FilterPDF.TjpbDespachoExtractor.Config;
 using FilterPDF.TjpbDespachoExtractor.Models;
 using FilterPDF.TjpbDespachoExtractor.Reference;
@@ -22,6 +23,9 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
         public List<PageTextInfo> Pages { get; set; } = new List<PageTextInfo>();
         public string FileName { get; set; } = "";
         public string FilePath { get; set; } = "";
+        public string ProcessNumber { get; set; } = "";
+        public List<string> FooterSigners { get; set; } = new List<string>();
+        public string? FooterSignatureRaw { get; set; }
         public TjpbDespachoConfig Config { get; set; } = new TjpbDespachoConfig();
         public int StartPage1 { get; set; }
         public int EndPage1 { get; set; }
@@ -126,6 +130,8 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
 
         private FieldInfo Prefer(Dictionary<string, FieldInfo> seed, string key, FieldInfo fallback)
         {
+            if (key.Equals("ASSINANTE", StringComparison.OrdinalIgnoreCase))
+                return fallback;
             if (seed.TryGetValue(key, out var s) && s.Method != "not_found")
             {
                 if ((key.Equals("PROMOVENTE", StringComparison.OrdinalIgnoreCase) ||
@@ -134,11 +140,6 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                 {
                     // evita "Juízo/Vara/Comarca" como parte processual
                     return fallback;
-                }
-                if (key.Equals("ASSINANTE", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (!LooksLikeAssinante(s.Value))
-                        return fallback;
                 }
                 if (fallback.Method == "not_found" || s.Confidence >= fallback.Confidence)
                     return s;
@@ -1219,10 +1220,14 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
 
         private FieldInfo ExtractAssinante(DespachoContext ctx)
         {
-            var assTemplates = MergeTemplates(_cfg.Fields.Assinante.Templates, new List<string> { "Documento assinado eletronicamente por {{value}}" });
-            var assCand = _template.ExtractFromParagraphs(ctx.Paragraphs, assTemplates, new Regex(@"(?i)documento assinado eletronicamente por\s+([^,\n]+)"));
-            if (assCand != null)
-                return BuildFieldFromSpan(assCand.Value, 0.85, "template_dmp", assCand.Paragraph, assCand.MatchIndex, assCand.MatchLength, assCand.Snippet);
+            var sigRegex = new Regex(@"(?i)(?:documento\s*)?assinad[oa]\s*eletronicamente\s*por\s*:?\s*(?<name>[\p{L}][\p{L}'\-\.]*(?:\s+[\p{L}][\p{L}'\-\.]*){0,8})(?=\s*(?:-|–|—|,|;|\\.|\\bem\\b|\\d{1,2}/\\d{1,2}/\\d{2,4})|$)");
+            var sigCollapsedRegex = new Regex(@"(?i)(?:documento)?assinad[oa]eletronicamentepor:?(?<name>[\p{L}]{5,})");
+            var pjeRegex = new Regex(@"(?i)por\\s*:?\\s*(?<name>[\p{L}][\p{L}'\\-\\.]{2,}(?:\\s+[\\p{L}][\\p{L}'\\-\\.]{2,}){0,8})(?=\\s*(?:-|–|—|\\d{1,2}/\\d{1,2}/\\d{2,4})|$)");
+            foreach (var band in ctx.BandSegments.Where(b => string.Equals(b.Band, "footer", StringComparison.OrdinalIgnoreCase)))
+            {
+                var bandHit = TryExtractAssinanteFromBand(band, "footer", sigRegex, sigCollapsedRegex, pjeRegex, ctx);
+                if (bandHit != null) return bandHit;
+            }
 
             foreach (var r in ctx.Regions.Where(r =>
                          r.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase) ||
@@ -1230,99 +1235,208 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             {
                 var text = r.Text ?? "";
                 if (string.IsNullOrWhiteSpace(text)) continue;
-                var regionHit = TryExtractAssinanteFromText(text, r, "regex_region");
+                if (!HasSignatureAnchor(text)) continue;
+                var regionHit = TryExtractAssinanteFromText(text, r, "regex_region", sigRegex, pjeRegex, ctx);
                 if (regionHit != null) return regionHit;
 
                 var collapsed = TextUtils.CollapseSpacedLettersText(text);
                 if (!string.Equals(collapsed, text, StringComparison.Ordinal))
                 {
-                    var regionCollapsedHit = TryExtractAssinanteFromCollapsed(collapsed, r, "regex_region:collapsed");
+                    var regionCollapsedHit = TryExtractAssinanteFromCollapsed(collapsed, r, "regex_region:collapsed", sigRegex, sigCollapsedRegex, pjeRegex, ctx);
                     if (regionCollapsedHit != null) return regionCollapsedHit;
                 }
 
-                foreach (var hint in _cfg.Anchors.SignerHints)
-                {
-                    var hintHit = TryExtractAssinanteByHint(text, r, hint, "heuristic:hint");
-                    if (hintHit != null) return hintHit;
-                }
             }
 
-            foreach (var band in ctx.BandSegments.Where(b => string.Equals(b.Band, "footer", StringComparison.OrdinalIgnoreCase)))
+            foreach (var p in ctx.Paragraphs)
             {
-                var text = band.Text ?? "";
-                var m = Regex.Match(text, @"(?i)documento assinado eletronicamente por\s+([^,\n]+)");
+                var text = p.Text ?? "";
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                if (!HasSignatureAnchor(text)) continue;
+                var m = sigRegex.Match(text);
                 if (m.Success)
                 {
-                    var name = CleanPersonName(m.Groups[1].Value.Trim());
+                    var name = ResolveSignerName(m.Groups["name"].Value.Trim(), ctx);
                     if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
-                        return BuildFieldFromBandMatch(name, 0.85, "regex", band, m, 1, m.Value);
+                        return BuildFieldFromMatch(name, 0.8, "regex_paragraph", p, m, 1, Snip(text, m));
                 }
                 var collapsed = TextUtils.CollapseSpacedLettersText(text);
                 if (!string.Equals(collapsed, text, StringComparison.Ordinal))
                 {
-                    var mCollapsed = Regex.Match(collapsed, @"(?i)documento assinado eletronicamente por\s+([^,\n]+)");
+                    var mCollapsed = sigRegex.Match(collapsed);
                     if (mCollapsed.Success)
                     {
-                        var name = CleanPersonName(mCollapsed.Groups[1].Value.Trim());
+                        var name = ResolveSignerName(mCollapsed.Groups["name"].Value.Trim(), ctx);
                         if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
-                            return BuildField(name, 0.75, "regex:collapsed", null, Snip(collapsed, mCollapsed), band.BBox, band.Page1);
+                            return BuildField(name, 0.78, "regex_paragraph:collapsed", null, Snip(collapsed, mCollapsed), p.BBox, p.Page1);
+                    }
+                    var mCollapsedTight = sigCollapsedRegex.Match(collapsed.Replace(" ", ""));
+                    if (mCollapsedTight.Success)
+                    {
+                        var name = ResolveSignerName(mCollapsedTight.Groups["name"].Value.Trim(), ctx);
+                        if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
+                            return BuildField(name, 0.76, "regex_paragraph:collapsed", null, Snip(collapsed, mCollapsedTight), p.BBox, p.Page1);
+                    }
+                    var pje = pjeRegex.Match(collapsed);
+                    if (pje.Success)
+                    {
+                        var name = ResolveSignerName(pje.Groups["name"].Value.Trim(), ctx);
+                        if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
+                            return BuildField(name, 0.75, "regex_paragraph:pje", null, Snip(collapsed, pje), p.BBox, p.Page1);
                     }
                 }
             }
 
-            foreach (var hint in _cfg.Anchors.SignerHints)
-            {
-                foreach (var band in ctx.BandSegments.Where(b => string.Equals(b.Band, "footer", StringComparison.OrdinalIgnoreCase)))
-                {
-                    var hintHit = TryExtractAssinanteByHint(band.Text ?? "", band.BBox, band.Page1, hint, "heuristic:hint");
-                    if (hintHit != null) return hintHit;
-                }
-            }
+            var directorHit = TryExtractAssinanteFromDirectorLine(ctx);
+            if (directorHit != null) return directorHit;
 
-            foreach (var band in ctx.BandSegments.Where(b => string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase)))
+            var footerCacheHit = TryExtractAssinanteFromFooterCache(ctx, sigRegex, sigCollapsedRegex, pjeRegex);
+            if (footerCacheHit != null) return footerCacheHit;
+
+            // Fallback final: assinatura digital do PDF (sem depender do texto extraido)
+            if (!string.IsNullOrWhiteSpace(ctx.FilePath))
             {
-                var bandHit = TryExtractAssinanteFromBand(band, "regex_band");
-                if (bandHit != null) return bandHit;
+                var sigs = SignatureExtractor.ExtractSignatures(ctx.FilePath);
+                var best = sigs.LastOrDefault(s => !string.IsNullOrWhiteSpace(s.SignerName));
+                if (best != null)
+                {
+                    var name = NormalizeSignerName(best.SignerName);
+                    if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
+                    {
+                        return BuildField(name, 0.9, "digital_signature", null, best.FieldName ?? "signature", best.BBoxN, best.Page1);
+                    }
+                }
             }
             return NotFound();
         }
 
-        private FieldInfo? TryExtractAssinanteFromBand(BandSegment band, string methodPrefix)
+        private FieldInfo? TryExtractAssinanteFromDirectorLine(DespachoContext ctx)
+        {
+            var directorRegex = new Regex(@"(?i)(?<name>[\p{L}][\p{L}'\-\.]+(?:\s+[\p{L}][\p{L}'\-\.]+){1,6})\s*(?:[–-]|,)\s*Diretor(?:a)?\s+Especial(?:\s+em\s+exerc[ií]cio)?");
+            var directorRegexAlt = new Regex(@"(?i)(?<name>[\p{L}][\p{L}'\-\.]+(?:\s+[\p{L}][\p{L}'\-\.]+){1,6})\s*(?:[–-]|,)\s*Diretor\\(a\\)\\s+Especial");
+            var candidateRegions = ctx.Regions.Where(r => r.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase)).ToList();
+            foreach (var r in candidateRegions)
+            {
+                var text = r.Text ?? "";
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                var m = directorRegex.Match(text);
+                if (!m.Success)
+                    m = directorRegexAlt.Match(text);
+                if (m.Success)
+                {
+                    var name = ResolveSignerName(m.Groups["name"].Value.Trim(), ctx);
+                    if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
+                        return BuildFieldFromRegionMatch(name, 0.82, "director_line", r, m, 1, Snip(text, m));
+                }
+            }
+
+            var lastPageText = ctx.Pages.FirstOrDefault(p => p.Page1 == ctx.EndPage1)?.Text ?? "";
+            if (!string.IsNullOrWhiteSpace(lastPageText))
+            {
+                var m = directorRegex.Match(lastPageText);
+                if (!m.Success)
+                    m = directorRegexAlt.Match(lastPageText);
+                if (m.Success)
+                {
+                    var name = ResolveSignerName(m.Groups["name"].Value.Trim(), ctx);
+                    if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
+                    {
+                        var bbox = ctx.BandSegments.FirstOrDefault(b => string.Equals(b.Band, "footer", StringComparison.OrdinalIgnoreCase) && b.Page1 == ctx.EndPage1)?.BBox;
+                        return BuildField(name, 0.8, "director_line", null, Snip(lastPageText, m), bbox, ctx.EndPage1);
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private FieldInfo? TryExtractAssinanteFromFooterCache(DespachoContext ctx, Regex sigRegex, Regex sigCollapsedRegex, Regex pjeRegex)
+        {
+            var signers = ctx.FooterSigners ?? new List<string>();
+            var raw = ctx.FooterSignatureRaw ?? "";
+
+            string? picked = null;
+            if (signers.Count > 0)
+                picked = PickSignerFromList(signers);
+
+            if (string.IsNullOrWhiteSpace(picked) && !string.IsNullOrWhiteSpace(raw) && HasSignatureAnchor(raw))
+            {
+                var m = sigRegex.Match(raw);
+                if (m.Success)
+                    picked = ResolveSignerName(m.Groups["name"].Value.Trim(), ctx);
+                if (string.IsNullOrWhiteSpace(picked))
+                {
+                    var collapsed = TextUtils.CollapseSpacedLettersText(raw);
+                    var mCollapsed = sigRegex.Match(collapsed);
+                    if (mCollapsed.Success)
+                        picked = ResolveSignerName(mCollapsed.Groups["name"].Value.Trim(), ctx);
+                    if (string.IsNullOrWhiteSpace(picked))
+                    {
+                        var tight = collapsed.Replace(" ", "");
+                        var mTight = sigCollapsedRegex.Match(tight);
+                        if (mTight.Success)
+                            picked = ResolveSignerName(mTight.Groups["name"].Value.Trim(), ctx);
+                    }
+                }
+                if (string.IsNullOrWhiteSpace(picked))
+                {
+                    var pje = pjeRegex.Match(raw);
+                    if (pje.Success)
+                        picked = ResolveSignerName(pje.Groups["name"].Value.Trim(), ctx);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(picked)) return null;
+            picked = ResolveSignerName(picked, ctx);
+            if (string.IsNullOrWhiteSpace(picked) || !LooksLikeAssinante(picked)) return null;
+
+            var footerBand = ctx.BandSegments.FirstOrDefault(b => string.Equals(b.Band, "footer", StringComparison.OrdinalIgnoreCase) && b.Page1 == ctx.EndPage1)
+                ?? ctx.BandSegments.FirstOrDefault(b => string.Equals(b.Band, "footer", StringComparison.OrdinalIgnoreCase));
+            var bbox = footerBand?.BBox;
+            var page1 = footerBand?.Page1 ?? ctx.EndPage1;
+            var snippet = string.IsNullOrWhiteSpace(raw) ? "footer_signers" : TextUtils.SafeSnippet(raw, 0, Math.Min(160, raw.Length));
+            var method = signers.Count > 0 ? "footer_signers" : "footer_raw";
+            return BuildField(picked, 0.72, method, null, snippet, bbox, page1);
+        }
+
+        private FieldInfo? TryExtractAssinanteFromBand(BandSegment band, string methodPrefix, Regex sigRegex, Regex sigCollapsedRegex, Regex pjeRegex, DespachoContext ctx)
         {
             var text = band.Text ?? "";
             if (string.IsNullOrWhiteSpace(text)) return null;
-            var m = Regex.Match(text, @"(?i)documento assinado eletronicamente por\s+([^,\n]+)");
+            if (!HasSignatureAnchor(text)) return null;
+            var m = sigRegex.Match(text);
             if (m.Success)
             {
-                var name = CleanPersonName(m.Groups[1].Value.Trim());
+                var name = ResolveSignerName(m.Groups["name"].Value.Trim(), ctx);
                 if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
                     return BuildFieldFromBandMatch(name, 0.82, methodPrefix, band, m, 1, Snip(text, m));
-            }
-
-            var mDir = Regex.Match(text, @"(?i)([\\p{L}][\\p{L}'\\.\\s\\-]{3,})\\s*[-\u2010\u2011\u2012\u2013\u2014\u2212]\\s*diretor");
-            if (mDir.Success)
-            {
-                var name = CleanPersonName(mDir.Groups[1].Value.Trim());
-                if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
-                    return BuildFieldFromBandMatch(name, 0.78, $"{methodPrefix}:diretor", band, mDir, 1, Snip(text, mDir));
             }
 
             var collapsed = TextUtils.CollapseSpacedLettersText(text);
             if (!string.Equals(collapsed, text, StringComparison.Ordinal))
             {
-                var mCollapsed = Regex.Match(collapsed, @"(?i)documento assinado eletronicamente por\s+([^,\n]+)");
+                var mCollapsed = sigRegex.Match(collapsed);
                 if (mCollapsed.Success)
                 {
-                    var name = CleanPersonName(mCollapsed.Groups[1].Value.Trim());
+                    var name = ResolveSignerName(mCollapsed.Groups["name"].Value.Trim(), ctx);
                     if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
                         return BuildField(name, 0.72, $"{methodPrefix}:collapsed", null, Snip(collapsed, mCollapsed), band.BBox, band.Page1);
                 }
-            }
-
-            foreach (var hint in _cfg.Anchors.SignerHints)
-            {
-                var hintHit = TryExtractAssinanteByHint(text, band.BBox, band.Page1, hint, $"{methodPrefix}:hint");
-                if (hintHit != null) return hintHit;
+                var tight = collapsed.Replace(" ", "");
+                var mTight = sigCollapsedRegex.Match(tight);
+                if (mTight.Success)
+                {
+                    var name = ResolveSignerName(mTight.Groups["name"].Value.Trim(), ctx);
+                    if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
+                        return BuildField(name, 0.7, $"{methodPrefix}:collapsed", null, Snip(collapsed, mTight), band.BBox, band.Page1);
+                }
+                var pje = pjeRegex.Match(collapsed);
+                if (pje.Success)
+                {
+                    var name = ResolveSignerName(pje.Groups["name"].Value.Trim(), ctx);
+                    if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
+                        return BuildField(name, 0.7, $"{methodPrefix}:pje", null, Snip(collapsed, pje), band.BBox, band.Page1);
+                }
             }
             return null;
         }
@@ -1341,7 +1455,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                 if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
                     return BuildField(name, 0.7, method, null, Snip(window, m), region.BBox, region.Page1);
             }
-            return BuildField(hint, 0.6, method, null, hint, region.BBox, region.Page1);
+            return null;
         }
 
         private FieldInfo? TryExtractAssinanteByHint(string text, BBoxN? bbox, int page1, string hint, string method)
@@ -1357,75 +1471,130 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                 if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
                     return BuildField(name, 0.7, method, null, Snip(window, m), bbox, page1);
             }
-            return BuildField(hint, 0.6, method, null, hint, bbox, page1);
+            return null;
         }
 
-        private FieldInfo? TryExtractAssinanteFromText(string text, RegionSegment region, string methodPrefix)
+        private FieldInfo? TryExtractAssinanteFromText(string text, RegionSegment region, string methodPrefix, Regex sigRegex, Regex pjeRegex, DespachoContext ctx)
         {
-            var m = Regex.Match(text, @"(?i)documento assinado eletronicamente por\s+([^,\n]+)");
+            var m = sigRegex.Match(text);
             if (m.Success)
             {
-                var name = CleanPersonName(m.Groups[1].Value.Trim());
+                var name = ResolveSignerName(m.Groups["name"].Value.Trim(), ctx);
                 if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
                     return BuildFieldFromRegionMatch(name, 0.85, methodPrefix, region, m, 1, Snip(text, m));
             }
-
-            var mDir = Regex.Match(text, @"(?i)([\\p{L}][\\p{L}'\\.\\s\\-]{3,})\\s*[-\u2010\u2011\u2012\u2013\u2014\u2212]\\s*diretor");
-            if (mDir.Success)
+            if (HasPjeSignatureAnchor(text))
             {
-                var name = CleanPersonName(mDir.Groups[1].Value.Trim());
-                if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
-                    return BuildFieldFromRegionMatch(name, 0.78, $"{methodPrefix}:diretor", region, mDir, 1, Snip(text, mDir));
-            }
-
-            var idx = text.IndexOf("diretor", StringComparison.OrdinalIgnoreCase);
-            if (idx > 0)
-            {
-                var start = Math.Max(0, idx - 140);
-                var window = text.Substring(start, idx - start);
-                var mWin = Regex.Match(window, @"([\\p{L}][\\p{L}'\\-]+(?:\\s+[\\p{L}][\\p{L}'\\-]+){1,5})\\s*$");
-                if (mWin.Success)
+                var mPje = pjeRegex.Match(text);
+                if (mPje.Success)
                 {
-                    var name = CleanPersonName(mWin.Groups[1].Value.Trim());
+                    var name = ResolveSignerName(mPje.Groups["name"].Value.Trim(), ctx);
                     if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
-                        return BuildField(name, 0.72, $"{methodPrefix}:diretor_window", null, Snip(window, mWin), region.BBox, region.Page1);
+                        return BuildFieldFromRegionMatch(name, 0.78, $"{methodPrefix}:pje", region, mPje, 1, Snip(text, mPje));
                 }
             }
             return null;
         }
 
-        private FieldInfo? TryExtractAssinanteFromCollapsed(string collapsedText, RegionSegment region, string methodPrefix)
+        private FieldInfo? TryExtractAssinanteFromCollapsed(string collapsedText, RegionSegment region, string methodPrefix, Regex sigRegex, Regex sigCollapsedRegex, Regex pjeRegex, DespachoContext ctx)
         {
-            var m = Regex.Match(collapsedText, @"(?i)documento assinado eletronicamente por\s+([^,\n]+)");
+            var m = sigRegex.Match(collapsedText);
             if (m.Success)
             {
-                var name = CleanPersonName(m.Groups[1].Value.Trim());
+                var name = ResolveSignerName(m.Groups["name"].Value.Trim(), ctx);
                 if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
                     return BuildField(name, 0.78, methodPrefix, null, Snip(collapsedText, m), region.BBox, region.Page1);
             }
-
-            var mDir = Regex.Match(collapsedText, @"(?i)([\\p{L}][\\p{L}'\\.\\s\\-]{3,})\\s*[-\u2010\u2011\u2012\u2013\u2014\u2212]\\s*diretor");
-            if (mDir.Success)
+            var tight = collapsedText.Replace(" ", "");
+            var mTight = sigCollapsedRegex.Match(tight);
+            if (mTight.Success)
             {
-                var name = CleanPersonName(mDir.Groups[1].Value.Trim());
+                var name = ResolveSignerName(mTight.Groups["name"].Value.Trim(), ctx);
                 if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
-                    return BuildField(name, 0.72, $"{methodPrefix}:diretor", null, Snip(collapsedText, mDir), region.BBox, region.Page1);
+                    return BuildField(name, 0.76, methodPrefix, null, Snip(collapsedText, mTight), region.BBox, region.Page1);
             }
-
-            var idx = collapsedText.IndexOf("diretor", StringComparison.OrdinalIgnoreCase);
-            if (idx > 0)
+            var pje = pjeRegex.Match(collapsedText);
+            if (pje.Success)
             {
-                var start = Math.Max(0, idx - 140);
-                var window = collapsedText.Substring(start, idx - start);
-                var mWin = Regex.Match(window, @"([\\p{L}][\\p{L}'\\-]+(?:\\s+[\\p{L}][\\p{L}'\\-]+){1,5})\\s*$");
-                if (mWin.Success)
-                {
-                    var name = CleanPersonName(mWin.Groups[1].Value.Trim());
-                    if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
-                        return BuildField(name, 0.68, $"{methodPrefix}:diretor_window", null, Snip(window, mWin), region.BBox, region.Page1);
-                }
+                var name = ResolveSignerName(pje.Groups["name"].Value.Trim(), ctx);
+                if (!string.IsNullOrWhiteSpace(name) && LooksLikeAssinante(name))
+                    return BuildField(name, 0.74, methodPrefix, null, Snip(collapsedText, pje), region.BBox, region.Page1);
             }
             return null;
+        }
+
+        private string NormalizeSignerName(string raw)
+        {
+            var cleaned = CleanPersonName(raw);
+            if (string.IsNullOrWhiteSpace(cleaned)) return "";
+            // remove cargo if it leaks into the name
+            cleaned = CutAtKeywords(cleaned, new[]
+            {
+                "Diretor", "Diretora", "Diretor(a)", "Diretor Especial",
+                "Juiz", "Juiza", "Juíza", "Juiz(a)",
+                "Desembargador", "Desembargadora", "Presidente"
+            });
+            return cleaned;
+        }
+
+        private string ResolveSignerName(string raw, DespachoContext ctx)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return "";
+            var cleaned = NormalizeSignerName(raw);
+            var key = NormalizeNameKey(raw);
+            if (string.IsNullOrWhiteSpace(key)) return cleaned;
+
+            var signers = ctx.FooterSigners ?? new List<string>();
+            foreach (var s in signers)
+            {
+                var k = NormalizeNameKey(s);
+                if (string.IsNullOrWhiteSpace(k)) continue;
+                if (k == key || k.Contains(key) || key.Contains(k))
+                    return NormalizeSignerName(s);
+            }
+            return cleaned;
+        }
+
+        private string? PickSignerFromList(List<string> signers)
+        {
+            if (signers == null || signers.Count == 0) return null;
+            var hints = _cfg.Anchors?.SignerHints ?? new List<string>();
+            if (hints.Count > 0)
+            {
+                foreach (var s in signers)
+                {
+                    var norm = TextUtils.NormalizeForMatch(s);
+                    if (hints.Any(h => !string.IsNullOrWhiteSpace(h) && norm.Contains(TextUtils.NormalizeForMatch(h))))
+                        return s;
+                }
+            }
+            return signers.FirstOrDefault();
+        }
+
+        private string NormalizeNameKey(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "";
+            var t = TextUtils.RemoveDiacritics(value);
+            t = Regex.Replace(t, @"[^A-Za-z]", "");
+            return t.ToLowerInvariant();
+        }
+
+        private bool HasSignatureAnchor(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            var norm = TextUtils.NormalizeForMatch(text).Replace(" ", "");
+            if (norm.Contains("assinadoeletronicamente")) return true;
+            if (norm.Contains("assinadodigitalmente")) return true;
+            return HasPjeSignatureAnchor(text);
+        }
+
+        private bool HasPjeSignatureAnchor(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            var norm = TextUtils.NormalizeForMatch(text).Replace(" ", "");
+            if (norm.Contains("numerododocumento") && norm.Contains("por")) return true;
+            if (norm.Contains("documento") && norm.Contains("por") && norm.Contains("eletron")) return true;
+            return false;
         }
 
         private bool LooksLikeAssinante(string value)

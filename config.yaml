@@ -118,7 +118,7 @@ despacho_type:
 template_regions:
   word_gap_x: 0.012
   first_page_top:
-    min_y: 0.0
+    min_y: 0.55
     max_y: 1.0
     templates:
       - "Processo nº {{PROCESSO_ADMINISTRATIVO}} Requerente: {{PROMOVENTE}} Interessado: {{PERITO}}"
@@ -133,7 +133,7 @@ template_regions:
       - "CPF {{CPF_PERITO}}"
   last_page_bottom:
     min_y: 0.0
-    max_y: 1.0
+    max_y: 0.45
     templates:
       - "proceder à reserva orçamentária, no valor de R$ {{VALOR_ARBITRADO_DE}}"
       - "proceder a reserva orçamentaria, no valor de R$ {{VALOR_ARBITRADO_DE}}"
@@ -157,6 +157,8 @@ template_regions:
       - "Documento assinado eletronicamente por {{ASSINANTE}}"
       - "Documento assinado eletronicamente por {{ASSINANTE}}, Diretor(a) Especial"
       - "Documento assinado eletronicamente por {{ASSINANTE}} Diretor(a) Especial"
+      - "Assinado eletronicamente por {{ASSINANTE}}"
+      - "Assinado eletronicamente por: {{ASSINANTE}}"
 
 regex:
   processo_cnj: "\\b\\d{7}-\\d{2}\\.\\d{4}\\.\\d\\.\\d{2}\\.\\d{4}\\b"

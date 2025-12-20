@@ -407,6 +407,11 @@ namespace FilterPDF
         public string SubFilter { get; set; } = "";
         public DateTime? SigningTime { get; set; }
         public string SignerName { get; set; } = "";
+        public int Page1 { get; set; }
+        public float? BBoxX0 { get; set; }
+        public float? BBoxY0 { get; set; }
+        public float? BBoxX1 { get; set; }
+        public float? BBoxY1 { get; set; }
     }
     
     /// <summary>

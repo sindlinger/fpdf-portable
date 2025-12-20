@@ -19,6 +19,12 @@ namespace FilterPDF.Utils
             public DateTime CreatedAt { get; set; }
             public string Json { get; set; } = "";
         }
+
+        public class FooterInfo
+        {
+            public List<string> Signers { get; set; } = new List<string>();
+            public string SignatureRaw { get; set; } = "";
+        }
         public class ProcessRow
         {
             public long Id { get; set; }
@@ -156,6 +162,44 @@ namespace FilterPDF.Utils
                 });
             }
             return rows;
+        }
+
+        public static FooterInfo? GetFooterInfo(string processNumber, string? pgUri = null)
+        {
+            if (string.IsNullOrWhiteSpace(processNumber)) return null;
+            try
+            {
+                var uri = GetPgUri(pgUri);
+                using var conn = new NpgsqlConnection(uri);
+                conn.Open();
+                using var cmd = new NpgsqlCommand("SELECT footer_signers, footer_signature_raw FROM processes WHERE process_number=@p LIMIT 1", conn);
+                cmd.Parameters.AddWithValue("@p", processNumber);
+                using var r = cmd.ExecuteReader();
+                if (!r.Read()) return null;
+
+                var info = new FooterInfo();
+                if (!r.IsDBNull(0))
+                {
+                    try
+                    {
+                        if (r.GetValue(0) is string[] arr)
+                            info.Signers = arr.ToList();
+                        else
+                            info.Signers = (r.GetFieldValue<string[]>(0) ?? Array.Empty<string>()).ToList();
+                    }
+                    catch
+                    {
+                        info.Signers = new List<string>();
+                    }
+                }
+                if (!r.IsDBNull(1))
+                    info.SignatureRaw = r.GetString(1) ?? "";
+                return info;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         public static ProcessSummary? GetProcessSummaryById(long id, string? pgUri = null)

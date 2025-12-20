@@ -19,6 +19,9 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
         public string? DumpDir { get; set; }
         public bool Verbose { get; set; }
         public string? BookmarkContains { get; set; }
+        public string? ProcessNumber { get; set; }
+        public List<string> FooterSigners { get; set; } = new List<string>();
+        public string? FooterSignatureRaw { get; set; }
     }
 
     public class DespachoExtractor
@@ -143,7 +146,8 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                 }
             }
 
-            var doc = BuildDocument(analysis, range.startPage1, range.endPage1, best.score, regions);
+            var doc = BuildDocument(analysis, range.startPage1, range.endPage1, best.score, regions,
+                options.ProcessNumber ?? "", options.FooterSigners, options.FooterSignatureRaw);
             result.Documents.Add(doc);
 
             LogVariationSnippets(result, logFn, regions);
@@ -211,7 +215,8 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             return snippets;
         }
 
-        private DespachoDocumentInfo BuildDocument(PDFAnalysisResult analysis, int startPage1, int endPage1, double matchScore, List<RegionSegment> regions)
+        private DespachoDocumentInfo BuildDocument(PDFAnalysisResult analysis, int startPage1, int endPage1, double matchScore,
+            List<RegionSegment> regions, string processNumber, List<string> footerSigners, string? footerSignatureRaw)
         {
             var doc = new DespachoDocumentInfo
             {
@@ -348,7 +353,10 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                 FilePath = analysis.FilePath ?? "",
                 Config = _cfg,
                 StartPage1 = startPage1,
-                EndPage1 = endPage1
+                EndPage1 = endPage1,
+                ProcessNumber = processNumber ?? "",
+                FooterSigners = footerSigners ?? new List<string>(),
+                FooterSignatureRaw = footerSignatureRaw
             };
 
             var fieldExtractor = new FieldExtractor(_cfg);

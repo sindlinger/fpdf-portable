@@ -13,6 +13,7 @@ using iText.Kernel.Pdf.Annot;
 using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using iText.Kernel.Pdf.Navigation;
+using iText.Signatures;
 
 namespace FilterPDF
 {
@@ -684,23 +685,123 @@ namespace FilterPDF
             try
             {
                 var acro = PdfAcroForm.GetAcroForm(doc, false);
-                if (acro == null) return sigs;
-                foreach (var kv in acro.GetFormFields())
+                var sigUtil = new SignatureUtil(doc);
+                var names = sigUtil.GetSignatureNames();
+                if (names == null || names.Count == 0) return sigs;
+
+                foreach (var name in names)
                 {
-                    var field = kv.Value;
-                    if (PdfName.Sig.Equals(field.GetFormType()))
+                    PdfPKCS7? pkcs7 = null;
+                    try { pkcs7 = sigUtil.ReadSignatureData(name); } catch { }
+
+                    var signerName = NormalizeSignerName(pkcs7?.GetSignName() ?? "");
+                    if (string.IsNullOrWhiteSpace(signerName))
+                    {
+                        try
+                        {
+                            var cert = pkcs7?.GetSigningCertificate();
+                            if (cert != null)
+                                signerName = NormalizeSignerName(cert.SubjectDN?.ToString() ?? "");
+                        }
+                        catch { }
+                    }
+
+                    DateTime? signDate = null;
+                    try { signDate = pkcs7?.GetSignDate(); } catch { }
+
+                    var reason = "";
+                    var location = "";
+                    try { reason = pkcs7?.GetReason() ?? ""; } catch { }
+                    try { location = pkcs7?.GetLocation() ?? ""; } catch { }
+
+                    bool isValid = false;
+                    try { isValid = pkcs7?.VerifySignatureIntegrityAndAuthenticity() ?? false; } catch { }
+
+                    var field = acro?.GetField(name);
+                    var widgets = field?.GetWidgets();
+                    if (widgets == null || widgets.Count == 0)
                     {
                         sigs.Add(new DigitalSignature
                         {
-                            Name = kv.Key,
+                            Name = name,
+                            FieldName = name,
                             SignatureType = "Digital Signature",
-                            SignDate = ParsePDFDate(field.GetValueAsString())
+                            SignDate = signDate,
+                            SigningTime = signDate,
+                            SignerName = signerName,
+                            Reason = reason ?? "",
+                            Location = location ?? "",
+                            IsValid = isValid,
+                            Page1 = 0
+                        });
+                        continue;
+                    }
+
+                    foreach (var widget in widgets)
+                    {
+                        var page = widget.GetPage();
+                        var page1 = page != null ? doc.GetPageNumber(page) : 0;
+                        var rect = widget.GetRectangle()?.ToRectangle();
+                        var bbox = NormalizeRect(rect, page?.GetPageSize());
+
+                        sigs.Add(new DigitalSignature
+                        {
+                            Name = name,
+                            FieldName = name,
+                            SignatureType = "Digital Signature",
+                            SignDate = signDate,
+                            SigningTime = signDate,
+                            SignerName = signerName,
+                            Reason = reason ?? "",
+                            Location = location ?? "",
+                            IsValid = isValid,
+                            Page1 = page1,
+                            BBoxX0 = bbox?.x0,
+                            BBoxY0 = bbox?.y0,
+                            BBoxX1 = bbox?.x1,
+                            BBoxY1 = bbox?.y1
                         });
                     }
                 }
             }
             catch { }
             return sigs;
+        }
+
+        private static (float x0, float y0, float x1, float y1)? NormalizeRect(Rectangle? rect, Rectangle? pageRect)
+        {
+            if (rect == null || pageRect == null) return null;
+            var width = pageRect.GetWidth();
+            var height = pageRect.GetHeight();
+            if (width <= 0 || height <= 0) return null;
+            var x0 = rect.GetLeft() / width;
+            var y0 = rect.GetBottom() / height;
+            var x1 = rect.GetRight() / width;
+            var y1 = rect.GetTop() / height;
+            return (
+                (float)Math.Max(0, Math.Min(1, x0)),
+                (float)Math.Max(0, Math.Min(1, y0)),
+                (float)Math.Max(0, Math.Min(1, x1)),
+                (float)Math.Max(0, Math.Min(1, y1))
+            );
+        }
+
+        private static string NormalizeSignerName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "";
+            var v = value;
+            var m = Regex.Match(v, @"(?i)\bCN\s*=\s*([^,;/]+)");
+            if (m.Success)
+                v = m.Groups[1].Value;
+            v = Regex.Replace(v, @"[^A-Za-zÁÂÃÀÉÊÍÓÔÕÚÇ\s'-]+", " ");
+            v = NormalizeWhitespace(v);
+            return v;
+        }
+
+        private static string NormalizeWhitespace(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            return Regex.Replace(text, "\\s+", " ").Trim();
         }
 
         private List<ColorProfile> ExtractColorProfiles()

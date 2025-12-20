@@ -898,6 +898,16 @@ namespace FilterPDF
             try
             {
                 var procName = DeriveProcessName(inputFile);
+                // Salva o PDF bruto no Postgres (raw_files) para permitir reprocessamento sem arquivo local
+                try
+                {
+                    var bytes = File.ReadAllBytes(inputFile);
+                    FilterPDF.Utils.PgDocStore.UpsertRawFile(FilterPDF.Utils.PgDocStore.DefaultPgUri, procName, inputFile, bytes);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[WARN] Não foi possível salvar PDF bruto no Postgres: {ex.Message}");
+                }
                 FilterPDF.Utils.PgDocStore.UpsertRawProcess(FilterPDF.Utils.PgDocStore.DefaultPgUri, procName, inputFile, json);
                 if (options.Verbose)
                     Console.WriteLine($"  Bruto salvo em raw_processes (processo {procName})");

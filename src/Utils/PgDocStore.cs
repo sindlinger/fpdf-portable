@@ -101,6 +101,63 @@ namespace FilterPDF.Utils
             }
         }
 
+        public static void UpsertRawFile(string pgUri, string processNumber, string sourcePath, byte[] fileBytes)
+        {
+            if (fileBytes == null || fileBytes.Length == 0) return;
+            pgUri = NormalizePgUri(pgUri);
+            processNumber = Clean(processNumber);
+            using var conn = new NpgsqlConnection(pgUri);
+            conn.Open();
+
+            using (var ensure = new NpgsqlCommand(@"
+                CREATE TABLE IF NOT EXISTS raw_files(
+                    process_number text PRIMARY KEY,
+                    source text,
+                    created_at timestamptz default now(),
+                    file_bytes bytea,
+                    sha256 text,
+                    file_size bigint
+                );
+            ", conn))
+            {
+                ensure.ExecuteNonQuery();
+            }
+
+            // Evita sobrescrever: raw_files é somente inserção
+            using var cmd = new NpgsqlCommand(@"
+                INSERT INTO raw_files(process_number, source, file_bytes, sha256, file_size)
+                VALUES (@p,@s,@b,@h,@sz)
+                ON CONFLICT (process_number) DO NOTHING;
+            ", conn);
+            cmd.Parameters.AddWithValue("@p", processNumber);
+            cmd.Parameters.AddWithValue("@s", sourcePath ?? "");
+            cmd.Parameters.AddWithValue("@b", fileBytes);
+            cmd.Parameters.AddWithValue("@h", ComputeSha256Hex(fileBytes));
+            cmd.Parameters.AddWithValue("@sz", (long)fileBytes.Length);
+            cmd.ExecuteNonQuery();
+        }
+
+        public static byte[]? FetchRawFile(string pgUri, string processNumber)
+        {
+            if (string.IsNullOrWhiteSpace(processNumber)) return null;
+            pgUri = NormalizePgUri(pgUri);
+            using var conn = new NpgsqlConnection(pgUri);
+            conn.Open();
+            using var cmd = new NpgsqlCommand("SELECT file_bytes FROM raw_files WHERE process_number=@p", conn);
+            cmd.Parameters.AddWithValue("@p", processNumber);
+            var obj = cmd.ExecuteScalar();
+            return obj == null || obj == DBNull.Value ? null : (byte[])obj;
+        }
+
+        private static string ComputeSha256Hex(byte[] data)
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hash = sha.ComputeHash(data);
+            var sb = new System.Text.StringBuilder(hash.Length * 2);
+            foreach (var b in hash) sb.Append(b.ToString("x2"));
+            return sb.ToString();
+        }
+
         public static string? FetchRawProcess(string pgUri, string processNumber)
         {
             pgUri = NormalizePgUri(pgUri);

@@ -139,6 +139,16 @@ namespace FilterPDF.TjpbDespachoExtractor.Commands
                         continue;
                     }
 
+                    options.ProcessNumber = row.ProcessNumber;
+                    var footerInfo = PgAnalysisLoader.GetFooterInfo(row.ProcessNumber, pgUri);
+                    if (footerInfo == null || (footerInfo.Signers.Count == 0 && string.IsNullOrWhiteSpace(footerInfo.SignatureRaw)))
+                        footerInfo = BuildFooterInfoFromAnalysis(analysis);
+                    options.FooterSigners = footerInfo?.Signers ?? new List<string>();
+                    options.FooterSignatureRaw = footerInfo?.SignatureRaw;
+                    if (verbose)
+                    {
+                        Console.WriteLine($"[tjpb-despacho-extractor] {row.ProcessNumber} footer_signers={options.FooterSigners.Count} footer_raw_len={(options.FooterSignatureRaw?.Length ?? 0)}");
+                    }
                     var output = extractor.Extract(analysis, row.Source ?? "", options, entry =>
                     {
                         if (verbose)
@@ -296,6 +306,49 @@ namespace FilterPDF.TjpbDespachoExtractor.Commands
                     }
                 }
             }
+        }
+
+        private static PgAnalysisLoader.FooterInfo BuildFooterInfoFromAnalysis(PDFAnalysisResult analysis)
+        {
+            var info = new PgAnalysisLoader.FooterInfo();
+            if (analysis?.Pages == null || analysis.Pages.Count == 0) return info;
+            var last = analysis.Pages[analysis.Pages.Count - 1];
+            var lines = (last.TextInfo?.PageText ?? "")
+                .Split('\n')
+                .Where(l => !string.IsNullOrWhiteSpace(l))
+                .Select(l => l.Trim())
+                .ToList();
+            if (lines.Count == 0) return info;
+            var tail = lines.Count > 12 ? lines.Skip(lines.Count - 12).ToList() : lines;
+            info.SignatureRaw = string.Join("\n", tail);
+            info.Signers = ExtractSignersFromLines(tail);
+            return info;
+        }
+
+        private static List<string> ExtractSignersFromLines(IEnumerable<string> lines)
+        {
+            var signers = new List<string>();
+            var nameRegex = new Regex(@"\b[A-ZÁÂÃÉÊÍÓÔÕÚÇ][A-Za-zÁÂÃÉÊÍÓÔÕÚÇàáâãéêíóôõúç'\-]{2,}(?:\s+[A-ZÁÂÃÉÊÍÓÔÕÚÇ][A-Za-zÁÂÃÉÊÍÓÔÕÚÇàáâãéêíóôõúç'\-]{2,})+", RegexOptions.Compiled);
+            var pjeRegex = new Regex(@"(?i)por\\s*:?\\s*([A-ZÁÂÃÉÊÍÓÔÕÚÇ]{5,})");
+
+            foreach (var line in lines)
+            {
+                var m = nameRegex.Match(line);
+                if (m.Success)
+                {
+                    var name = m.Value.Trim();
+                    if (!signers.Contains(name))
+                        signers.Add(name);
+                }
+                var pje = pjeRegex.Match(line.Replace(" ", ""));
+                if (pje.Success)
+                {
+                    var name = pje.Groups[1].Value.Trim();
+                    if (!signers.Contains(name))
+                        signers.Add(name);
+                }
+            }
+            return signers;
         }
 
         private void RunReport(string[] args)
