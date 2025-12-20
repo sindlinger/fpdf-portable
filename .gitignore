@@ -92,6 +92,8 @@ src/PipelineTjpb/reference/
 data/inbox/
 data/inbox_batch1/
 data/inbox_batch2/
+data/inbox_batch*_list.txt
+data/inbox_batch*_list.csv
 data/pipeline_two/
 data/out-report/
 data/out-test/
