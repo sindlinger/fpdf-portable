@@ -8,6 +8,10 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using FilterPDF.Utils;
 using System.Text;
+using FilterPDF.TjpbDespachoExtractor.Config;
+using FilterPDF.TjpbDespachoExtractor.Extraction;
+using FilterPDF.TjpbDespachoExtractor.Utils;
+using FilterPDF.TjpbDespachoExtractor.Models;
 
 namespace FilterPDF.Commands
 {
@@ -28,6 +32,7 @@ namespace FilterPDF.Commands
     {
         public override string Name => "pipeline-tjpb";
         public override string Description => "Etapa FPDF do pipeline-tjpb: consolida documentos em JSON";
+        private TjpbDespachoConfig? _tjpbCfg;
 
         public override void Execute(string[] args)
         {
@@ -37,6 +42,7 @@ namespace FilterPDF.Commands
             bool onlyDespachos = false;
             string? signerContains = null;
             string pgUri = FilterPDF.Utils.PgDocStore.DefaultPgUri;
+            string configPath = "config.yaml";
             var analysesByProcess = new Dictionary<string, PDFAnalysisResult>();
             string cacheDir = Path.Combine(Directory.GetCurrentDirectory(), "tmp", "cache");
             // Localiza configs/fields e docid/layout_hashes.csv respeitando cwd ou pasta do binário.
@@ -71,6 +77,20 @@ namespace FilterPDF.Commands
                 if (args[i] == "--split-anexos") splitAnexos = true;
                 if (args[i] == "--only-despachos") onlyDespachos = true;
                 if (args[i] == "--signer-contains" && i + 1 < args.Length) signerContains = args[i + 1];
+                if (args[i] == "--config" && i + 1 < args.Length) configPath = args[i + 1];
+            }
+
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(configPath) && File.Exists(configPath))
+                    _tjpbCfg = TjpbDespachoConfig.Load(configPath);
+                else
+                    _tjpbCfg = new TjpbDespachoConfig();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[pipeline-tjpb] WARN config: {ex.Message}");
+                _tjpbCfg = new TjpbDespachoConfig();
             }
 
             var dir = new DirectoryInfo(inputDir);
@@ -112,13 +132,25 @@ namespace FilterPDF.Commands
 
                     var procName = DeriveProcessName(pdfPath);
                     analysesByProcess[procName] = analysis;
+                    ExtractionResult? despachoResult = null;
+                    try
+                    {
+                        var cfg = _tjpbCfg ?? new TjpbDespachoConfig();
+                        var extractor = new DespachoExtractor(cfg);
+                        var options = new ExtractionOptions { ProcessNumber = procName };
+                        despachoResult = extractor.Extract(analysis, pdfPath, options);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[pipeline-tjpb] WARN despacho-extractor {procName}: {ex.Message}");
+                    }
                     var bookmarkDocs = BuildBookmarkBoundaries(analysis, maxBookmarkPages);
                     var segmenter = new DocumentSegmenter(new DocumentSegmentationConfig());
                     var docs = bookmarkDocs.Count > 0 ? bookmarkDocs : segmenter.FindDocuments(analysis);
 
                     foreach (var d in docs)
                     {
-                        var obj = BuildDocObject(d, analysis, pdfPath, fieldScripts);
+                        var obj = BuildDocObject(d, analysis, pdfPath, fieldScripts, despachoResult);
                         allDocs.Add(obj);
                         if (obj.ContainsKey("words"))
                         {
@@ -205,6 +237,7 @@ namespace FilterPDF.Commands
         public override void ShowHelp()
         {
             Console.WriteLine("fpdf pipeline-tjpb --input-dir <dir> [--split-anexos] [--only-despachos] [--signer-contains <texto>]");
+            Console.WriteLine("--config: caminho para config.yaml (opcional; usado para hints de despacho).");
             Console.WriteLine("Lê caches (tmp/cache/*.json) ou PDFs; grava no Postgres (processes + documents). Não gera arquivo.");
             Console.WriteLine("--split-anexos: cria subdocumentos a partir de bookmarks 'Anexo/Anexos' dentro de cada documento.");
             Console.WriteLine("--only-despachos: filtra apenas documentos cujo doc_label/doc_type contenha 'Despacho'.");
@@ -219,7 +252,7 @@ namespace FilterPDF.Commands
             return name;
         }
 
-        private Dictionary<string, object> BuildDocObject(DocumentBoundary d, PDFAnalysisResult analysis, string pdfPath, List<FieldScript> scripts)
+        private Dictionary<string, object> BuildDocObject(DocumentBoundary d, PDFAnalysisResult analysis, string pdfPath, List<FieldScript> scripts, ExtractionResult? despachoResult)
         {
             var docText = string.Join("\n", Enumerable.Range(d.StartPage, d.PageCount)
                                                       .Select(p => analysis.Pages[p - 1].TextInfo.PageText ?? ""));
@@ -332,8 +365,29 @@ namespace FilterPDF.Commands
             }
 
             var docSummary = BuildDocSummary(d, pdfPath, docText, lastPageText, lastTwoText, header, footer, docBookmarks, analysis.Signatures, docLabel);
-            var extractedFields = ExtractFields(docText, wordsWithCoords, d, pdfPath, scripts);
+            var despachoMatch = FindBestDespachoMatch(d, despachoResult, out var overlapRatio, out var overlapPages);
+            if (despachoMatch != null)
+            {
+                var despachoFields = ConvertDespachoFields(despachoMatch);
+                if (despachoFields.Count > 0)
+                {
+                    // add after script extraction
+                }
+            }
+            var labelIsDespacho = docLabel.Contains("despacho", StringComparison.OrdinalIgnoreCase) ||
+                                  docType.Contains("despacho", StringComparison.OrdinalIgnoreCase);
+            var isDespacho = labelIsDespacho || despachoMatch != null;
+            var forcedBucket = isDespacho ? "principal" : null;
+            var extractedFields = ExtractFields(docText, wordsWithCoords, d, pdfPath, scripts, forcedBucket);
+            if (despachoMatch != null)
+            {
+                var despachoFields = ConvertDespachoFields(despachoMatch);
+                if (despachoFields.Count > 0)
+                    extractedFields.AddRange(despachoFields);
+            }
+            AddDocSummaryFallbacks(extractedFields, docSummary, d.StartPage);
             var forensics = BuildForensics(d, analysis, docText, wordsWithCoords);
+            var despachoInfo = DetectDespachoTipo(docText, lastTwoText);
 
             return new Dictionary<string, object>
             {
@@ -341,6 +395,17 @@ namespace FilterPDF.Commands
                 ["pdf_path"] = pdfPath,
                 ["doc_label"] = docLabel,
                 ["doc_type"] = docType,
+                ["is_despacho"] = isDespacho,
+                ["despacho_overlap_ratio"] = despachoMatch != null ? overlapRatio : 0.0,
+                ["despacho_overlap_pages"] = despachoMatch != null ? overlapPages : 0,
+                ["despacho_match_score"] = despachoMatch != null ? despachoMatch.MatchScore : 0.0,
+                ["despacho_tipo"] = isDespacho ? despachoInfo.Tipo : "-",
+                ["despacho_categoria"] = isDespacho ? despachoInfo.Categoria : "-",
+                ["despacho_destino"] = isDespacho ? despachoInfo.Destino : "-",
+                ["is_despacho_autorizacao"] = isDespacho && despachoInfo.Categoria == "autorizacao",
+                ["is_despacho_encaminhamento"] = isDespacho && despachoInfo.Categoria == "encaminhamento",
+                ["is_despacho_georc"] = isDespacho && despachoInfo.Destino == "georc",
+                ["is_despacho_conselho"] = isDespacho && despachoInfo.Destino == "conselho",
                 ["modification_dates"] = analysis.ModificationDates,
                 ["start_page"] = d.StartPage,
                 ["end_page"] = d.EndPage,
@@ -363,6 +428,7 @@ namespace FilterPDF.Commands
                 ["anexos_bookmarks"] = anexos,
                 ["doc_summary"] = docSummary,
                 ["fields"] = extractedFields,
+                ["despacho_extraction"] = despachoMatch,
                 ["forensics"] = forensics
             };
         }
@@ -417,9 +483,9 @@ namespace FilterPDF.Commands
             string hay = $"{lastTwoText}\n{footer}";
 
             // Processo SEI (formato com hífens/pontos)
-            var mProc = Regex.Match(hay, @"Processo\s+n[º°]?\s*([\d]{6}-\d{2}\.\d{4}\.\d\.\d{2})", RegexOptions.IgnoreCase);
+            var mProc = Regex.Match(hay, @"Processo\s+n[º°]?\s*([\d]{6,7}-\d{2}\.\d{4}\.\d\.\d{2}(?:\.\d{4})?)", RegexOptions.IgnoreCase);
             if (!mProc.Success)
-                mProc = Regex.Match(hay, @"SEI\s+([\d]{6}-\d{2}\.\d{4}\.\d\.\d{2})");
+                mProc = Regex.Match(hay, @"SEI\s+([\d]{6,7}-\d{2}\.\d{4}\.\d\.\d{2}(?:\.\d{4})?)", RegexOptions.IgnoreCase);
             if (mProc.Success) meta.Process = mProc.Groups[1].Value.Trim();
 
             // Número da peça SEI (doc)
@@ -1242,12 +1308,56 @@ namespace FilterPDF.Commands
         private static readonly Regex MoneyRegex = new Regex(@"R\$ ?\d{1,3}(\.\d{3})*,\d{2}", RegexOptions.Compiled);
         private static readonly Regex DateNumRegex = new Regex(@"\b[0-3]?\d/[01]?\d/\d{2,4}\b", RegexOptions.Compiled);
 
-        private List<Dictionary<string, object>> ExtractFields(string fullText, List<Dictionary<string, object>> words, DocumentBoundary d, string pdfPath, List<FieldScript> scripts)
+        private List<Dictionary<string, object>> ExtractFields(string fullText, List<Dictionary<string, object>> words, DocumentBoundary d, string pdfPath, List<FieldScript> scripts, string? forcedBucket = null)
         {
             var name = ExtractDocumentName(d);
-            var bucket = ClassifyBucket(name, fullText);
+            var bucket = forcedBucket ?? ClassifyBucket(name, fullText);
             var namePdf = name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? name : name + ".pdf";
-            return FieldScripts.RunScripts(scripts, namePdf, fullText ?? string.Empty, d.StartPage, bucket);
+            return FieldScripts.RunScripts(scripts, namePdf, fullText ?? string.Empty, words, d.StartPage, bucket);
+        }
+
+        private void AddDocSummaryFallbacks(List<Dictionary<string, object>> fields, Dictionary<string, object> docSummary, int page)
+        {
+            if (fields == null) return;
+            string GetStr(string key)
+            {
+                return docSummary.TryGetValue(key, out var v) ? v?.ToString() ?? "" : "";
+            }
+
+            AddFieldIfMissing(fields, "PROCESSO_ADMINISTRATIVO", GetStr("sei_process"), "doc_summary", 0.55, page);
+            AddFieldIfMissing(fields, "VARA", GetStr("juizo_vara"), "doc_summary", 0.55, page);
+            AddFieldIfMissing(fields, "COMARCA", GetStr("comarca"), "doc_summary", 0.55, page);
+            AddFieldIfMissing(fields, "PERITO", GetStr("interested_name"), "doc_summary", 0.50, page);
+            AddFieldIfMissing(fields, "ESPECIALIDADE", GetStr("interested_profession"), "doc_summary", 0.45, page);
+            AddFieldIfMissing(fields, "DATA", GetStr("signed_at"), "doc_summary", 0.45, page);
+            AddFieldIfMissing(fields, "ASSINANTE", GetStr("signer"), "doc_summary", 0.50, page);
+        }
+
+        private void AddFieldIfMissing(List<Dictionary<string, object>> fields, string name, string value, string method, double weight, int page)
+        {
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(value)) return;
+            var existing = fields.FirstOrDefault(f => string.Equals(f.TryGetValue("name", out var n) ? n?.ToString() : "", name, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                var existingValue = existing.TryGetValue("value", out var v) ? v?.ToString() ?? "" : "";
+                if (!string.IsNullOrWhiteSpace(existingValue) && existingValue.Trim() != "-")
+                    return;
+
+                existing["value"] = value.Trim();
+                existing["method"] = method;
+                existing["weight"] = weight;
+                existing["page"] = page;
+                return;
+            }
+
+            fields.Add(new Dictionary<string, object>
+            {
+                ["name"] = name,
+                ["value"] = value.Trim(),
+                ["method"] = method,
+                ["weight"] = weight,
+                ["page"] = page
+            });
         }
 
         private string ClassifyBucket(string name, string text)
@@ -1412,6 +1522,131 @@ private int FindPageForText(List<Dictionary<string, object>> words, string text)
             return firstLine.Length > 80 ? firstLine.Substring(0, 80) + "..." : firstLine;
         }
 
+        private DespachoDocumentInfo? FindBestDespachoMatch(DocumentBoundary d, ExtractionResult? result, out double overlapRatio, out int overlapPages)
+        {
+            overlapRatio = 0.0;
+            overlapPages = 0;
+            if (result?.Documents == null || result.Documents.Count == 0) return null;
+
+            DespachoDocumentInfo? best = null;
+            foreach (var doc in result.Documents)
+            {
+                var interStart = Math.Max(d.StartPage, doc.StartPage1);
+                var interEnd = Math.Min(d.EndPage, doc.EndPage1);
+                var inter = interEnd - interStart + 1;
+                if (inter <= 0) continue;
+                var despachoPages = Math.Max(1, doc.EndPage1 - doc.StartPage1 + 1);
+                var docPages = Math.Max(1, d.EndPage - d.StartPage + 1);
+                var ratioDespacho = inter / (double)despachoPages;
+                var ratioDoc = inter / (double)docPages;
+                var score = Math.Max(ratioDespacho, ratioDoc);
+                if (best == null || score > overlapRatio)
+                {
+                    best = doc;
+                    overlapRatio = score;
+                    overlapPages = inter;
+                }
+            }
+
+            if (best == null) return null;
+
+            // aceita match mesmo com docs grandes (overlap pequeno), mas exige pelo menos 1 página comum
+            if (overlapPages >= 1 && (overlapRatio >= 0.2 || (d.EndPage - d.StartPage + 1) <= 3))
+                return best;
+
+            return null;
+        }
+
+        private List<Dictionary<string, object>> ConvertDespachoFields(DespachoDocumentInfo doc)
+        {
+            var list = new List<Dictionary<string, object>>();
+            if (doc?.Fields == null) return list;
+            foreach (var kv in doc.Fields)
+            {
+                var info = kv.Value;
+                if (info == null) continue;
+                var ev = info.Evidence;
+                list.Add(new Dictionary<string, object>
+                {
+                    ["name"] = kv.Key,
+                    ["value"] = info.Value ?? "-",
+                    ["confidence"] = info.Confidence,
+                    ["method"] = info.Method ?? "not_found",
+                    ["page"] = ev?.Page1 ?? 0,
+                    ["snippet"] = ev?.Snippet ?? "",
+                    ["bboxN"] = ev?.BBoxN,
+                    ["source"] = "despacho_extractor"
+                });
+            }
+            return list;
+        }
+
+        private class DespachoTipoInfo
+        {
+            public string Tipo { get; set; } = "indefinido";
+            public string Categoria { get; set; } = "-";
+            public string Destino { get; set; } = "-";
+            public bool HasGeorc { get; set; }
+            public bool HasConselho { get; set; }
+            public bool HasAutorizacao { get; set; }
+        }
+
+        private DespachoTipoInfo DetectDespachoTipo(string fullText, string lastTwoText)
+        {
+            var cfg = _tjpbCfg ?? new TjpbDespachoConfig();
+            var tail = fullText ?? "";
+            if (tail.Length > 4000)
+                tail = tail.Substring(tail.Length - 4000);
+            var norm = TextUtils.NormalizeForMatch($"{lastTwoText}\n{tail}");
+            bool hasGeorc = ContainsAny(norm, cfg.DespachoType.GeorcHints);
+            bool hasConselho = ContainsAny(norm, cfg.DespachoType.ConselhoHints);
+            bool hasAutorizacao = ContainsAny(norm, cfg.DespachoType.AutorizacaoHints);
+
+            var info = new DespachoTipoInfo
+            {
+                HasGeorc = hasGeorc,
+                HasConselho = hasConselho,
+                HasAutorizacao = hasAutorizacao
+            };
+
+            if (hasConselho)
+            {
+                info.Categoria = "encaminhamento";
+                info.Destino = "conselho";
+                info.Tipo = "encaminhamento_conselho";
+                return info;
+            }
+
+            if (hasGeorc)
+            {
+                info.Categoria = "encaminhamento";
+                info.Destino = "georc";
+                info.Tipo = "encaminhamento_georc";
+                return info;
+            }
+
+            if (hasAutorizacao)
+            {
+                info.Categoria = "autorizacao";
+                info.Destino = "-";
+                info.Tipo = "autorizacao";
+                return info;
+            }
+
+            return info;
+        }
+
+        private bool ContainsAny(string norm, List<string> hints)
+        {
+            if (string.IsNullOrWhiteSpace(norm) || hints == null || hints.Count == 0) return false;
+            foreach (var h in hints)
+            {
+                if (string.IsNullOrWhiteSpace(h)) continue;
+                if (norm.Contains(TextUtils.NormalizeForMatch(h))) return true;
+            }
+            return false;
+        }
+
         private List<Dictionary<string, object>> SplitAnexos(DocumentBoundary parent, PDFAnalysisResult analysis, string pdfPath, List<FieldScript> scripts)
         {
             var list = new List<Dictionary<string, object>>();
@@ -1446,7 +1681,7 @@ private int FindPageForText(List<Dictionary<string, object>> words, string text)
                     TotalWords = parent.TotalWords
                 };
 
-                var obj = BuildDocObject(boundary, analysis, pdfPath, scripts);
+                var obj = BuildDocObject(boundary, analysis, pdfPath, scripts, null);
                 obj["parent_doc_label"] = ExtractDocumentName(parent);
                 obj["doc_label"] = anexos[i]["title"]?.ToString() ?? "Anexo";
                 obj["doc_type"] = "anexo_split";

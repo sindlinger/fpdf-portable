@@ -132,6 +132,18 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             }
 
             var regions = BuildTemplateRegions(analysis, range.startPage1, range.endPage1);
+            var certidaoPage1 = CertidaoExtraction.FindCertidaoPage(analysis, _cfg);
+            if (certidaoPage1 > 0)
+            {
+                var certRegions = CertidaoExtraction.BuildCertidaoRegions(analysis, certidaoPage1, _cfg);
+                if (certRegions.Count > 0)
+                    regions.AddRange(certRegions);
+                Log(result, logFn, "info", "certidao_found", new Dictionary<string, object>
+                {
+                    { "page1", certidaoPage1 },
+                    { "regions", certRegions.Count }
+                });
+            }
             if (options.Verbose || options.Dump)
             {
                 foreach (var r in regions)
@@ -261,6 +273,17 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                 var bandSeg = BandSegmenter.SegmentPage(words, p, _cfg.Thresholds.Bands, _cfg.Thresholds.Paragraph.LineMergeY, _cfg.Thresholds.Paragraph.WordGapX);
                 bands.AddRange(bandSeg.Bands.Where(b => !string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase)));
                 bandSegments.AddRange(bandSeg.BandSegments.Where(b => !string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase)));
+
+                // Body paragraphs (full page body band) for better field recall
+                var bodySeg = bandSeg.BandSegments.FirstOrDefault(b => string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase));
+                if (bodySeg != null && bodySeg.Words != null && bodySeg.Words.Count > 0)
+                {
+                    AddBodyBand(bands, bandSegments, p, bodySeg.Words);
+                    var linesBody = LineBuilder.BuildLines(bodySeg.Words, p, _cfg.Thresholds.Paragraph.LineMergeY, _cfg.Thresholds.Paragraph.WordGapX);
+                    var parasBody = ParagraphBuilder.BuildParagraphs(linesBody, _cfg.Thresholds.Paragraph.ParagraphGapY);
+                    foreach (var para in parasBody)
+                        AddParagraph(para);
+                }
 
                 // Top region (primeira metade da primeira pagina)
                 if (p == startPage1)

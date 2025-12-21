@@ -186,22 +186,39 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                 "PERCENTUAL","PARCELA","DATA","ASSINANTE","NUM_PERITO"
             };
 
+            var certAllowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "VALOR_ARBITRADO_CM","DATA","ADIANTAMENTO","PERCENTUAL","PARCELA"
+            };
+
             foreach (var region in ctx.Regions)
             {
                 var isBottom = region.Name.StartsWith("last_bottom", StringComparison.OrdinalIgnoreCase) ||
                                region.Name.Equals("second_bottom", StringComparison.OrdinalIgnoreCase);
+                var isCertidao = region.Name.StartsWith("certidao_", StringComparison.OrdinalIgnoreCase);
                 var templates = region.Name == "first_top"
                     ? ctx.Config.TemplateRegions.FirstPageTop.Templates
                     : isBottom
                         ? ctx.Config.TemplateRegions.LastPageBottom.Templates
-                        : new List<string>();
+                        : region.Name == "certidao_full"
+                            ? ctx.Config.TemplateRegions.CertidaoFull.Templates
+                            : region.Name == "certidao_value_date"
+                                ? ctx.Config.TemplateRegions.CertidaoValueDate.Templates
+                                : new List<string>();
 
                 foreach (var template in templates)
                 {
                     var hits = ApplyTemplate(region, template);
                     foreach (var kv in hits)
                     {
-                        if (!allowed.Contains(kv.Key)) continue;
+                        if (isCertidao)
+                        {
+                            if (!certAllowed.Contains(kv.Key)) continue;
+                        }
+                        else
+                        {
+                            if (!allowed.Contains(kv.Key)) continue;
+                        }
                         if (!result.ContainsKey(kv.Key) || kv.Value.Confidence > result[kv.Key].Confidence)
                             result[kv.Key] = kv.Value;
                     }
@@ -598,6 +615,21 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                     return BuildFieldFromMatch(m2.Value, 0.7, "regex", p, m2, 0, Snip(p.Text, m2));
             }
 
+            foreach (var band in ctx.BandSegments)
+            {
+                if (band == null || string.IsNullOrWhiteSpace(band.Text)) continue;
+                var bNorm = TextUtils.NormalizeForMatch(band.Text);
+                if (!(bNorm.Contains("processo") || bNorm.Contains("sei") || bNorm.Contains("adme") || bNorm.Contains("ci")))
+                    continue;
+
+                var m1 = _sei.Match(band.Text);
+                if (m1.Success)
+                    return BuildFieldFromBandMatch(m1.Value, 0.7, $"regex_band:{band.Band}", band, m1, 0, Snip(band.Text, m1));
+                var m2 = _adme.Match(band.Text);
+                if (m2.Success)
+                    return BuildFieldFromBandMatch(m2.Value, 0.65, $"regex_band:{band.Band}", band, m2, 0, Snip(band.Text, m2));
+            }
+
             var fn = ctx.FileName ?? "";
             var mf = _sei.Match(fn);
             if (!mf.Success) mf = _adme.Match(fn);
@@ -907,12 +939,16 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
 
             foreach (var p in ctx.Paragraphs)
             {
-                var m = Regex.Match(p.Text ?? "", @"(?i)pericia\s+([a-zA-Z]+)");
+                var m = Regex.Match(p.Text ?? "", @"(?i)per[ií]cia\s+([A-Za-zÁÂÃÀÉÊÍÓÔÕÚÇ]+(?:\s+[A-Za-zÁÂÃÀÉÊÍÓÔÕÚÇ]+){0,2})");
                 if (m.Success)
                 {
                     var esp = m.Groups[1].Value.Trim();
-                    especie = BuildFieldFromMatch(esp, 0.7, "regex", p, m, 1, Snip(p.Text, m));
-                    break;
+                    var espNorm = TextUtils.NormalizeForMatch(esp);
+                    if (!IsWeakEspecieToken(espNorm))
+                    {
+                        especie = BuildFieldFromMatch(esp, 0.7, "regex", p, m, 1, Snip(p.Text, m));
+                        break;
+                    }
                 }
             }
 
@@ -942,6 +978,16 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             var lastParas = ctx.Paragraphs.Where(p => p.Page1 == lastPage).ToList();
             var secondBody = ctx.BandSegments
                 .Where(b => b.Page1 == secondPage && string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(b => b.Words?.Count ?? 0)
+                .ThenByDescending(b => (b.Text ?? "").Length)
+                .FirstOrDefault();
+            var firstBody = ctx.BandSegments
+                .Where(b => b.Page1 == firstPage && string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(b => b.Words?.Count ?? 0)
+                .ThenByDescending(b => (b.Text ?? "").Length)
+                .FirstOrDefault();
+            var lastBody = ctx.BandSegments
+                .Where(b => b.Page1 == lastPage && string.Equals(b.Band, "body", StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(b => b.Words?.Count ?? 0)
                 .ThenByDescending(b => (b.Text ?? "").Length)
                 .FirstOrDefault();
@@ -1074,7 +1120,61 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
                 }
             }
 
+            if (valorJz.Method == "not_found" && firstBody != null)
+            {
+                var include = new List<string> { "arbitr", "honor", "perit", "peric", "fixa", "valor" };
+                var exclude = new List<string> { "reserva", "georc", "empenh", "conselho", "diretoria" };
+                var hit = FindMoneyInBand(firstBody, include, exclude, "heuristic:band_first", 0.62);
+                if (hit.Method != "not_found")
+                    valorJz = hit;
+            }
+
+            if (valorDe.Method == "not_found" && lastBody != null)
+            {
+                var include = new List<string> { "reserva", "georc", "orcament", "autoriz", "encaminh", "pagamento", "empenh" };
+                var exclude = new List<string> { "conselho", "certidao" };
+                var hit = FindMoneyInBand(lastBody, include, exclude, "heuristic:band_last", 0.6);
+                if (hit.Method != "not_found")
+                    valorDe = hit;
+            }
+
             return (Ensure(valorJz), Ensure(valorDe), Ensure(valorCm), Ensure(valorTabela));
+        }
+
+        private FieldInfo FindMoneyInBand(BandSegment band, List<string> includeHints, List<string> excludeHints, string method, double baseScore)
+        {
+            if (band == null || band.Words == null || band.Words.Count == 0) return NotFound();
+            var (collapsed, spans) = BuildCollapsedTextWithSpans(band.Words);
+            if (string.IsNullOrWhiteSpace(collapsed)) return NotFound();
+            var matches = _money.Matches(collapsed);
+            if (matches.Count == 0) return NotFound();
+
+            FieldInfo best = NotFound();
+            double bestScore = 0;
+            foreach (Match m in matches)
+            {
+                var windowStart = Math.Max(0, m.Index - 100);
+                var windowLen = Math.Min(collapsed.Length - windowStart, 200);
+                var window = collapsed.Substring(windowStart, windowLen);
+                var norm = TextUtils.NormalizeForMatch(window);
+                var score = baseScore;
+                if (includeHints != null && includeHints.Count > 0 && includeHints.Any(h => norm.Contains(TextUtils.NormalizeForMatch(h))))
+                    score += 0.15;
+                if (excludeHints != null && excludeHints.Count > 0 && excludeHints.Any(h => norm.Contains(TextUtils.NormalizeForMatch(h))))
+                    score -= 0.15;
+                if (score <= 0) continue;
+
+                var money = TextUtils.NormalizeMoney(m.Value);
+                if (string.IsNullOrWhiteSpace(money)) continue;
+                var bbox = ComputeMatchBBox(spans, m.Index, m.Length) ?? band.BBox;
+                var info = BuildField(money, Math.Min(0.85, score), method, null, Snip(window, m), bbox, band.Page1);
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    best = info;
+                }
+            }
+            return best.Method == "not_found" ? best : best;
         }
 
         private FieldInfo FindValor(List<ParagraphSegment> paragraphs, bool preferArbitrado = false, bool preferGeorc = false, bool preferConselho = false)
@@ -1959,7 +2059,21 @@ namespace FilterPDF.TjpbDespachoExtractor.Extraction
             if (norm.Contains("contab")) return "contabil";
             if (norm.Contains("engenh")) return "engenharia";
             if (norm.Contains("psicol")) return "psicologica";
+            if (norm.Contains("odontol")) return "odontologica";
+            if (norm.Contains("psiquiatr")) return "psiquiatrica";
+            if (norm.Contains("fonoaud")) return "fonoaudiologica";
+            if (norm.Contains("fisioter")) return "fisioterapica";
+            if (norm.Contains("informat")) return "informatica";
+            if (norm.Contains("ambient")) return "ambiental";
+            if (norm.Contains("arquitet")) return "arquitetonica";
             return "";
+        }
+
+        private bool IsWeakEspecieToken(string tokenNorm)
+        {
+            if (string.IsNullOrWhiteSpace(tokenNorm)) return true;
+            var bad = new[] { "nos", "no", "na", "dos", "das", "do", "da", "em", "de", "do processo", "autos", "autos do processo" };
+            return bad.Any(b => tokenNorm == b);
         }
 
         private double EstimateRelativePosition(DespachoContext ctx, ParagraphSegment p)

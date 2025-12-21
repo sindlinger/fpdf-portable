@@ -14,6 +14,7 @@ namespace FilterPDF.TjpbDespachoExtractor.Config
         public AnchorsConfig Anchors { get; set; } = new AnchorsConfig();
         public TemplateRegionsConfig TemplateRegions { get; set; } = new TemplateRegionsConfig();
         public DespachoTypeConfig DespachoType { get; set; } = new DespachoTypeConfig();
+        public CertidaoConfig Certidao { get; set; } = new CertidaoConfig();
         public RegexConfig Regex { get; set; } = new RegexConfig();
         public PrioritiesConfig Priorities { get; set; } = new PrioritiesConfig();
         public FieldRulesConfig Fields { get; set; } = new FieldRulesConfig();
@@ -84,6 +85,8 @@ namespace FilterPDF.TjpbDespachoExtractor.Config
     {
         public RegionTemplateConfig FirstPageTop { get; set; } = new RegionTemplateConfig { MinY = 0.55, MaxY = 1.0 };
         public RegionTemplateConfig LastPageBottom { get; set; } = new RegionTemplateConfig { MinY = 0.0, MaxY = 0.45 };
+        public RegionTemplateConfig CertidaoFull { get; set; } = new RegionTemplateConfig { MinY = 0.0, MaxY = 1.0 };
+        public RegionTemplateConfig CertidaoValueDate { get; set; } = new RegionTemplateConfig { MinY = 0.0, MaxY = 1.0 };
         public double WordGapX { get; set; } = 0.012;
     }
 
@@ -93,6 +96,14 @@ namespace FilterPDF.TjpbDespachoExtractor.Config
         public List<string> GeorcHints { get; set; } = new List<string>();
         public List<string> ConselhoHints { get; set; } = new List<string>();
         public List<string> DeValuePatterns { get; set; } = new List<string>();
+    }
+
+    public class CertidaoConfig
+    {
+        public List<string> HeaderHints { get; set; } = new List<string>();
+        public List<string> TitleHints { get; set; } = new List<string>();
+        public List<string> BodyHints { get; set; } = new List<string>();
+        public List<string> DateHints { get; set; } = new List<string>();
     }
 
     public class RegionTemplateConfig
