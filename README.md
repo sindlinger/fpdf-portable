@@ -12,6 +12,20 @@ Este projeto inclui um extrator robusto para documentos de DESPACHO do TJPB (DIE
 fpdf tjpb-despacho-extractor extract --inbox data/inbox --config config.yaml --verbose
 ```
 
+## Itinerario oficial do pipeline (nao esquecer)
+
+O pipeline que roda de verdade (CLI `pipeline-tjpb`) esta na arvore principal `src/`. A pasta `src/PipelineTjpb` existe, mas **nao e o pipeline ativo**.
+
+Arquivos-chave (caminhos completos):
+- `/mnt/b/dev/sei-dashboard/fpdf-portable/src/Commands/PipelineTjpbCommand.cs` (entrada CLI e orquestracao)
+- `/mnt/b/dev/sei-dashboard/fpdf-portable/src/PDFAnalyzer.cs` (leitura PDF + texto/words/bboxes/bookmarks)
+- `/mnt/b/dev/sei-dashboard/fpdf-portable/src/TjpbDespachoExtractor/Extraction/DespachoExtractor.cs` (matching e segmentacao)
+- `/mnt/b/dev/sei-dashboard/fpdf-portable/src/TjpbDespachoExtractor/Extraction/FieldExtractor.cs` (extracao de campos)
+- `/mnt/b/dev/sei-dashboard/fpdf-portable/src/TjpbDespachoExtractor/Extraction/CertidaoExtraction.cs` (certidao CM)
+- `/mnt/b/dev/sei-dashboard/fpdf-portable/src/Utils/FieldScripts.cs` (regras YAML por campo)
+- `/mnt/b/dev/sei-dashboard/fpdf-portable/src/Utils/PgDocStore.cs` (grava no Postgres)
+- `/mnt/b/dev/sei-dashboard/configs/fields/` (YAMLs de regras por campo)
+
 ### Opcoes
 
 - `--inbox <dir>`: pasta com PDFs (default: `data/inbox`).
